@@ -79,6 +79,8 @@ async function connectOpenRgb() {
   }
   client = c;
   c.on('disconnect', () => { client = null; state.openrgb = { ok: false, msg: 'disconnected' }; push(); });
+  // A rescan (ours or OpenRGB's) renumbers devices; stale ids would paint the wrong device.
+  c.on('deviceListUpdated', () => loadDevices().catch((e) => log(`reload devices: ${e.message}`)));
   await loadDevices();
 }
 
