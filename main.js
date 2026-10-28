@@ -236,13 +236,14 @@ app.whenReady().then(() => {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   // Dev aid: RGB_SHOT=<folder> writes fans.txt and a screenshot of each page, starting at 10 s.
   if (process.env.RGB_SHOT) setTimeout(async () => {
-    const rpm = (c) => (state.hw.find((h) => h.name === c.hw)?.sensors.find((s) => s.type === 'Fan' && s.index === c.index) || {}).value;
-    fs.writeFileSync(path.join(process.env.RGB_SHOT, 'fans.txt'), state.controls.map((c) => `${c.name}: ${Math.round(rpm(c) ?? -1)} rpm, ${c.value}%, ours ${c.ours}, cfg ${JSON.stringify(settings.fans[c.id] || null)}`).join('\n'));
     for (const p of ['monitoring', 'lighting', 'devices', 'cooling']) {
       await win.webContents.executeJavaScript(`go(${JSON.stringify(p)})`);
       await new Promise((r) => setTimeout(r, 1500));
       fs.writeFileSync(path.join(process.env.RGB_SHOT, `${p}.png`), (await win.webContents.capturePage()).toPNG());
     }
+    // after the screenshots, so the sidecar has ticked at least once
+    const rpm = (c) => (state.hw.find((h) => h.name === c.hw)?.sensors.find((s) => s.type === 'Fan' && s.index === c.index) || {}).value;
+    fs.writeFileSync(path.join(process.env.RGB_SHOT, 'fans.txt'), state.controls.map((c) => `${c.name}: ${Math.round(rpm(c) ?? -1)} rpm, ${c.value}%, ours ${c.ours}, cfg ${JSON.stringify(settings.fans[c.id] || null)}`).join('\n'));
   }, 10000);
   checkGuard();
   setInterval(checkGuard, 4000);
