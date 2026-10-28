@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Monitoring</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0d0e0f}
+a{color:#c9ccce;text-decoration:none}a:hover{color:#e4e4e1}
+.lbl{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#8b9096}
+.num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:6px;font-size:14px;color:#8b9096}
+.nav a:hover{color:#e4e4e1;background:#16181a}
+input[type=range]{width:100%;margin:0;accent-color:#8fd3e0}
+button,select{font:inherit;color:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #0d0e0f; color: #e4e4e1; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 14px;">
+<div style="flex: 1; display: flex; flex-wrap: wrap;">
+
+<nav class="nav" aria-label="Pages" style="flex: 1 1 200px; max-width: 220px; box-sizing: border-box; padding: 20px 12px; border-right: 1px solid #222528; display: flex; flex-direction: column; gap: 2px;">
+<span class="num" style="font-size: 13px; letter-spacing: 0.2em; padding: 0 12px 20px;">RGB</span>
+<a href="Lighting.dc.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="6.5" r="4"></circle><path d="M6 13h4M6.5 15h3"></path></svg>Lighting</a>
+<a href="Devices.dc.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="2" y="3" width="12" height="9" rx="1"></rect><path d="M5 14h6"></path></svg>Devices</a>
+<a href="Cooling.dc.html"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="1.5"></circle><path d="M8 6.5C8 3 10 2 11.5 3S10 6.5 8 6.5M9.5 8c3.5 0 4.5 2 3.5 3.5S9.5 10 9.5 8M8 9.5c0 3.5-2 4.5-3.5 3.5S6 9.5 8 9.5M6.5 8C3 8 2 6 3 4.5S6.5 6 6.5 8"></path></svg>Cooling</a>
+<a href="Main.dc.html" aria-current="page" style="color: #e4e4e1; background: #1a1c1f;"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#8fd3e0" stroke-width="1.3" aria-hidden="true"><path d="M1 9h3l2-5 3 9 2-6 1 2h3"></path></svg>Monitoring</a>
+<span style="flex: 1;"></span>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px;">
+<div style="display: flex; justify-content: space-between;"><span class="lbl">openrgb</span><span class="lbl" style="color: #c9ccce;">ok</span></div>
+<div style="display: flex; justify-content: space-between;"><span class="lbl">sensors</span><span class="lbl" style="color: #c9ccce;">ok</span></div>
+<div style="display: flex; justify-content: space-between;"><span class="lbl">apex guard</span><span class="lbl" style="color: #c9ccce;">idle</span></div>
+</div>
+<a href="#settings"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="2.2"></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg>Settings</a>
+</nav>
+
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 20px 24px 28px; display: flex; flex-direction: column; gap: 16px;">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+<label style="display: flex; align-items: center; gap: 8px;"><span class="lbl">profile</span>
+<select style="background: #121315; border: 1px solid #2c3034; border-radius: 4px; padding: 7px 10px; font-size: 13px;"><option>Default</option><option>Night</option></select></label>
+<button type="button" style="padding: 7px 12px; border: 1px solid #2c3034; border-radius: 4px; background: transparent; font-size: 13px;">New profile</button>
+<span style="flex: 1;"></span>
+<button type="button" style="padding: 7px 12px; border: 1px solid #2c3034; border-radius: 4px; background: transparent; font-size: 13px;">Add widget</button>
+<button type="button" aria-label="Help" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #2c3034; background: transparent; color: #8b9096; font-size: 12px;">?</button>
+</header>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;">
+
+<section aria-label="CPU temperature" style="background: #121315; border: 1px solid #222528; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+<div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px;">CPU temperature</span><span class="lbl">ryzen 7 3700x · package</span></div>
+<svg viewBox="0 0 140 140" width="160" height="160" role="img" aria-label="58 degrees" style="align-self: center;">
+<circle cx="70" cy="70" r="56" fill="none" stroke="#1e2124" stroke-width="6"></circle>
+<circle cx="70" cy="70" r="56" fill="none" stroke="#8fd3e0" stroke-width="6" stroke-dasharray="204 352" transform="rotate(-90 70 70)"></circle>
+<text x="70" y="74" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="30" fill="#e4e4e1">58</text>
+<text x="70" y="94" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8b9096">°C</text>
+</svg>
+</section>
+
+<section aria-label="GPU temperature" style="background: #121315; border: 1px solid #222528; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+<div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px;">GPU temperature</span><span class="lbl">rx 6700 xt · edge</span></div>
+<svg viewBox="0 0 140 140" width="160" height="160" role="img" aria-label="47 degrees" style="align-self: center;">
+<circle cx="70" cy="70" r="56" fill="none" stroke="#1e2124" stroke-width="6"></circle>
+<circle cx="70" cy="70" r="56" fill="none" stroke="#8fd3e0" stroke-width="6" stroke-dasharray="165 352" transform="rotate(-90 70 70)"></circle>
+<text x="70" y="74" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="30" fill="#e4e4e1">47</text>
+<text x="70" y="94" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8b9096">°C</text>
+</svg>
+</section>
+
+<section aria-label="Memory load" style="background: #121315; border: 1px solid #222528; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+<div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px;">Memory load</span><span class="lbl">21.4 of 64 gb</span></div>
+<svg viewBox="0 0 140 140" width="160" height="160" role="img" aria-label="33 percent" style="align-self: center;">
+<circle cx="70" cy="70" r="56" fill="none" stroke="#1e2124" stroke-width="6"></circle>
+<circle cx="70" cy="70" r="56" fill="none" stroke="#8fd3e0" stroke-width="6" stroke-dasharray="116 352" transform="rotate(-90 70 70)"></circle>
+<text x="70" y="74" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="30" fill="#e4e4e1">33</text>
+<text x="70" y="94" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8b9096">%</text>
+</svg>
+</section>
+
+<section aria-label="Fans" style="background: #121315; border: 1px solid #222528; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+<div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px;">Fans</span><span class="lbl">rpm · duty</span></div>
+<div style="display: flex; justify-content: space-between;"><span>CPU fan</span><span class="num" style="font-size: 13px;">1040 · 44%</span></div>
+<div style="display: flex; justify-content: space-between;"><span>Pump</span><span class="num" style="font-size: 13px;">2600 · 70%</span></div>
+<div style="display: flex; justify-content: space-between;"><span>Case front</span><span class="num" style="font-size: 13px;">820 · 38%</span></div>
+<div style="display: flex; justify-content: space-between;"><span>Case rear</span><span class="num" style="font-size: 13px;">790 · 38%</span></div>
+<div style="display: flex; justify-content: space-between; color: #8b9096;"><span>GPU</span><span class="num" style="font-size: 13px;">0 · auto</span></div>
+</section>
+
+<section aria-label="CPU load over time" style="grid-column: 1 / -1; background: #121315; border: 1px solid #222528; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+<div style="display: flex; justify-content: space-between;"><div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px;">CPU load</span><span class="lbl">all cores · 1 min</span></div><span class="num" style="font-size: 20px;">23%</span></div>
+<svg viewBox="0 0 600 140" width="100%" height="140" preserveAspectRatio="none" aria-hidden="true">
+<g stroke="#1e2124"><line x1="0" y1="10" x2="600" y2="10"></line><line x1="0" y1="70" x2="600" y2="70"></line><line x1="0" y1="130" x2="600" y2="130"></line></g>
+<polyline points="0,110 30,104 60,112 90,80 120,98 150,102 180,90 210,108 240,96 270,60 300,84 330,100 360,94 390,106 420,88 450,92 480,70 510,98 540,90 570,100 600,96" fill="none" stroke="#8fd3e0" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="display: flex; justify-content: space-between;"><span class="lbl">-1m</span><span class="lbl">-30s</span><span class="lbl">now</span></div>
+</section>
+
+<section aria-label="GPU clock over time" style="grid-column: 1 / -1; background: #121315; border: 1px solid #222528; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+<div style="display: flex; justify-content: space-between;"><div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px;">GPU core clock</span><span class="lbl">rx 6700 xt · 1 min</span></div><span class="num" style="font-size: 20px;">512 mhz</span></div>
+<svg viewBox="0 0 600 140" width="100%" height="140" preserveAspectRatio="none" aria-hidden="true">
+<g stroke="#1e2124"><line x1="0" y1="10" x2="600" y2="10"></line><line x1="0" y1="70" x2="600" y2="70"></line><line x1="0" y1="130" x2="600" y2="130"></line></g>
+<polyline points="0,120 30,120 60,118 90,121 120,92 150,119 180,120 210,118 240,121 270,119 300,40 330,116 360,120 390,119 420,121 450,118 480,120 510,119 540,104 570,120 600,119" fill="none" stroke="#8fd3e0" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="display: flex; justify-content: space-between;"><span class="lbl">-1m</span><span class="lbl">-30s</span><span class="lbl">now</span></div>
+</section>
+
+</div>
+</main>
+</div>
+
+<footer style="border-top: 1px solid #222528; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px;">
+<div style="display: flex; align-items: center; gap: 10px; min-width: 200px;">
+<span style="width: 28px; height: 28px; border-radius: 4px; background: #c8323c;"></span>
+<div style="display: flex; flex-direction: column;"><span style="font-size: 13px;">Static</span><span class="lbl">#c8323c · all devices</span></div>
+</div>
+<span style="flex: 1;"></span>
+<button type="button" aria-label="Lights off" style="width: 36px; height: 36px; border-radius: 18px; border: 1px solid #2c3034; background: transparent; display: flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M7 1v5M3.5 3.5a5 5 0 1 0 7 0"></path></svg></button>
+<span style="flex: 1;"></span>
+<label style="display: flex; align-items: center; gap: 10px; width: 220px;"><span class="lbl">brightness</span><input type="range" min="0" max="100" value="80"><span class="lbl num" style="color: #c9ccce;">80</span></label>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

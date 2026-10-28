@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>KelvinRGB</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <div class="body">
+    <nav aria-label="Pages">
+      <span class="brand">KELVIN</span>
+      <button data-page="lighting"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="6.5" r="4"/><path d="M6 13h4M6.5 15h3"/></svg>Lighting</button>
+      <button data-page="devices"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="2" y="3" width="12" height="9" rx="1"/><path d="M5 14h6"/></svg>Devices</button>
+      <button data-page="cooling"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="1.5"/><path d="M8 6.5C8 3 10 2 11.5 3S10 6.5 8 6.5M9.5 8c3.5 0 4.5 2 3.5 3.5S9.5 10 9.5 8M8 9.5c0 3.5-2 4.5-3.5 3.5S6 9.5 8 9.5M6.5 8C3 8 2 6 3 4.5S6.5 6 6.5 8"/></svg>Cooling</button>
+      <button data-page="monitoring"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1 9h3l2-5 3 9 2-6 1 2h3"/></svg>Monitoring</button>
+      <div class="status">
+        <div><span class="lbl">openrgb</span><span class="lbl soft" id="st-openrgb">...</span></div>
+        <div><span class="lbl">sensors</span><span class="lbl soft" id="st-sensors">...</span></div>
+        <div><span class="lbl">apex guard</span><span class="lbl soft" id="st-guard">...</span></div>
+      </div>
+    </nav>
+    <main id="page"></main>
+  </div>
+  <footer>
+    <div class="row" style="min-width: 200px;">
+      <span id="ft-swatch" style="width: 28px; height: 28px; border-radius: 4px;"></span>
+      <div style="display: flex; flex-direction: column;"><span id="ft-effect" style="font-size: 13px;"></span><span class="lbl" id="ft-sub"></span></div>
+    </div>
+    <span class="grow"></span>
+    <button class="round" id="ft-power" aria-label="Lights on or off"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M7 1v5M3.5 3.5a5 5 0 1 0 7 0"/></svg></button>
+    <span class="grow"></span>
+    <label class="row" style="width: 240px;"><span class="lbl">brightness</span><input type="range" id="ft-bright" min="0" max="100"><span class="lbl num soft" id="ft-bright-v"></span></label>
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

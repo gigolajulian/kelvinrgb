@@ -1,0 +1,5 @@
+node_modules/
+sidecar/lib/
+sidecar/sidecar.exe
+verify/
+shot*.png
