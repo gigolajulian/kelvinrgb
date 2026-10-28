@@ -29,7 +29,7 @@ const DEFAULTS = {
   fans: {},    // control id -> { mode: bios|curve|fixed, sensor, points, shape, fixed }
 };
 let settings = structuredClone(DEFAULTS);
-try { settings = { ...settings, ...JSON.parse(fs.readFileSync(settingsFile, 'utf8')) }; } catch {}
+try { settings = { ...settings, ...JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')) }; } catch (e) { console.log(`settings: ${e.message}`); }
 let saveTimer;
 function save() {
   clearTimeout(saveTimer);
@@ -236,8 +236,8 @@ app.whenReady().then(() => {
   // Dev aid: RGB_SHOT=<folder> saves a screenshot of each page after 10 s.
   if (process.env.RGB_SHOT) setTimeout(async () => {
     for (const p of ['monitoring', 'lighting', 'devices', 'cooling']) {
-      await win.webContents.executeJavaScript(`go(${JSON.stringify(p)})`);
-      await new Promise((r) => setTimeout(r, 1200));
+      // wait two frames after switching, or capturePage returns the previous page
+      await win.webContents.executeJavaScript(`go(${JSON.stringify(p)}); new Promise((r) => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(r)), 1500))`);
       fs.writeFileSync(path.join(process.env.RGB_SHOT, `${p}.png`), (await win.webContents.capturePage()).toPNG());
     }
   }, 10000);

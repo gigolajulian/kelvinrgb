@@ -295,7 +295,7 @@ const pages = {
       $('#c-unclean').hidden = !ST.sensors.unclean;
       box.innerHTML = ST.controls.map((c) => {
         const f = S.fans[c.id];
-        const mode = !f || f.mode === 'bios' ? 'bios' : f.mode === 'fixed' ? `fixed ${f.fixed}%` : 'curve';
+        const mode = !f || f.mode === 'bios' ? (c.ours ? 'held 100% until reboot' : 'bios') : f.mode === 'fixed' ? `fixed ${f.fixed}%` : 'curve';
         return `<button class="fancard" data-id="${esc(c.id)}" aria-pressed="${c.id === this.sel}"><span class="row" style="width:100%"><span class="grow">${esc(fanName(c))}</span><span class="lbl">${esc(c.hw)}</span></span>
           <span class="big">${fanRpm(c) ?? '-'}<span style="font-size:12px;color:var(--mute)"> rpm</span></span><span class="lbl">${Math.round(c.value)}% · ${mode}</span></button>`;
       }).join('');

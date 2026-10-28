@@ -14,7 +14,8 @@ function start() {
   const p = spawn(path.join(dir, 'sidecar.exe'), ['--floor', '25'], { cwd: dir });
   const sc = { p, tick: null, ready: null };
   readline.createInterface({ input: p.stdout }).on('line', (l) => {
-    const m = JSON.parse(l);
+    let m;
+    try { m = JSON.parse(l); } catch { return; } // a hard kill can cut the last line short
     if (m.type === 'tick') sc.tick = m;
     else if (m.type === 'ready') { sc.ready = m; say('ready', JSON.stringify(m)); }
     else say('sidecar', l);
