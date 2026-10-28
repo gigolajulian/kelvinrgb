@@ -36,6 +36,9 @@ $cfg = '{"lighting":{"effect":"static","color":"#00b4d8","speed":40,"brightness"
 $env:RGB_SHOT = $out
 $app = Start-Process .\node_modules\electron\dist\electron.exe -ArgumentList '.' -PassThru -RedirectStandardOutput (Join-Path $out 'app.out') -RedirectStandardError (Join-Path $out 'app.err')
 Start-Sleep 25
+'== fans as the app sees them'
+Get-Content (Join-Path $out 'fans.txt') -ErrorAction SilentlyContinue | Out-String
+Get-ChildItem $out -Filter *.png | Select-Object Name, LastWriteTime | Out-String
 '== colors read back from OpenRGB'
 node scripts\color-check.mjs 2>&1 | Out-String
 Stop-Process -Id $app.Id -Force
