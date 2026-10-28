@@ -48,9 +48,14 @@ const state = {
 };
 let win;
 function push() { if (win && !win.isDestroyed()) win.webContents.send('state', state); }
+// The installed app has no console, so the log also goes to %APPDATA%\KelvinRGB\log.txt (reset each launch).
+const logFile = path.join(app.getPath('userData'), 'log.txt');
+try { fs.writeFileSync(logFile, ''); } catch {}
 function log(msg) {
-  state.log = [...state.log.slice(-49), `${new Date().toLocaleTimeString()} ${msg}`];
+  const line = `${new Date().toLocaleTimeString()} ${msg}`;
+  state.log = [...state.log.slice(-49), line];
   console.log(msg);
+  fs.appendFile(logFile, line + '\n', () => {});
 }
 
 // ---------- lighting ----------
