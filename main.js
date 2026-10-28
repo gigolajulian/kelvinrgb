@@ -127,7 +127,8 @@ function render() {
 // ---------- sensors + fans ----------
 let sidecar = null;
 let sidecarStopping = false;
-const SIDECAR = path.join(__dirname, 'sidecar', 'sidecar.exe');
+// Packaged builds ship the sidecar under resources/ (an exe can't run from inside app.asar).
+const SIDECAR = path.join(app.isPackaged ? process.resourcesPath : __dirname, 'sidecar', 'sidecar.exe');
 
 function startSidecar() {
   if (sidecar || state.guard) return;

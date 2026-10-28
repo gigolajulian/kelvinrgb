@@ -8,12 +8,50 @@
     "start": "electron .",
     "build:sidecar": "powershell -ExecutionPolicy Bypass -File sidecar/build.ps1",
     "test": "node --test test/math.test.js",
-    "postinstall": "node scripts/patch-sdk.js"
+    "postinstall": "node scripts/patch-sdk.js",
+    "dist": "npm run build:sidecar && electron-builder --win nsis"
   },
   "dependencies": {
-    "openrgb-sdk": "^0.6.0"
+    "openrgb-sdk": "0.6.0"
   },
   "devDependencies": {
-    "electron": "^45.1.0"
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0"
+  },
+  "productName": "KelvinRGB",
+  "author": "Julian Gigola",
+  "build": {
+    "appId": "com.juliangigola.kelvinrgb",
+    "productName": "KelvinRGB",
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**",
+      "renderer/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "sidecar",
+        "to": "sidecar",
+        "filter": [
+          "sidecar.exe",
+          "lib/**"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "KelvinRGB"
+    },
+    "directories": {
+      "output": "dist"
+    }
   }
 }

@@ -3,3 +3,4 @@ sidecar/lib/
 sidecar/sidecar.exe
 verify/
 shot*.png
+dist/

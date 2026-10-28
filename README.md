@@ -6,7 +6,17 @@ One dark window for the PC: lighting on every component, fan curves, live sensor
 - **Sensors and fans:** [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) 0.9.6 (MPL 2.0) inside a small sidecar (`sidecar/sidecar.exe`) that talks JSON over stdio.
 - **Color tuning:** done in this app. Each device gets red, green and blue gain and a gamma, applied before colors go to OpenRGB, saved per device.
 
-## Setup
+## Install
+
+Build the installer and run it:
+```bash
+npm run dist
+```
+This builds the sidecar, then writes `dist\KelvinRGB Setup <version>.exe`. The installer puts the app in `C:\Program Files\KelvinRGB` and adds Start menu and desktop shortcuts. The app always starts as admin (UAC prompt). OpenRGB and PawnIO still need installing once (step 1 below).
+
+The build is unsigned, so Windows SmartScreen may warn the first time: More info, then Run anyway. It uses the default Electron icon for now.
+
+## Setup (run from source)
 
 1. Install the engines (once):
    ```bash
