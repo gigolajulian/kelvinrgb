@@ -24,16 +24,16 @@ const ST = {
   controls: [1, 2, 3, 4, 5].map((i) => ({ id: 'fan' + i, name: ['CPU Fan', 'Chassis Fan 1', 'Chassis Fan 2', 'Chassis Fan 3', 'AIO Pump'][i - 1] + ' Control', hw: 'Nuvoton NCT6798D', index: i - 1, kind: 'board', value: [42, 35, 35, 35, 60][i - 1] })),
   openrgb: { ok: true, msg: 'connected' }, sensors: { ok: true, msg: 'live', admin: true }, guard: false, conflicts: null, version: '1.0.0', update: { kind: 'current', text: 'Up to date · 1.0.0' }, setup: { openrgb: true, pawnio: true, busy: '', bundled: true },
   drivers: { checking: false, at: Date.now(), lhm: '0.9.6.0', busy: '', msg: '',
-    openrgb: { installed: '1.1.0', latest: 'release_1.1', pinned: '1.1.0', act: '' }, pawnio: { installed: '2.2.0.0', latest: '2.2.0', pinned: '2.2.0', act: '' },
+    openrgb: { installed: '1.1.0', latest: 'release_1.1', pinned: '1.1.0', act: '', tone: 'ok' }, pawnio: { installed: '2.2.0.0', latest: '2.2.0', pinned: '2.2.0', act: '', tone: 'ok' },
     windows: [
-      { id: 'chipset', name: 'AMD chipset', what: 'Board drivers: GPIO, SMBus, PSP.', device: 'AMD SMBus', state: 'ok', installed: '8.09.28.1124' },
-      { id: 'radeon', name: 'AMD Software', what: 'Radeon graphics driver.', device: 'Microsoft Basic Display Adapter', state: 'inbox', installed: '' },
-      { id: 'realtek', name: 'Realtek network', what: 'Wired network on the board.', device: 'Realtek Gaming GbE Family Controller', state: 'inbox', inboxOk: true, installed: '' },
-      { id: 'fresco', name: 'Fresco Logic USB 3', what: 'USB 3 card. Windows has no driver for it.', device: 'USB Controller', state: 'none', installed: '' },
+      { id: 'chipset', name: 'AMD chipset', what: 'Board drivers: GPIO, SMBus, PSP.', device: 'AMD SMBus', state: 'ok', installed: '8.09.28.1124', tone: 'ok' },
+      { id: 'radeon', name: 'AMD Software', what: 'Radeon graphics driver.', device: 'Microsoft Basic Display Adapter', state: 'inbox', installed: '', tone: 'bad' },
+      { id: 'realtek', name: 'Realtek network', what: 'Wired network on the board.', device: 'Realtek Gaming GbE Family Controller', state: 'inbox', inboxOk: true, installed: '', tone: 'ok' },
+      { id: 'fresco', name: 'Fresco Logic USB 3', what: 'USB 3 card. Windows has no driver for it.', device: 'USB Controller', state: 'none', installed: '', tone: 'bad' },
     ] },
 };
-if (process.argv[3] === 'pending') Object.assign(ST.drivers.openrgb, { latest: 'release_1.2', act: 'update' });
-if (process.argv[3] === 'clean') { ST.drivers.windows.forEach((w) => { w.state = 'ok'; w.installed ||= '1.0'; }); }
+if (process.argv[3] === 'pending') Object.assign(ST.drivers.openrgb, { latest: 'release_1.2', act: 'update', tone: 'warn' });
+if (process.argv[3] === 'clean') { ST.drivers.windows.forEach((w) => { w.state = 'ok'; w.installed ||= '1.0'; w.tone = 'ok'; }); }
 const S = { lighting: { on: true, effect: 'static', color: '#b3121f', brightness: 80, speed: 50 }, devices: { board: { brightness: 70 }, mouse: { zones: { 0: '#2f5bff', 1: '#2f5bff', 2: '#2f5bff' } } }, fans: Object.fromEntries([1, 2, 3, 4, 5].map((i) => ['fan' + i, { mode: 'curve', shape: 'smooth', points: [[30, 25], [50, 35], [65, 55], [80, 85], [90, 100]], fixed: 50, sensor: '/cpu/t' }])), glass: true, setupSeen: true };
 const stub = `window.rgb = new Proxy({ get: async () => ({ settings: ${JSON.stringify(S)}, state: ${JSON.stringify(ST)}, floor: 25 }), onState(cb) { const st = ${JSON.stringify(ST)}; let n = 0; const t = setInterval(() => { for (const h of st.hw) for (const s of h.sensors) if (s.value) s.value = +(s.value * (0.97 + Math.random() * 0.06)).toFixed(1); cb(JSON.parse(JSON.stringify(st))); if (++n >= 60) clearInterval(t); }, 15); }, onSettings() {} }, { get: (t, k) => t[k] || ((...a) => console.log('rgb.' + k, JSON.stringify(a))) });`;
 const R = path.join(__dirname, '../../renderer').split(path.sep).join('/');

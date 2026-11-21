@@ -227,6 +227,7 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .drv .v.dim { color: var(--dim); }
 .drv .st { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--soft); }
 .drv .st .dot { width: 8px; height: 8px; } .dot.acc { background: var(--acc); }
+.drv .st.t-ok { color: var(--ok); } .drv .st.t-warn { color: var(--warn); } .drv .st.t-bad { color: var(--bad); } .drv .st.t-dim { color: var(--dim); }
 .drv .act { align-items: flex-end; }
 .drv .act .btn { min-width: 96px; }
 #v .helptext { margin: 12px 4px 0; }

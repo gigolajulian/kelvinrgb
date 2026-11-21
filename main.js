@@ -437,7 +437,16 @@ async function latestTag(url) {
 function drv(installed, latest, pinned) {
   const older = !!installed && !!latest && D.cmp(latest, installed) > 0;
   const beyond = !!latest && (!pinned || D.cmp(latest, pinned) > 0);
-  return { installed, latest, pinned, act: !installed ? (pinned && !beyond ? 'install' : 'page') : older ? (beyond ? 'page' : 'update') : '' };
+  return { installed, latest, pinned, tone: D.tone({ installed, latest }), act: !installed ? (pinned && !beyond ? 'install' : 'page') : older ? (beyond ? 'page' : 'update') : '' };
+}
+// Driver updates Windows Update offers for this PC: the one official "latest" for makers' drivers. About 15 s.
+// Resolves null when the search fails, so rows say "not checked" instead of a false green.
+const WU_QUERY = "$r=(New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher().Search(\"IsInstalled=0 and Type='Driver'\"); ConvertTo-Json -Compress -InputObject @($r.Updates | %{@{provider=[string]$_.DriverProvider;model=[string]$_.DriverModel;title=[string]$_.Title}})";
+function wuDrivers() {
+  return new Promise((res) => execFile(SYS('WindowsPowerShell\\v1.0\\powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', WU_QUERY], { windowsHide: true, timeout: 90000 }, (e, out) => {
+    if (e) { log(`drivers: Windows Update search failed: ${e.message.trim()}`); return res(null); }
+    try { const j = JSON.parse(out || '[]'); res(Array.isArray(j) ? j : [j]); } catch { res(null); }
+  }));
 }
 function checkDrivers() {
   if (state.drivers.checking) return;
@@ -448,9 +457,9 @@ function checkDrivers() {
     let raw = { devices: [], packages: [] };
     if (e) log(`drivers: query failed: ${e.message.trim()}`);
     else try { raw = JSON.parse(out); } catch (x) { log(`drivers: ${x.message}`); }
-    const [orgb, pawn] = await Promise.all([latestTag(D.OPENRGB.api), latestTag('https://api.github.com/repos/namazso/PawnIO.Setup/releases/latest')]);
+    const [orgb, pawn, wu] = await Promise.all([latestTag(D.OPENRGB.api), latestTag('https://api.github.com/repos/namazso/PawnIO.Setup/releases/latest'), wuDrivers()]);
     state.drivers = {
-      ...state.drivers, checking: false, at: Date.now(), windows: D.windowsRows(raw), lhm: raw.lhm || '',
+      ...state.drivers, checking: false, at: Date.now(), windows: D.windowsRows(raw, wu), lhm: raw.lhm || '',
       openrgb: drv(D.pkgVer(raw, /^OpenRGB$/i), orgb, D.OPENRGB.v),
       pawnio: drv(D.pkgVer(raw, /^PawnIO$/i), pawn, fs.existsSync(PAWNIO_SETUP) ? PAWNIO_V : ''),
     };
