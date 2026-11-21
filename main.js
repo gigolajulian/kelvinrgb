@@ -24,7 +24,9 @@ const DEV = !app.isPackaged; // dev switches (RGB_*) only work from source
 function isAdmin() {
   try { execFileSync(SYS('net.exe'), ['session'], { stdio: 'ignore' }); return true; } catch { return false; }
 }
-if (!isAdmin() && !(DEV && process.env.RGB_NO_ELEVATE)) {
+// --quit is for the running copy (the installer sends it): asking for the lock passes it on, then this copy exits.
+if (process.argv.includes('--quit')) { app.requestSingleInstanceLock(); app.exit(0); }
+else if (!isAdmin() && !(DEV && process.env.RGB_NO_ELEVATE)) {
   const q = (s) => s.replace(/'/g, "''"); // PowerShell single-quote escape
   const ps = `Start-Process -FilePath '${q(process.execPath)}' -ArgumentList '"${q(app.getAppPath())}"' -WorkingDirectory '${q(app.getAppPath())}' -Verb RunAs`;
   spawn(SYS('WindowsPowerShell\\v1.0\\powershell.exe'), ['-NoProfile', '-Command', ps], { detached: true, stdio: 'ignore' }).unref();
