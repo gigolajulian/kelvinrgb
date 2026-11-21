@@ -23,9 +23,10 @@ button { cursor: pointer; }
 
 /* light behind the glass follows the lighting colour */
 .amb { position: fixed; inset: -20%; z-index: -1; pointer-events: none; transition: opacity .4s; }
-.amb i { position: absolute; border-radius: 50%; filter: blur(110px); background: var(--glow); transition: background .5s; }
-.amb i:nth-child(1) { width: 46%; height: 52%; left: 8%; top: 12%; opacity: .22; }
-.amb i:nth-child(2) { width: 36%; height: 42%; right: 4%; bottom: 6%; opacity: .12; }
+/* A see-through tint, not a fog: low-alpha radial fades, so the desktop still shows through the glow. No blur filter (cheaper). */
+.amb i { position: absolute; border-radius: 50%; transition: background .5s; }
+.amb i:nth-child(1) { width: 60%; height: 70%; left: 0; top: 4%; background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 9%, transparent), transparent); }
+.amb i:nth-child(2) { width: 50%; height: 60%; right: 0; bottom: 0; background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 5%, transparent), transparent); }
 html.dark-lights .amb { opacity: 0; }
 
 .app { height: 100%; display: flex; flex-direction: column; }
