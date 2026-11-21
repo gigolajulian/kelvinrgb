@@ -1,5 +1,5 @@
 // KelvinRGB: one window for lighting (OpenRGB SDK), sensors and fans (LibreHardwareMonitor sidecar).
-const { app, BrowserWindow, ipcMain, Notification, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, session, shell, Tray, Menu, nativeImage } = require('electron');
 const { spawn, execFile, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -8,6 +8,8 @@ const { Client } = require('openrgb-sdk');
 const M = require('./lib/math');
 const C = require('./lib/conflicts');
 const V = require('./lib/validate');
+const G = require('./lib/guard');
+const U = require('./lib/update');
 
 const FLOOR = 25;
 const GUARD_PROCS = ['r5apex.exe', 'r5apex_dx12.exe', 'easyanticheat.exe', 'easyanticheat_eos.exe'];
@@ -17,9 +19,6 @@ const OPENRGB_EXE = [path.join(process.env.ProgramFiles || 'C:\\Program Files', 
 const SYS = (exe) => path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', exe);
 const DEV = !app.isPackaged; // dev switches (RGB_*) only work from source
 
-// One copy only: two elevated instances would fight over the fan headers.
-if (!app.requestSingleInstanceLock()) app.exit(0);
-
 // LibreHardwareMonitor and OpenRGB need admin to reach SMBus / Super I/O. Relaunch elevated once.
 function isAdmin() {
   try { execFileSync(SYS('net.exe'), ['session'], { stdio: 'ignore' }); return true; } catch { return false; }
@@ -28,6 +27,10 @@ if (!isAdmin() && !(DEV && process.env.RGB_NO_ELEVATE)) {
   const q = (s) => s.replace(/'/g, "''"); // PowerShell single-quote escape
   const ps = `Start-Process -FilePath '${q(process.execPath)}' -ArgumentList '"${q(app.getAppPath())}"' -WorkingDirectory '${q(app.getAppPath())}' -Verb RunAs`;
   spawn(SYS('WindowsPowerShell\\v1.0\\powershell.exe'), ['-NoProfile', '-Command', ps], { detached: true, stdio: 'ignore' }).unref();
+  app.exit(0);
+} else if (!app.requestSingleInstanceLock()) {
+  // One copy only: two elevated instances would fight over the fan headers. Taken after the relaunch,
+  // so the short-lived non-admin parent never holds it.
   app.exit(0);
 }
 
@@ -39,6 +42,7 @@ const DEFAULTS = {
   fans: {},    // control id -> { mode: bios|curve|fixed, sensor, points, shape, fixed }
   closeConflicts: true, // show the conflict list when RGB apps that fight us run (lib/conflicts.js)
   glass: true, // Windows 11 acrylic behind the window
+  splash: true, // Bloom splash at launch (renderer/splash.html)
 };
 let settings = structuredClone(DEFAULTS);
 try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
@@ -60,7 +64,8 @@ const state = {
   log: [],
 };
 let win;
-function push() { if (win && !win.isDestroyed()) win.webContents.send('state', state); }
+// A hidden window gets nothing: it would only redraw for nobody. showWindow() sends the latest state.
+function push() { if (win && !win.isDestroyed() && win.isVisible()) win.webContents.send('state', state); updateTray(); }
 // The installed app has no console, so the log also goes to %APPDATA%\KelvinRGB\log.txt (reset each launch).
 const logFile = path.join(app.getPath('userData'), 'log.txt');
 try { fs.writeFileSync(logFile, ''); } catch {}
@@ -111,6 +116,7 @@ async function loadDevices() {
   }));
   for (const d of state.devices) if (d.leds) client.setCustomMode(d.id);
   state.openrgb = { ok: true, msg: `${state.devices.length} devices` };
+  stepSplash(3);
   log(`OpenRGB: ${state.devices.map((d) => d.name).join(', ')}`);
   push();
   startRender();
@@ -199,7 +205,8 @@ function onSidecarLine(line) {
   if (m.type === 'log') return log(`sidecar: ${m.msg}`);
   if (m.type === 'ready') {
     state.sensors = { ok: true, msg: m.admin ? 'ok' : 'no admin', admin: m.admin, unclean: m.unclean };
-    log(`sidecar ready: ${m.controls} fan controls, admin ${m.admin}`);
+    stepSplash(2);
+    log(`sidecar ready:${m.controls} fan controls, admin ${m.admin}`);
   }
   if (m.type === 'tick') {
     state.hw = m.hw;
@@ -238,16 +245,27 @@ function checkGuard() {
     if (active === state.guard) return;
     state.guard = active;
     if (active) {
-      log('apex guard: game running, releasing fans and lighting');
-      clearInterval(renderTimer);
-      await stopSidecar();
-      if (client) { client.disconnect(); client = null; }
+      log('apex guard: game running, releasing fans and lighting, stopping OpenRGB');
       state.openrgb = { ok: false, msg: 'paused for apex' };
       state.sensors = { ...state.sensors, ok: false, msg: 'paused for apex' };
+      push();
+      await G.enter({
+        stopRender: () => clearInterval(renderTimer),
+        stopSidecar,
+        disconnect: () => { if (client) { client.removeAllListeners('disconnect'); client.disconnect(); client = null; } },
+        wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+        killOpenRgb: () => new Promise((r) => {
+          if (!names.includes('"openrgb.exe"')) return r();
+          if (!launchedOpenRgb) log('apex guard: OpenRGB was already running before KelvinRGB, stopping it anyway');
+          execFile(SYS('taskkill.exe'), ['/F', '/T', '/IM', 'OpenRGB.exe'], { windowsHide: true }, (e) => {
+            log(e ? `apex guard: could not stop OpenRGB: ${e.message.trim()}` : 'apex guard: OpenRGB server stopped');
+            r();
+          });
+        }),
+      });
     } else {
-      log('apex guard: game closed, resuming');
-      startSidecar();
-      connectOpenRgb();
+      log('apex guard: game closed, restarting OpenRGB and resuming');
+      G.leave({ startSidecar, allowRelaunch: () => { launchedOpenRgb = false; }, connect: connectOpenRgb });
     }
     push();
   });
@@ -282,6 +300,7 @@ function handleConflicts(tasklistCsv) {
   const names = [...new Set([...C.toClose(lastProcs).map((p) => p.name), ...C.toWarn(lastProcs)])].filter((n) => !declined.has(n.toLowerCase()));
   if (!names.length) return firstCheckDone();
   state.conflicts = names.map((n) => ({ name: n, label: C.label(n), note: C.WARN[n] || n, closable: C.closable(n), service: !!C.service(n), running: true }));
+  if (win && !win.isVisible()) showWindow(); // the prompt needs a visible window (hidden ones get no state)
   push();
 }
 function stopConflictService(name) {
@@ -325,7 +344,7 @@ const on = (ch, fn) => ipcMain.on(ch, (e, ...a) => { if (ours(e)) fn(...a); else
 const hasDevice = (k) => state.devices.some((d) => d.key === k);
 const hasFan = (id) => state.controls.some((c) => c.id === id);
 ipcMain.handle('get', (e) => (ours(e) ? { settings, state, floor: FLOOR } : null));
-on('lighting', (patch) => { const p = V.lighting(patch); if (!p) return; Object.assign(settings.lighting, p); save(); startRender(); });
+on('lighting', (patch) => { const p = V.lighting(patch); if (!p) return; Object.assign(settings.lighting, p); save(); startRender(); updateTray(); });
 on('device', (key, patch) => {
   const p = V.device(patch); if (!p || !hasDevice(key)) return;
   const cur = settings.devices[key] || {};
@@ -339,19 +358,132 @@ on('conflictClose', (name) => { if (state.conflicts?.some((c) => c.name === name
 on('conflictDone', finishConflicts);
 on('rescan', () => { if (client) { client.requestRescan(); setTimeout(() => loadDevices().catch((e) => log(e.message)), 3000); } });
 on('glass', (v) => { settings.glass = v === true; save(); applyGlass(); });
+on('splash', (v) => { settings.splash = v === true; save(); });
 on('openLog', () => shell.openPath(logFile)); // fixed path, nothing taken from the renderer
+on('quit', () => app.quit());
+on('autostart', (v) => setAutostart(v === true));
+on('update', (a) => { if (a === 'check') updater.check(true); else if (a === 'install') updater.install(); else if (a === 'releases') shell.openExternal(U.RELEASES); });
+
+// ---------- updates ----------
+const updater = U.create({
+  version: app.getVersion(), log, packaged: app.isPackaged,
+  onChange: () => { state.update = { ...updater.view(), kind: updater.state.kind }; push(); updateTray(true); },
+  beforeInstall: async () => { quitting = true; clearInterval(renderTimer); await stopSidecar(); if (client) client.disconnect(); },
+  spawn: (file, args) => spawn(file, args, { detached: true, stdio: 'ignore' }).unref(),
+  quit: () => app.quit(),
+});
+state.update = { ...updater.view(), kind: 'idle' };
+function updateItem() { const v = updater.view(); return { label: v.text, enabled: !!v.action, click: () => (v.action === 'install' ? updater.install() : updater.check(true)) }; }
+
+// ---------- start with Windows ----------
+// A scheduled task at logon with highest privileges, so there is no admin prompt every login.
+// Installed build only: an elevated task must never point at an exe in a user-writable folder (dev runs from Documents).
+const TASK = 'KelvinRGB';
+const autostartSupported = () => app.isPackaged && process.execPath.toLowerCase().startsWith((process.env.ProgramFiles || 'C:\\Program Files').toLowerCase() + '\\');
+function readAutostart() {
+  state.autostart = { supported: autostartSupported(), on: false };
+  if (!state.autostart.supported) return;
+  execFile(SYS('schtasks.exe'), ['/Query', '/TN', TASK], { windowsHide: true }, (err) => { state.autostart.on = !err; push(); updateTray(true); });
+}
+function setAutostart(on) {
+  if (!autostartSupported()) return;
+  const args = on ? ['/Create', '/TN', TASK, '/TR', `"${process.execPath}" --hidden`, '/SC', 'ONLOGON', '/RL', 'HIGHEST', '/F'] : ['/Delete', '/TN', TASK, '/F'];
+  execFile(SYS('schtasks.exe'), args, { windowsHide: true }, (err, _out, se) => {
+    if (err) log(`autostart: ${(se || err.message).trim()}`); else log(`autostart: ${on ? 'on' : 'off'}`);
+    readAutostart();
+  });
+}
 function applyGlass() { if (win && process.platform === 'win32') win.setBackgroundMaterial(settings.glass ? 'acrylic' : 'none'); }
 
+// ---------- tray helper: status at a glance, click opens the app, right click for quick settings ----------
+const ICON = path.join(__dirname, 'renderer', 'icon.png');
+const ICO = path.join(__dirname, 'renderer', 'icon.ico');
+let tray = null;
+let trayKey = '', trayStatus = '', trayAt = 0;
+const EFFECT_NAMES = { static: 'Static', breathing: 'Breathing', spectrum: 'Spectrum', wave: 'Wave', off: 'Off' };
+function showWindow() { if (!win) return; if (splash) return endSplash();win.setSkipTaskbar(false); if (win.isMinimized()) win.restore(); win.show(); win.focus(); push(); }
+function hideWindow() { if (win) { win.hide(); win.setSkipTaskbar(true); } }
+function temp(re, hwRe) {
+  for (const h of state.hw) if (hwRe.test(h.type)) { const s = h.sensors.find((x) => x.type === 'Temperature' && re.test(x.name)) || h.sensors.find((x) => x.type === 'Temperature'); if (s) return Math.round(s.value); }
+  return null;
+}
+// Changes the app makes from the tray are sent to the window so its copy of settings stays in step.
+function trayChange(fn) { fn(); save(); if (win && !win.isDestroyed()) win.webContents.send('settings', settings); updateTray(true); }
+function updateTray(force) {
+  if (!tray) return;
+  const L = settings.lighting, cpu = temp(/Tctl|Package|Tdie/, /^Cpu$/), gpu = temp(/GPU Core|Edge/, /^Gpu/);
+  const lights = state.guard ? 'paused for Apex' : L.on ? EFFECT_NAMES[L.effect] : 'off';
+  const temps = [cpu != null && `CPU ${cpu} °C`, gpu != null && `GPU ${gpu} °C`].filter(Boolean).join(' · ') || 'sensors starting';
+  const status = JSON.stringify([lights, state.openrgb.msg, state.sensors.msg, state.guard, settings.glass, settings.closeConflicts, L.effect, L.on]);
+  tray.setToolTip(`KelvinRGB\nLights ${lights}\n${temps}`.slice(0, 127)); // cheap, every tick
+  // Rebuilding the menu is not: only when status or settings change, temps at most every 10 s.
+  if (!force && status === trayStatus && (temps === trayKey || Date.now() - trayAt < 10000)) return;
+  trayKey = temps; trayStatus = status; trayAt = Date.now();
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: `Lights ${lights}`, enabled: false },
+    { label: temps, enabled: false },
+    { label: `OpenRGB ${state.openrgb.ok ? 'connected' : state.openrgb.msg} · Sensors ${state.sensors.ok ? 'live' : state.sensors.msg}`, enabled: false },
+    { type: 'separator' },
+    { label: 'Open KelvinRGB', click: showWindow },
+    { type: 'separator' },
+    { label: 'Lights on', type: 'checkbox', checked: L.on, enabled: !state.guard, click: (m) => trayChange(() => { L.on = m.checked; startRender(); }) },
+    { label: 'Effect', enabled: !state.guard, submenu: Object.entries(EFFECT_NAMES).map(([k, n]) => ({ label: n, type: 'radio', checked: L.effect === k, click: () => trayChange(() => { L.effect = k; startRender(); }) })) },
+    { label: state.autostart?.supported ? 'Start with Windows' : 'Start with Windows (installed app only)', type: 'checkbox', checked: !!state.autostart?.on, enabled: !!state.autostart?.supported, click: (m) => setAutostart(m.checked) },
+    { label: 'Glass background', type: 'checkbox', checked: settings.glass !== false, click: (m) => trayChange(() => { settings.glass = m.checked; applyGlass(); }) },
+    { label: 'Conflict check', type: 'checkbox', checked: settings.closeConflicts !== false, click: (m) => trayChange(() => { settings.closeConflicts = m.checked; declined.clear(); }) },
+    { type: 'separator' },
+    updateItem(),
+    { label: 'Releases on GitHub', click: () => shell.openExternal(U.RELEASES) },
+    { type: 'separator' },
+    { label: 'Quit KelvinRGB', click: () => app.quit() },
+  ]));
+}
+
+// ---------- splash (Bloom) ----------
+// A transparent, click-through window over the main window's bounds. The ring turns amber to teal as start-up
+// steps finish (Apex checked, sensors, OpenRGB), then a panel opens out of it and the real window takes over.
+let splash = null, splashStep = 0, splashAt = 0, splashEnding = false;
+function openSplash() {
+  splash = new BrowserWindow({
+    ...win.getBounds(), transparent: true, frame: false, resizable: false, movable: false, skipTaskbar: true, alwaysOnTop: true,
+    focusable: false, hasShadow: false, show: false, backgroundColor: '#00000000',
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
+  });
+  splash.setIgnoreMouseEvents(true);
+  splash.webContents.on('will-navigate', (e) => e.preventDefault());
+  splash.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  splash.loadFile(path.join(__dirname, 'renderer', 'splash.html'));
+  splash.once('ready-to-show', () => splash && splash.showInactive());
+  splashAt = Date.now();
+  setTimeout(endSplash, 5000); // never hold the app back longer than this, OpenRGB can be slow to start
+}
+function stepSplash(i) {
+  if (!splash || i <= splashStep) return;
+  splashStep = i;
+  splash.webContents.executeJavaScript(`step(${i})`).catch(() => {});
+  if (i >= 3) endSplash();
+}
+function endSplash() {
+  if (!splash || splashEnding) return;
+  splashEnding = true;
+  const wait = Math.max(0, 1400 - (Date.now() - splashAt)); // long enough to read as a moment, not a flicker
+  setTimeout(() => {
+    splash.webContents.executeJavaScript('step(4); done()').catch(() => {});
+    // the panel has filled the window by now: show the real one, drop the splash just after
+    setTimeout(() => { const s = splash; splash = null; showWindow(); setTimeout(() => s.destroy(), 150); }, 950);
+  }, wait);
+}
+
 // ---------- app ----------
-// Windows toasts need an AppUserModelID; in dev it must point at electron.exe.
-app.setAppUserModelId(app.isPackaged ? 'com.juliangigola.kelvinrgb' : process.execPath);
+// One app id in dev and installed, so Windows shows KelvinRGB's icon in the taskbar, never Electron's.
+app.setAppUserModelId('com.juliangigola.kelvinrgb');
 app.whenReady().then(() => {
   // Deny anything a page could ask for (camera, mic, clipboard reads, ...).
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 900, minHeight: 600, autoHideMenuBar: true, title: 'KelvinRGB',
-    icon: path.join(__dirname, 'renderer', 'icon.png'),
+    icon: ICO, show: false,
     backgroundColor: '#00000000', backgroundMaterial: settings.glass ? 'acrylic' : 'none', // transparent so acrylic shows through
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, spellcheck: false,
@@ -364,7 +496,19 @@ app.whenReady().then(() => {
   win.webContents.on('will-redirect', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  app.on('second-instance', () => { if (win.isMinimized()) win.restore(); win.focus(); });
+  // Taskbar icon and id for this window (dev runs as electron.exe, which would otherwise lend its own icon).
+  if (process.platform === 'win32') win.setAppDetails({ appId: 'com.juliangigola.kelvinrgb', appIconPath: ICO, appIconIndex: 0 });
+  // Close and minimize hide to the tray. Quit from the tray menu or Settings.
+  win.on('close', (e) => { if (!quitting) { e.preventDefault(); hideWindow(); } });
+  win.on('minimize', (e) => { e.preventDefault(); hideWindow(); });
+  // Hidden start (logon task) shows nothing; otherwise the splash, or the window straight away.
+  if (!process.argv.includes('--hidden')) { if (settings.splash !== false) openSplash(); else win.once('ready-to-show', showWindow); }
+  firstCheck.then(() => stepSplash(1));
+  tray = new Tray(ICO);
+  tray.on('click', showWindow);
+  readAutostart();
+  updateTray(true);
+  app.on('second-instance', showWindow);
   // Dev aid: RGB_SHOT=<folder> writes fans.txt and a screenshot of each page, starting at 10 s.
   if (DEV && process.env.RGB_SHOT) setTimeout(async () => {
     for (const p of ['home', 'lighting', 'devices', 'fans', 'system', 'settings']) {
@@ -380,6 +524,9 @@ app.whenReady().then(() => {
   setInterval(checkGuard, 4000);
   // Give the guard its first look before touching any device.
   setTimeout(() => firstCheck.then(() => { started = true; startSidecar(); connectOpenRgb(); setInterval(connectOpenRgb, 3000); }), 1500);
+  // Quiet update check a little after start, then every 6 hours. Nothing shows unless one is available.
+  setTimeout(() => updater.check(false), 20000);
+  setInterval(() => updater.check(false), 6 * 3600e3);
 });
 
 let quitting = false;
@@ -392,4 +539,4 @@ app.on('before-quit', async (e) => {
   if (client) client.disconnect();
   app.quit();
 });
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {}); // the tray keeps KelvinRGB running

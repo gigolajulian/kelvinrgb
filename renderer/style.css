@@ -1,12 +1,17 @@
 /* Glass: the window sits on Windows 11 acrylic (main.js backgroundMaterial), panels are frosted layers on top.
-   System fonts only, nothing loads from the network. */
+   IBM Plex is bundled in renderer/fonts (OFL), nothing loads from the network. */
+/* Only 400 and 500 ship; 500 also covers 600-700 so bold text uses Medium, not faux bold. */
+@font-face { font-family: 'IBM Plex Sans'; src: url(fonts/ibm-plex-sans-latin-400-normal.woff2) format('woff2'); font-weight: 400; font-display: block; }
+@font-face { font-family: 'IBM Plex Sans'; src: url(fonts/ibm-plex-sans-latin-500-normal.woff2) format('woff2'); font-weight: 500 700; font-display: block; }
+@font-face { font-family: 'IBM Plex Mono'; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2'); font-weight: 400; font-display: block; }
+@font-face { font-family: 'IBM Plex Mono'; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format('woff2'); font-weight: 500 700; font-display: block; }
 :root {
   --acc: #8fd3e0; --ink: #e6e7e8; --soft: #9aa0a6; --dim: #6c7177;
   --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.12);
   --glass: rgba(22,24,27,.55); --glass2: rgba(255,255,255,.045);
   --ok: #7fd49b; --warn: #f0a35e; --bad: #ff6b5e; --glow: #c8323c;
-  --mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
-  --sans: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
 }
 * { box-sizing: border-box; min-width: 0; }
 html, body { margin: 0; height: 100%; color: var(--ink); font: 14px/1.45 var(--sans); background: rgba(8,9,10,.62); overflow: hidden; }
@@ -23,9 +28,10 @@ button { cursor: pointer; }
 
 /* light behind the glass follows the lighting colour */
 .amb { position: fixed; inset: -20%; z-index: -1; pointer-events: none; transition: opacity .4s; }
-.amb i { position: absolute; border-radius: 50%; filter: blur(110px); background: var(--glow); transition: background .5s; }
-.amb i:nth-child(1) { width: 46%; height: 52%; left: 8%; top: 12%; opacity: .22; }
-.amb i:nth-child(2) { width: 36%; height: 42%; right: 4%; bottom: 6%; opacity: .12; }
+/* A see-through tint, not a fog: low-alpha radial fades, so the desktop still shows through the glow. No blur filter (cheaper). */
+.amb i { position: absolute; border-radius: 50%; transition: background .5s; }
+.amb i:nth-child(1) { width: 60%; height: 70%; left: 0; top: 4%; background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 9%, transparent), transparent); }
+.amb i:nth-child(2) { width: 50%; height: 60%; right: 0; bottom: 0; background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 5%, transparent), transparent); }
 html.dark-lights .amb { opacity: 0; }
 
 .app { height: 100%; display: flex; flex-direction: column; }
@@ -66,7 +72,7 @@ input[type=text] { height: 34px; padding: 0 10px; border-radius: 8px; border: 1p
 .list > * { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
 .list > *:last-child { border-bottom: 0; }
 .sw { width: 22px; height: 22px; border-radius: 50%; flex: none; border: 1px solid rgba(255,255,255,.15); }
-.tag { width: 86px; flex: none; text-align: center; height: 24px; line-height: 22px; border-radius: 12px; border: 1px solid var(--line2); font: 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: #a3a8ad; }
+.tag { width: 86px; flex: none; height: 24px; display: flex; align-items: center; justify-content: center; padding-left: .06em; line-height: 1; text-box: trim-both cap alphabetic; border-radius: 12px; border: 1px solid var(--line2); font: 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: #a3a8ad; }
 .helptext { font-size: 12.5px; color: var(--soft); line-height: 1.5; margin: 0; }
 .spark { width: 100%; height: 36px; display: block; }
 
@@ -127,11 +133,11 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .pw[aria-pressed=false] { color: var(--dim); }
 
 /* conflict prompt */
-.scrim { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(6,7,8,.72); backdrop-filter: blur(6px); }
-.sheet { width: min(460px, calc(100% - 48px)); background: rgba(22,24,27,.92); border: 1px solid var(--line2); border-radius: 12px; padding: 22px; display: flex; flex-direction: column; gap: 10px; animation: sheet-in .18s ease-out; }
+.scrim { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(6,7,8,.38); backdrop-filter: blur(10px) saturate(120%); }
+.sheet { width: min(460px, calc(100% - 48px)); background: rgba(24,26,30,.55); backdrop-filter: blur(34px) saturate(160%); border: 1px solid rgba(255,255,255,.12); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 24px 60px rgba(0,0,0,.35); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 10px; animation: sheet-in .18s ease-out; }
 .sheet h2 { margin: 0; font-size: 18px; font-weight: 500; }
 .sheet p { margin: 0 0 6px; font-size: 13px; line-height: 1.5; }
-.sheet ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; }
+.sheet ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.035); }
 .sheet li { display: flex; align-items: center; gap: 12px; padding: 11px 12px; font-size: 13px; }
 .sheet li + li { border-top: 1px solid var(--line); }
 .sheet li small { display: block; margin-top: 2px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
@@ -139,7 +145,8 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .sheet li.on .dot { background: var(--bad); }
 .sheet li.off .dot { background: var(--ok); }
 .sheet li.off .state { color: var(--ok); }
-.sheet li.on .state { color: var(--bad); }
+.sheet li.on .state { color: var(--soft); }
+.sheet li { min-height: 46px; }
 .cf-actions { margin-top: 8px; }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { *, .sheet { transition: none !important; animation: none !important; } }

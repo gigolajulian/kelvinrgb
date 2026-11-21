@@ -25,7 +25,8 @@ const isWraithFan = (d, z) => isWraith(d) && /fan/i.test(z.name);
 // ---------- sensor lookups ----------
 function sensors() { return ST ? ST.hw.flatMap((h) => h.sensors.map((s) => ({ ...s, hwName: h.name, hwType: h.type }))) : []; }
 function pick(hwType, type, nameRe) {
-  const all = sensors().filter((s) => hwType.test(s.hwType) && s.type === type && !/virtual/i.test(s.hwName));
+  // A 0 °C reading means the sensor isn't readable (no admin), not a cold CPU.
+  const all = sensors().filter((s) => hwType.test(s.hwType) && s.type === type && !/virtual/i.test(s.hwName) && !(type === 'Temperature' && s.value <= 0));
   return all.find((s) => nameRe.test(s.name)) || all[0] || null;
 }
 const cpuTemp = () => pick(/^Cpu$/, 'Temperature', /Tctl|Package|Tdie/);
@@ -296,13 +297,13 @@ const pages = {
       const live = f.mode === 'curve';
       $('#c-svg').innerHTML = `<g stroke="rgba(255,255,255,.06)">${grid}</g>
         <rect x="0" y="${Y(FLOOR)}" width="400" height="${FLOOR * 2}" fill="rgba(240,163,94,.08)"/>
-        <text x="396" y="${Y(FLOOR) + 14}" text-anchor="end" font-family="Cascadia Mono, Consolas, monospace" font-size="9" fill="#f0a35e">FLOOR ${FLOOR}%</text>
+        <text x="396" y="${Y(FLOOR) + 14}" text-anchor="end" style="font-family:var(--mono)" font-size="9" fill="#f0a35e">FLOOR ${FLOOR}%</text>
         <polyline points="${path.join(' ')}" fill="none" stroke="${live ? '#8fd3e0' : '#6c7177'}" stroke-width="2"/>
         ${pts.map((p) => `<circle class="pt" data-i="${f.points.indexOf(p)}" cx="${X(p[0])}" cy="${Y(p[1])}" r="6" fill="#0b0c0d" stroke="${live ? '#8fd3e0' : '#6c7177'}" stroke-width="2"/>`).join('')}
         ${temp ? `<line x1="${X(temp.value)}" y1="0" x2="${X(temp.value)}" y2="200" stroke="#e6e7e8" stroke-dasharray="3 4" opacity=".5"/>
         <circle cx="${X(temp.value)}" cy="${Y(now)}" r="4" fill="#e6e7e8"/>
-        <text x="${Math.min(X(temp.value) + 6, 320)}" y="${Y(now) - 8}" font-family="Cascadia Mono, Consolas, monospace" font-size="10" fill="#e6e7e8">now ${Math.round(temp.value)}° · ${Math.round(now)}%</text>` : ''}
-        <g font-family="Cascadia Mono, Consolas, monospace" font-size="9" fill="#6c7177">${[20, 40, 60, 80, 100].map((t) => `<text x="${X(t)}" y="216" text-anchor="middle">${t}°</text>`).join('')}
+        <text x="${Math.min(X(temp.value) + 6, 320)}" y="${Y(now) - 8}" style="font-family:var(--mono)" font-size="10" fill="#e6e7e8">now ${Math.round(temp.value)}° · ${Math.round(now)}%</text>` : ''}
+        <g style="font-family:var(--mono)" font-size="9" fill="#6c7177">${[20, 40, 60, 80, 100].map((t) => `<text x="${X(t)}" y="216" text-anchor="middle">${t}°</text>`).join('')}
         <text x="-8" y="3" text-anchor="end">100%</text><text x="-8" y="103" text-anchor="end">50%</text><text x="-8" y="203" text-anchor="end">0%</text></g>`;
       const c = ST.controls.find((x) => x.id === this.sel);
       if (c) $('#c-sub').textContent = temp ? `follows ${temp.name} · now ${Math.round(temp.value)}°C` : 'pick a sensor to follow';
@@ -354,7 +355,9 @@ const pages = {
       <div class="grid c2" style="align-items:start">
         <div class="g" style="padding:6px 16px"><div class="set">
           <div><span class="t"><span>Conflict check</span><span>Asks to close NZXT CAM and SteelSeries when they hold the same devices</span></span>${tg('s-conf', S.closeConflicts !== false, 'Conflict check')}</div>
+          <div><span class="t"><span>Start with Windows</span><span id="s-auto-t">Opens in the tray when you sign in, without an admin prompt</span></span>${tg('s-auto', false, 'Start with Windows')}</div>
           <div><span class="t"><span>Glass background</span><span>Windows 11 acrylic behind the window</span></span>${tg('s-glass', S.glass !== false, 'Glass background')}</div>
+          <div><span class="t"><span>Startup splash</span><span>The ring on the desktop while KelvinRGB starts</span></span>${tg('s-splash', S.splash !== false, 'Startup splash')}</div>
           <div><span class="t"><span>Apex guard</span><span>Always on. Hands lights and fans back while Apex or Easy Anti-Cheat runs.</span></span><button class="tg" aria-pressed="true" disabled aria-label="Apex guard, always on" style="opacity:.45;cursor:default"></button></div>
         </div></div>
         <div class="g" style="padding:6px 16px"><div class="set">
@@ -363,13 +366,32 @@ const pages = {
           <div><span class="t"><span>Fan floor</span><span>No fan goes below this</span></span><span class="mono">${FLOOR}%</span></div>
           <div><span class="t"><span>Log file</span><span>%APPDATA%\\KelvinRGB\\log.txt, reset each launch</span></span><button class="btn" id="s-log">Open</button></div>
         </div></div>
+        <div class="g" style="padding:6px 16px"><div class="set">
+          <div><span class="t"><span>Updates</span><span id="s-upd-t">Checks GitHub quietly at start and every 6 hours</span></span><span class="row" style="gap:8px"><button class="btn" id="s-upd">Check</button><button class="btn" id="s-rel">Releases</button></span></div>
+          <div><span class="t"><span>Quit KelvinRGB</span><span>Closing or minimizing the window keeps KelvinRGB in the tray. Quit stops it fully and hands the fans back to the BIOS.</span></span><button class="btn" id="s-quit">Quit</button></div>
+        </div></div>
       </div>`;
+      $('#s-quit').onclick = () => rgb.quit();
+      $('#s-auto').onclick = (e) => { if (ST?.autostart?.supported) rgb.autostart(e.currentTarget.getAttribute('aria-pressed') !== 'true'); };
       const flip = (b) => { const v = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', v); return v; };
       $('#s-conf').onclick = (e) => { S.closeConflicts = flip(e.currentTarget); rgb.closeConflicts(S.closeConflicts); };
       $('#s-glass').onclick = (e) => { S.glass = flip(e.currentTarget); rgb.glass(S.glass); applyGlass(); };
       $('#s-log').onclick = () => rgb.openLog();
+      $('#s-upd').onclick = () => rgb.update(ST?.update?.action || 'check');
+      $('#s-rel').onclick = () => rgb.update('releases');
+      $('#s-splash').onclick = (e) => { S.splash = flip(e.currentTarget); rgb.splash(S.splash); };
     },
-    live() { $('#s-orgb').textContent = ST.openrgb.msg; $('#s-sens').textContent = ST.sensors.msg; },
+    live() {
+      $('#s-orgb').textContent = ST.openrgb.msg; $('#s-sens').textContent = ST.sensors.msg;
+      const a = ST.autostart || {}, b = $('#s-auto');
+      b.setAttribute('aria-pressed', !!a.on); // the switch shows what Windows has, set by main after each change
+      b.disabled = !a.supported; b.style.opacity = a.supported ? '' : '.45';
+      if (!a.supported) $('#s-auto-t').textContent = 'Works in the installed app. Running from the code folder it stays off, for safety.';
+      const u = ST.update || {};
+      if (u.kind && u.kind !== 'idle') $('#s-upd-t').textContent = u.text;
+      $('#s-upd').textContent = u.action === 'install' ? 'Update' : 'Check';
+      $('#s-upd').disabled = !u.action;
+    },
   },
 };
 
@@ -436,30 +458,45 @@ function tick() { // soft two-note chime when a row turns green
     o.start(t); o.stop(t + 0.5);
   });
 }
+const cfPending = new Map(); // name -> time Close all was pressed
+let cfData = null;
+const canClose = (x) => x.running && (x.closable || x.service);
 function conflicts(c) {
   const el = $('#conflicts');
-  if (!c) { el.hidden = true; cfLast = ''; return; }
+  if (!c) { el.hidden = true; cfLast = ''; cfData = null; cfPending.clear(); return; }
   const key = JSON.stringify(c);
   if (key === cfLast) return;
   const opening = !cfLast;
   const was = opening ? [] : JSON.parse(cfLast);
   if (c.some((x) => !x.running && was.find((w) => w.name === x.name)?.running)) tick();
-  cfLast = key;
-  const left = c.filter((x) => x.running).length;
-  $('#cf-count').textContent = left ? `conflicts · ${left} of ${c.length} running` : `conflicts · all ${c.length} closed`;
-  $('#cf-list').innerHTML = c.map((x) => `<li class="${x.running ? 'on' : 'off'}"><span class="dot"></span>
-    <span class="grow">${esc(x.label)}<small>${esc(x.note)}</small></span>
-    ${!x.running ? '<span class="lbl state">closed</span>'
-      : x.closable ? `<button class="btn" data-close="${esc(x.name)}">Close</button>`
-      : x.service ? `<button class="btn" data-close="${esc(x.name)}">Stop service</button>`
-      : '<span class="lbl state">close it yourself</span>'}</li>`).join('');
-  const done = $('#cf-done');
-  done.textContent = left ? 'Continue anyway' : 'Continue';
-  done.classList.toggle('p', !left);
-  el.hidden = false;
-  if (opening || !left) ($('#cf-list [data-close]') || done).focus();
+  cfLast = key; cfData = c;
+  drawConflicts(opening);
 }
-$('#cf-list').onclick = (e) => { const b = e.target.closest('[data-close]'); if (b) { b.disabled = true; b.textContent = 'Closing'; rgb.conflictClose(b.dataset.close); } };
+function drawConflicts(opening) {
+  const c = cfData, now = Date.now();
+  const left = c.filter((x) => x.running).length;
+  const state = (x) => !x.running ? 'closed'
+    : !(x.closable || x.service) ? 'close it yourself'
+    : cfPending.has(x.name) ? (now - cfPending.get(x.name) < 8000 ? 'closing' : 'still running') : 'running';
+  $('#cf-count').textContent = left ? `${left} of ${c.length} running` : `all ${c.length} closed`;
+  $('#cf-list').innerHTML = c.map((x) => `<li class="${x.running ? 'on' : 'off'}"><span class="dot"></span>
+    <span class="grow">${esc(x.label)}${x.note && x.note !== x.name ? `<small>${esc(x.note)}</small>` : ''}</span>
+    <span class="lbl state">${state(x)}</span></li>`).join('');
+  const closable = c.filter(canClose), busy = closable.some((x) => state(x) === 'closing');
+  const all = $('#cf-all'), done = $('#cf-done');
+  all.hidden = !closable.length;
+  all.disabled = busy;
+  all.textContent = busy ? 'Closing' : closable.some((x) => cfPending.has(x.name)) ? 'Try again' : 'Close all';
+  done.textContent = left ? 'Continue anyway' : 'Continue';
+  done.classList.toggle('p', !closable.length);
+  $('#conflicts').hidden = false;
+  if (opening || !left) (all.hidden ? done : all).focus();
+}
+$('#cf-all').onclick = () => {
+  for (const x of cfData.filter(canClose)) { cfPending.set(x.name, Date.now()); rgb.conflictClose(x.name); }
+  drawConflicts();
+  setTimeout(() => cfData && drawConflicts(), 8100); // flip any that refused to "still running"
+};
 $('#cf-done').onclick = () => rgb.conflictDone();
 document.addEventListener('keydown', (e) => { if (cfLast && e.key === 'Escape') rgb.conflictDone(); });
 
@@ -478,7 +515,8 @@ function onState(s) {
     history.set(sn.id, h);
   }
   health('st-openrgb', s.openrgb.ok, !s.guard, `OpenRGB ${s.openrgb.ok ? 'connected' : s.openrgb.msg}`);
-  health('st-sensors', s.sensors.ok, true, `Sensors ${s.sensors.ok ? 'live' : s.sensors.msg}`);
+  const sensorsFull = s.sensors.ok && s.sensors.admin !== false;
+  health('st-sensors', sensorsFull, true, `Sensors ${sensorsFull ? 'live' : s.sensors.msg}`);
   health('st-guard', !s.guard, s.guard, s.guard ? 'Apex guard active' : 'Apex guard idle');
   if ((page === 'devices' && devicesChanged) || (page === 'fans' && fansChanged)) pages[page].build();
   pages[page].live();
@@ -492,4 +530,6 @@ rgb.get().then((r) => {
   go(page);
   onState(r.state);
   rgb.onState(onState);
+  // the tray menu changed something: take main's copy and redraw
+  rgb.onSettings((s) => { S = s; applyGlass(); footer(); if (page === 'lighting' || page === 'settings') go(page); });
 });

@@ -1,17 +1,18 @@
 {
   "name": "kelvinrgb",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "private": true,
   "description": "One dark window for PC lighting, fans and sensors, on OpenRGB and LibreHardwareMonitor.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build:sidecar": "powershell -ExecutionPolicy Bypass -File sidecar/build.ps1",
-    "test": "node --test test/math.test.js test/conflicts.test.js test/validate.test.js",
+    "test": "node --test test/math.test.js test/conflicts.test.js test/validate.test.js test/guard.test.js test/update.test.js",
     "postinstall": "node scripts/patch-sdk.js",
     "dist": "npm run build:sidecar && electron-builder --win nsis"
   },
   "dependencies": {
+    "bufferpack": "0.0.6",
     "openrgb-sdk": "0.6.0"
   },
   "devDependencies": {
