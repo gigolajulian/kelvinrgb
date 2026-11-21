@@ -368,6 +368,7 @@ const pages = {
         </div></div>
         <div class="g" style="padding:6px 16px"><div class="set">
           <div><span class="t"><span>Updates</span><span id="s-upd-t">Checks GitHub quietly at start and every 6 hours</span></span><span class="row" style="gap:8px"><button class="btn" id="s-upd">Check</button><button class="btn" id="s-rel">Releases</button></span></div>
+          <div><span class="t"><span>About</span><span class="mono">Made by Julian · Powered by <a href="#" id="s-orgb-link" style="color:var(--acc)">OpenRGB</a></span></span><span class="mono sub" id="s-ver"></span></div>
           <div><span class="t"><span>Quit KelvinRGB</span><span>Closing or minimizing the window keeps KelvinRGB in the tray. Quit stops it fully and hands the fans back to the BIOS.</span></span><button class="btn" id="s-quit">Quit</button></div>
         </div></div>
       </div>`;
@@ -379,6 +380,7 @@ const pages = {
       $('#s-log').onclick = () => rgb.openLog();
       $('#s-upd').onclick = () => rgb.update(ST?.update?.action || 'check');
       $('#s-rel').onclick = () => rgb.update('releases');
+      $('#s-orgb-link').onclick = (e) => { e.preventDefault(); rgb.update('openrgb'); };
       $('#s-splash').onclick = (e) => { S.splash = flip(e.currentTarget); rgb.splash(S.splash); };
     },
     live() {
@@ -387,6 +389,7 @@ const pages = {
       b.setAttribute('aria-pressed', !!a.on); // the switch shows what Windows has, set by main after each change
       b.disabled = !a.supported; b.style.opacity = a.supported ? '' : '.45';
       if (!a.supported) $('#s-auto-t').textContent = 'Works in the installed app. Running from the code folder it stays off, for safety.';
+      $('#s-ver').textContent = ST.version ? `v${ST.version}` : '';
       const u = ST.update || {};
       if (u.kind && u.kind !== 'idle') $('#s-upd-t').textContent = u.text;
       $('#s-upd').textContent = u.action === 'install' ? 'Update' : 'Check';

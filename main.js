@@ -362,7 +362,8 @@ on('splash', (v) => { settings.splash = v === true; save(); });
 on('openLog', () => shell.openPath(logFile)); // fixed path, nothing taken from the renderer
 on('quit', () => app.quit());
 on('autostart', (v) => setAutostart(v === true));
-on('update', (a) => { if (a === 'check') updater.check(true); else if (a === 'install') updater.install(); else if (a === 'releases') shell.openExternal(U.RELEASES); });
+on('update', (a) => { if (a === 'check') updater.check(true); else if (a === 'install') updater.install(); else if (a === 'releases') shell.openExternal(U.RELEASES); else if (a === 'openrgb') shell.openExternal('https://openrgb.org'); });
+state.version = app.getVersion();
 
 // ---------- updates ----------
 const updater = U.create({
