@@ -21,6 +21,8 @@ const TYPES = ['Board', 'RAM', 'Graphics', 'Cooler', 'Strip', 'Keyboard', 'Mouse
 const typeLabel = (t) => TYPES[t] || 'Device';
 const isWraith = (d) => d.name === 'AMD Wraith Prism';
 const isWraithFan = (d, z) => isWraith(d) && /fan/i.test(z.name);
+// Devices that sit on the desk, outside the case (the Devices page's right column).
+const DESK = new Set(['Mouse', 'Keyboard', 'Mousemat', 'Headset', 'Stand', 'Pad', 'Speaker', 'Mic', 'Keypad', 'Laptop', 'Monitor', 'Accessory']);
 
 // ---------- sensor lookups ----------
 function sensors() { return ST ? ST.hw.flatMap((h) => h.sensors.map((s) => ({ ...s, hwName: h.name, hwType: h.type }))) : []; }
@@ -379,56 +381,71 @@ const pages = {
     },
   },
 
-  // Mixer: an All strip and one channel strip per device (icon, live zone colours, brightness fader, on/off).
-  // The selected device's zones, colour and tuning sit in the panel below. Everything that differs from the
-  // global look is listed at the top with an undo.
+  // Bento: one tile per device, laid out like the PC. Inside the case the cooler, RAM, board, graphics card and the
+  // first hub or strip get fixed slots; the rest flow after them. Peripherals sit on the desk beside an All tile.
+  // Each tile has its own on/off, colour and brightness; click a tile (or one RAM stick) to edit its zones and
+  // tuning in the panel below. Everything that differs from the global look is listed at the top with an undo.
   devices: {
     sel: null, // device key
     zone: 0,
     dragging: false,
+    // Same-name devices (the four DRAM sticks) share a tile, as on Lighting.
+    groups() { return pages.lighting.groups(); },
+    area(g, seen) {
+      const a = { Cooler: 'cool', RAM: 'ram', Board: 'board', Graphics: 'gpu' }[g.type] || (DESK.has(g.type) ? 'desk' : 'hub');
+      if (a === 'desk' || !seen.has(a)) { seen.add(a); return a; }
+      return 'case';
+    },
     build() {
       const devs = ST.devices;
       if (!devs.find((d) => d.key === this.sel)) { this.sel = devs[0] ? devs[0].key : null; this.zone = 0; }
       main.innerHTML = `<div class="hd"><h1>Devices</h1><span class="sub" id="d-count"></span><span class="grow"></span><button class="btn" id="d-reset-all">Reset all to the global look</button><button class="btn" id="d-rescan">Rescan</button></div>
-      ${devs.length ? '<div class="changes" id="d-chg"></div><div class="desk" id="d-desk"></div><div class="g drawer" id="d-ed"></div>'
+      ${devs.length ? '<div class="changes" id="d-chg"></div><div class="bento" id="d-bento"></div><div class="g drawer" id="d-ed"></div>'
         : `<div class="g"><p class="helptext">${esc(ST.openrgb.msg)}. No devices yet. Is OpenRGB installed, with its SDK server on?</p></div>`}`;
       $('#d-rescan').onclick = () => rgb.rescan();
       $('#d-reset-all').onclick = () => { for (const d of devs) this.resetDevice(d); this.draw(); };
       if (!devs.length) return;
-      const desk = $('#d-desk');
-      desk.onclick = (e) => {
-        const t = e.target.closest('[data-on]');
-        if (t) {
-          if (t.dataset.on === '*') setLighting({ on: !S.lighting.on }, false);
-          else this.patch(t.dataset.on, { off: !(S.devices[t.dataset.on] || {}).off });
+      const bento = $('#d-bento'), grp = (k) => this.groups().find((g) => g.key === k);
+      bento.onclick = (e) => {
+        const t = e.target, on = t.closest('[data-on]');
+        if (on) {
+          if (on.dataset.on === '*') setLighting({ on: !S.lighting.on }, false);
+          else { const g = grp(on.dataset.on), off = pages.lighting.on(g); for (const d of g.devs) this.patch(d.key, { off }); }
           this.draw(); return;
         }
-        const s = e.target.closest('.strip[data-k]');
-        if (s && !e.target.closest('.fd') && s.dataset.k !== this.sel) { this.sel = s.dataset.k; this.zone = 0; this.draw(); }
+        if (t.closest('.scrub, input')) return;
+        const k = t.closest('[data-k]'), tile = t.closest('.bt[data-g]'), g = tile && grp(tile.dataset.g);
+        const key = k ? k.dataset.k : g && (g.devs.some((d) => d.key === this.sel) ? this.sel : g.devs[0].key);
+        if (key && key !== this.sel) { this.sel = key; this.zone = 0; this.draw(); }
       };
-      // Faders: drag, or arrow keys (Shift for 1%), Home and End.
-      const setFader = (fd, v) => {
+      // The colour well sets every colour zone of the tile's devices. Redraw once the picker closes.
+      bento.oninput = (e) => {
+        const t = e.target; if (!t.dataset.cw) return;
+        for (const d of grp(t.dataset.cw).devs) this.patch(d.key, { zones: Object.fromEntries(pages.lighting.colourZones(d).map((i) => [i, t.value])) });
+        t.classList.remove('follow', 'mixed'); t.style.background = '';
+      };
+      bento.onchange = (e) => { if (e.target.dataset.cw) this.draw(); };
+      // Brightness: drag across, or arrow keys (Shift for 1%), Home and End.
+      const setB = (el, v) => {
         v = Math.max(0, Math.min(100, Math.round(v)));
-        fd.style.setProperty('--p', v + '%'); fd.setAttribute('aria-valuenow', v);
-        const out = fd.closest('.strip').querySelector('.val'); out.textContent = v + '%';
-        if (fd.dataset.f === '*') setLighting({ brightness: v }, false);
-        else { out.classList.toggle('moved', v !== 100); this.patch(fd.dataset.f, { brightness: v }); }
+        el.style.setProperty('--p', v + '%'); el.setAttribute('aria-valuenow', v); el.querySelector('.bv').textContent = v + '%';
+        if (el.dataset.bright === '*') setLighting({ brightness: v }, false);
+        else for (const d of grp(el.dataset.bright).devs) this.patch(d.key, { brightness: v });
       };
-      desk.onpointerdown = (e) => {
-        const fd = e.target.closest('.fd'); if (!fd) return;
-        e.preventDefault(); fd.setPointerCapture(e.pointerId); fd.focus(); this.dragging = true;
-        const at = (ev) => { const r = fd.getBoundingClientRect(); setFader(fd, ((r.bottom - ev.clientY) / r.height) * 100); };
+      bento.onpointerdown = (e) => {
+        const el = e.target.closest('.scrub'); if (!el) return;
+        e.preventDefault(); el.setPointerCapture(e.pointerId); el.focus(); this.dragging = true;
+        const r = el.getBoundingClientRect(), at = (ev) => setB(el, ((ev.clientX - r.left) / r.width) * 100);
         at(e);
-        fd.onpointermove = at;
-        fd.onpointerup = fd.onpointercancel = () => { fd.onpointermove = fd.onpointerup = fd.onpointercancel = null; this.dragging = false; this.top(); };
+        el.onpointermove = at;
+        el.onpointerup = el.onpointercancel = () => { el.onpointermove = el.onpointerup = el.onpointercancel = null; this.dragging = false; this.top(); };
       };
-      desk.onkeydown = (e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.strip[data-k]')) { e.preventDefault(); e.target.click(); return; }
-        const fd = e.target.closest('.fd'); if (!fd) return;
-        const v = +fd.getAttribute('aria-valuenow'), step = e.shiftKey ? 1 : 5;
+      bento.onkeydown = (e) => {
+        const el = e.target.closest('.scrub'); if (!el) return;
+        const v = +el.getAttribute('aria-valuenow'), step = e.shiftKey ? 1 : 5;
         const next = { ArrowUp: v + step, ArrowRight: v + step, ArrowDown: v - step, ArrowLeft: v - step, Home: 0, End: 100 }[e.key];
         if (next == null) return;
-        e.preventDefault(); setFader(fd, next); clearTimeout(this.kt); this.kt = setTimeout(() => this.top(), 400);
+        e.preventDefault(); setB(el, next); clearTimeout(this.kt); this.kt = setTimeout(() => this.top(), 400);
       };
       $('#d-chg').onclick = (e) => { const b = e.target.closest('[data-u]'); if (!b) return; const c = this.changes()[+b.dataset.u]; if (c) { this.patch(c.d.key, c.undo); this.draw(); } };
       this.draw();
@@ -460,30 +477,37 @@ const pages = {
       return out;
     },
     draw() { this.top(); this.editor(); },
-    // Count, the changed list and the desk. Skipped while a fader is held so the drag isn't cut.
+    // Count, the changed list and the tiles. Skipped while a brightness bar is held so the drag isn't cut.
     top() {
-      if (this.dragging || page !== 'devices' || !$('#d-desk')) return;
-      const a = document.activeElement, fk = a && a.dataset && ['f', 'on', 'u', 'k'].find((x) => x in a.dataset), fv = fk && a.dataset[fk];
+      if (this.dragging || page !== 'devices' || !$('#d-bento')) return;
+      const a = document.activeElement, fk = a && a.dataset && ['bright', 'on', 'u', 'k', 'cw'].find((x) => x in a.dataset), fv = fk && a.dataset[fk];
       const ch = this.changes(), changed = new Set(ch.map((c) => c.d.key)), L = S.lighting;
       $('#d-count').textContent = `${ST.devices.length} devices · ${changed.size ? `${changed.size} changed` : 'all on the global look'}`;
       $('#d-chg').innerHTML = ch.length
         ? `<span class="lbl">changed</span>${ch.map((c, i) => `<span class="pill"><b>${esc(c.d.name)}</b>${esc(c.t)}<button data-u="${i}" aria-label="Undo ${esc(c.t)} on ${esc(c.d.name)}">×</button></span>`).join('')}`
         : '<span class="helptext">Every device follows the global look from Lighting.</span>';
-      const fader = (k, v, label) => `<div class="fd" data-f="${esc(k)}" role="slider" tabindex="0" aria-label="${esc(label)} brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}" style="--p:${v}%"><i></i><b></b></div>`;
-      const all = `<div class="strip all"><div class="ty">every device</div><div class="nm">All</div>
-        <div class="ch"><span class="allsw" style="background:${lightsOn() ? L.color : '#1b1c1e'}"></span>${fader('*', L.brightness, 'All devices')}</div>
-        <div class="val num">${L.brightness}%</div><button class="tg" data-on="*" aria-pressed="${L.on}" aria-label="All lights on"></button></div>`;
-      const strip = (d) => {
-        const dev = S.devices[d.key] || {}, b = dev.brightness ?? 100, sel = d.key === this.sel;
-        const dim = (0.15 + 0.85 * (L.brightness / 100) * (b / 100)).toFixed(2);
-        const leds = d.zones.length ? d.zones.flatMap((z, zi) => Array(Math.max(1, Math.min(4, z.leds))).fill(zi)).slice(0, 12) : [0];
-        return `<div class="strip${sel ? ' sel' : ''}${dev.off ? ' off' : ''}" data-k="${esc(d.key)}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="Edit ${esc(d.name)}">${changed.has(d.key) ? '<span class="chg" title="Changed from the global look"></span>' : ''}
-          ${deviceIcon(typeLabel(d.type), 40, sel)}<div class="ty">${esc(typeLabel(d.type))}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div>
-          <div class="ch"><div class="leds" style="opacity:${dim}">${leds.map((zi) => `<i style="background:${d.zones.length ? zoneColor(d, zi) : '#1b1c1e'}"></i>`).join('')}</div>${fader(d.key, b, d.name)}</div>
-          <div class="val num${b !== 100 ? ' moved' : ''}">${b}%</div>
-          <button class="tg" data-on="${esc(d.key)}" aria-pressed="${!dev.off}" aria-label="${esc(d.name)} on"></button></div>`;
+      const scrub = (k, v, label) => `<div class="scrub" data-bright="${esc(k)}" role="slider" tabindex="0" aria-label="${esc(label)} brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}" style="--p:${v}%"><i></i><span class="bv">${v}%</span></div>`;
+      const all = `<div class="g bt all"><div class="top"><div class="grow"><div class="ty">every device</div><div class="nm">All</div></div><button class="tg" data-on="*" aria-pressed="${L.on}" aria-label="All lights on"></button></div>
+        <div class="foot"><span class="cw" style="background:${lightsOn() ? L.color : '#1b1c1e'}" title="Global colour, set on Lighting"></span>${scrub('*', L.brightness, 'All devices')}</div></div>`;
+      const SIZE = { cool: 112, board: 112, gpu: 150, hub: 104, desk: 84 };
+      const tile = (g, area) => {
+        const lt = pages.lighting, b = lt.dev(g.devs[0]).brightness ?? 100, on = lt.on(g), has = g.devs.some((d) => d.key === this.sel);
+        const dim = (0.15 + 0.85 * (L.brightness / 100) * (b / 100)).toFixed(2), c = lt.current(g);
+        const mix = `conic-gradient(${g.devs.flatMap((d) => d.zones.map((_z, i) => zoneColor(d, i))).join(',')})`;
+        const art = g.devs.length > 1
+          ? `<div class="sticks">${g.devs.map((d, i) => `<button class="st" data-k="${esc(d.key)}" aria-pressed="${d.key === this.sel}" aria-label="Edit ${esc(g.name)} stick ${i + 1}">${deviceIcon(g.type, 46, d.key === this.sel)}<i style="background:${d.zones.length ? zoneColor(d, 0) : '#1b1c1e'};opacity:${dim}"></i></button>`).join('')}</div>`
+          : `<button class="art" data-k="${esc(g.devs[0].key)}" aria-pressed="${has}" aria-label="Edit ${esc(g.name)}">${deviceIcon(g.type, SIZE[area] || 96, has)}</button>`;
+        return `<div class="g bt a-${area}${has ? ' sel' : ''}${on ? '' : ' off'}" data-g="${esc(g.key)}" role="group" aria-label="${esc(g.name)}">
+          ${g.devs.some((d) => changed.has(d.key)) ? '<span class="chg" title="Changed from the global look"></span>' : ''}
+          <div class="top"><div class="grow"><div class="ty">${esc(lt.sub(g))}</div><div class="nm" title="${esc(g.name)}">${esc(g.name)}</div></div>
+            <button class="tg" data-on="${esc(g.key)}" aria-pressed="${on}" aria-label="${esc(g.name)} on"></button></div>
+          ${art}${g.devs.length > 1 ? '' : lt.leds(g)}
+          <div class="foot"><input type="color" class="cw${c.mixed ? ' mixed' : c.own ? '' : ' follow'}" data-cw="${esc(g.key)}" value="${c.hex}" style="${c.mixed ? `background:${mix}` : ''}" aria-label="${esc(g.name)} colour" title="${c.mixed ? 'Mixed zone colours' : c.own ? 'Own colour' : 'Follows the global colour'}">${scrub(g.key, b, g.name)}</div></div>`;
       };
-      $('#d-desk').innerHTML = all + ST.devices.map(strip).join('');
+      const seen = new Set(), tiles = this.groups().map((g) => [g, this.area(g, seen)]);
+      const caseT = tiles.filter(([, ar]) => ar !== 'desk'), deskT = tiles.filter(([, ar]) => ar === 'desk');
+      $('#d-bento').innerHTML = `<div><span class="lbl zl">inside the case</span><div class="case">${caseT.map(([g, ar]) => tile(g, ar)).join('')}</div></div>
+        <div><span class="lbl zl">on the desk</span><div class="desk2">${all}${deskT.map(([g, ar]) => tile(g, ar)).join('')}</div></div>`;
       if (fk) { const el = [...main.querySelectorAll(`[data-${fk}]`)].find((x) => x.dataset[fk] === fv); if (el) el.focus(); }
     },
     // The selected device: zones and their colour on the left, colour tuning on the right.
@@ -720,7 +744,7 @@ function setLighting(patch, rebuild = true) {
   rgb.lighting(patch);
   footer();
   if (page === 'lighting') { if (rebuild) pages.lighting.paint(); if (ST) pages.lighting.live(); }
-  if (page === 'devices') pages.devices.top(); // the footer and tray change the All strip too
+  if (page === 'devices') pages.devices.top(); // the footer and tray change the All tile too
 }
 function footer() {
   const L = S.lighting;

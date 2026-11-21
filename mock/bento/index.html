@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KelvinRGB: Devices, Bento mock</title>
+<!-- Real app CSS and icons. publish.sh copies them next to this file for the Artifact. -->
+<link rel="stylesheet" href="../../renderer/style.css">
+<script src="../../renderer/icons.js"></script>
+<style>
+  /* mock frame only */
+  html, body { overflow: auto; background: #1b2026; }
+  body { background: radial-gradient(120% 90% at 20% 0%, #3a4552, #15181c 70%); min-height: 100vh; }
+  .mockbar { position: sticky; top: 0; z-index: 9; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: rgba(10,11,12,.85); border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
+  .mockbar b { font-weight: 500; letter-spacing: .14em; }
+  .stage { padding: 24px; display: flex; justify-content: center; }
+  .win { width: 1280px; height: 820px; max-width: 100%; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,.14); position: relative; background: rgba(8,9,10,.62); transition: width .25s; container-type: inline-size; }
+  .win.flat { background: #0a0b0c; }
+  .win .app { position: relative; }
+  .win.w760 nav, .win.w390 nav { display: none; }
+  .win.w760 { width: 760px; } .win.w390 { width: 390px; height: 844px; }
+  .win.w390 footer label { width: 120px !important; }
+  .win.w390 footer > div { width: 120px !important; }
+  .win .amb { position: absolute; }
+
+  /* ---------- Devices: bento, laid out like the PC ---------- */
+  .bento { flex: none; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) 230px; align-items: start; }
+  .zone-lbl { display: flex; justify-content: space-between; padding: 0 2px 8px; }
+  .case { padding: 12px; border-radius: 16px; border: 1px dashed rgba(255,255,255,.12); }
+  .cgrid { display: grid; gap: 12px; grid-template-columns: 1.25fr .85fr 1fr; grid-template-areas: "cool ram board" "gpu gpu hub"; }
+  .desk2 { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 16px; border: 1px dashed rgba(255,255,255,.12); }
+  .bt { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px; min-height: 236px; cursor: pointer; }
+  .bt:hover { border-color: var(--line2); }
+  .bt.sel { border-color: var(--acc); }
+  .bt.off .art, .bt.off .leds, .bt.off .scrub { opacity: .4; }
+  .bt .top { display: flex; align-items: flex-start; gap: 10px; }
+  .bt .ty { font: 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .bt .nm { font-size: 14px; font-weight: 500; line-height: 1.25; }
+  .bt .art { flex: 1; display: grid; place-items: center; min-height: 110px; }
+  .bt .chg { position: absolute; left: 6px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); }
+  .bt .foot { display: flex; align-items: center; gap: 10px; }
+  .bt .foot .scrub { margin: 0; flex: 1; }
+  .bt .cw { width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1px solid rgba(255,255,255,.2); padding: 0; }
+  .bt .cw.follow { background-image: linear-gradient(135deg, transparent 46%, rgba(0,0,0,.55) 46% 54%, transparent 54%); }
+  .bt .zl { font: 11px var(--mono); color: var(--soft); }
+  .a-cool { grid-area: cool; } .a-ram { grid-area: ram; } .a-board { grid-area: board; } .a-gpu { grid-area: gpu; min-height: 200px; } .a-hub { grid-area: hub; min-height: 200px; }
+  .a-gpu .art { min-height: 90px; }
+  .sticks { display: flex; gap: 2px; justify-content: center; }
+  .sticks .st { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .sticks .st i { width: 8px; height: 22px; border-radius: 2px; }
+  .bt.all { min-height: 0; background: rgba(143,211,224,.06); border-color: rgba(143,211,224,.3); cursor: default; }
+  .bt.all .art { min-height: 0; }
+  .drawer { margin-top: 0; }
+
+  @container (max-width: 1100px) {
+    .bento { grid-template-columns: minmax(0, 1fr); }
+    .desk2 { flex-direction: row; } .desk2 > * { flex: 1; }
+  }
+  @container (max-width: 700px) {
+    .cgrid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-areas: "cool ram" "gpu gpu" "board hub"; }
+  }
+  @container (max-width: 480px) {
+    main { padding: 16px 14px 20px; }
+    .cgrid { grid-template-columns: minmax(0,1fr); grid-template-areas: "cool" "ram" "gpu" "board" "hub"; }
+    .desk2 { flex-direction: column; }
+    .case, .desk2 { padding: 0; border: 0; }
+    .bt { min-height: 0; } .bt .art { min-height: 84px; }
+    .hd .btn { display: none; }
+    .dr-body { grid-template-columns: minmax(0,1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="mockbar">
+  <b>BENTO MOCK</b><span class="sub">Devices page, tiles laid out like the PC</span><span class="grow"></span>
+  <div class="seg" id="w"><button data-w="" aria-pressed="true">Desktop 1280</button><button data-w="w760" aria-pressed="false">Narrow 760</button><button data-w="w390" aria-pressed="false">Phone 390</button></div>
+  <div class="seg" id="gl"><button data-g="" aria-pressed="true">Glass on</button><button data-g="flat" aria-pressed="false">Glass off</button></div>
+</div>
+<div class="stage"><div class="win" id="win">
+<div class="amb" aria-hidden="true"><i></i><i></i></div>
+<div class="app">
+  <div class="body">
+    <nav aria-label="Pages">
+      <span class="brand">KELVIN</span>
+      <button><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 7.5 8 2.5l6 5M3.5 6.5V13.5h9V6.5"/></svg>Home</button>
+      <button><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="6.5" r="4"/><path d="M6 13h4M6.5 15h3"/></svg>Lighting</button>
+      <button aria-current="page"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="9" rx="1"/><path d="M5 14h6"/></svg>Devices</button>
+      <button><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="1.5"/><path d="M8 6.5C8 3 10 2 11.5 3S10 6.5 8 6.5M9.5 8c3.5 0 4.5 2 3.5 3.5S9.5 10 9.5 8M8 9.5c0 3.5-2 4.5-3.5 3.5S6 9.5 8 9.5M6.5 8C3 8 2 6 3 4.5S6.5 6 6.5 8"/></svg>Fans</button>
+      <button><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 9h3l2-5 3 9 2-6 1 2h3"/></svg>System</button>
+      <div class="sep"></div>
+      <button><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></svg>Settings</button>
+      <div class="health">
+        <div><span class="dot ok"></span><span>OpenRGB</span></div>
+        <div><span class="dot ok"></span><span>Sensors</span></div>
+        <div><span class="dot ok"></span><span>Apex guard</span></div>
+      </div>
+    </nav>
+    <main id="page"></main>
+  </div>
+  <footer>
+    <span class="sw" style="width:30px;height:30px;border-radius:8px;background:#c8323c"></span>
+    <div style="display:flex;flex-direction:column;width:180px"><span style="font-size:13px">Static</span><span class="lbl" style="font-size:10px">#c8323c · all devices</span></div>
+    <span class="grow"></span>
+    <button class="pw" aria-label="Lights on or off" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M7 1v5M3.5 3.5a5 5 0 1 0 7 0"/></svg></button>
+    <span class="grow"></span>
+    <label class="row" style="width:220px"><input type="range" min="0" max="100" value="80" aria-label="Brightness"><span class="num" style="width:28px;text-align:right">80</span></label>
+  </footer>
+</div>
+</div></div>
+
+<script>
+const G = '#c8323c';
+const SW = [['White', '#ffffff'], ['Red', '#c8323c'], ['Orange', '#ff6a1a'], ['Cobalt', '#2f5bff'], ['Teal', '#13a3a3'], ['Violet', '#8a5cff']];
+// The PC as OpenRGB reports it. area = where it sits in the case.
+const D = [
+  { k: 'cool', area: 'a-cool', type: 'Cooler', name: 'AMD Wraith Prism', zones: ['Logo', 'Fan', 'Ring'], leds: 18, b: 100, own: {}, fanWhite: 240 },
+  { k: 'ram', area: 'a-ram', type: 'RAM', name: 'ENE DRAM', sticks: 4, zones: ['Stick 1', 'Stick 2', 'Stick 3', 'Stick 4'], leds: 32, b: 100, own: {} },
+  { k: 'board', area: 'a-board', type: 'Board', name: 'ASUS TUF GAMING X570-PLUS', zones: ['Aura Mainboard', 'Aura Addressable 1', 'Aura Addressable 2'], leds: 6, b: 70, own: {} },
+  { k: 'gpu', area: 'a-gpu', type: 'Graphics', name: 'Sapphire RX 6700 XT Nitro+', zones: ['Fans', 'Logo'], leds: 26, b: 100, own: {} },
+  { k: 'hub', area: 'a-hub', type: 'Strip', name: 'NZXT Smart Device V2', zones: ['Channel 1', 'Channel 2'], leds: 40, b: 100, own: {} },
+  { k: 'mouse', type: 'Mouse', name: 'SteelSeries Aerox 3 Wireless', zones: ['Front', 'Middle', 'Rear'], leds: 3, b: 100, own: { 0: '#2f5bff', 1: '#2f5bff', 2: '#2f5bff' } },
+];
+let sel = 'cool', zone = 0, allB = 80, allOn = true;
+const $ = (s) => document.querySelector(s);
+const fanHex = (v) => { const t = Math.max(0, Math.min(1, (v - 184) / 56)); return '#' + [[255, 255], [199, 255], [90, 255]].map(([a, b]) => Math.round(a + (b - a) * t).toString(16).padStart(2, '0')).join(''); };
+const zc = (d, i) => d.off || !allOn ? '#1b1c1e' : d.k === 'cool' && i === 1 ? fanHex(d.fanWhite) : d.own[i] || G;
+const owns = (d) => Object.keys(d.own).length;
+const changed = (d) => d.off || d.b !== 100 || owns(d) || (d.fanWhite != null && d.fanWhite !== 240);
+const dim = (d) => (0.15 + 0.85 * (allB / 100) * (d.b / 100)).toFixed(2);
+const tileColor = (d) => { const o = Object.values(d.own); return o.length === d.zones.length && o.every((x) => x === o[0]) ? o[0] : o.length ? null : G; };
+const scrub = (k, v, name) => `<div class="scrub" data-bright="${k}" role="slider" tabindex="0" aria-label="${name} brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}" style="--p:${v}%"><i></i><span>${v}%</span></div>`;
+
+function tile(d) {
+  const c = tileColor(d), big = d.k === 'gpu' ? 150 : d.k === 'mouse' ? 84 : 112;
+  const art = d.sticks
+    ? `<div class="sticks">${Array.from({ length: d.sticks }, (_, i) => `<div class="st">${deviceIcon('RAM', 46, sel === d.k)}<i style="background:${zc(d, i)};opacity:${dim(d)}"></i></div>`).join('')}</div>`
+    : `${deviceIcon(d.type, big, sel === d.k)}`;
+  return `<div class="g bt ${d.area || ''}${sel === d.k ? ' sel' : ''}${d.off ? ' off' : ''}" data-k="${d.k}" role="button" tabindex="0" aria-pressed="${sel === d.k}" aria-label="Edit ${d.name}">
+    ${changed(d) ? '<span class="chg" title="Changed from the global look"></span>' : ''}
+    <div class="top"><div class="grow"><div class="ty">${d.sticks ? `RAM · ${d.sticks} sticks` : d.type}</div><div class="nm">${d.name}</div></div>
+      <button class="tg" data-on="${d.k}" aria-pressed="${!d.off}" aria-label="${d.name} on"></button></div>
+    <div class="art">${art}</div>
+    ${d.sticks ? '' : `<div class="leds" style="opacity:${dim(d)}">${d.zones.map((_, i) => `<i style="background:${zc(d, i)}"></i>`).join('')}</div>`}
+    <div class="foot"><label style="display:contents"><input type="color" class="cw${c === G ? ' follow' : ''}" data-cw="${d.k}" value="${c || G}" style="background:${c || 'conic-gradient(' + d.zones.map((_, i) => zc(d, i)).join(',') + ')'}" aria-label="${d.name} colour" title="${c === G ? 'Follows the global colour' : c ? 'Own colour' : 'Mixed zones'}"></label>${scrub(d.k, d.b, d.name)}</div>
+  </div>`;
+}
+
+function drawer() {
+  const d = D.find((x) => x.k === sel), z = d.zones[zone], fan = d.k === 'cool' && zone === 1, own = d.own[zone];
+  return `<div class="g drawer"><div class="row dr-hd">${deviceIcon(d.type, 52, true)}<div class="grow"><div class="dr-name">${d.name}</div><div class="sub">${d.type} · ${d.leds} LEDs · ${d.zones.length} zones</div></div>
+    <button class="btn">Identify</button><button class="btn" data-reset="${d.k}">Reset this device</button></div>
+    <div class="dr-body"><div class="dr-col"><span class="lbl">zones</span>
+      <div class="chips">${d.zones.map((n, i) => `<button class="chip" data-z="${i}" aria-pressed="${i === zone}"><span class="sw${d.own[i] || (d.k === 'cool' && i === 1) ? '' : ' follow'}" style="background:${zc(d, i)}"></span>${n}</button>`).join('')}</div>
+      <div class="sub">${z} · ${fan ? 'fan white' : own ? `own colour ${own}` : 'follows the global colour'}</div>
+      ${fan ? `<div class="row"><span class="sw" style="width:30px;height:30px;background:${fanHex(d.fanWhite)}"></span><span class="helptext">This LED only has a working blue input, so it goes from yellow to white. White from about 240.</span></div>
+        <div class="slider"><span><span class="lbl">fan white</span><span class="num" id="fw-v">${d.fanWhite}</span></span><input type="range" id="fw" min="160" max="255" value="${d.fanWhite}"></div>`
+      : `<div class="row"><div class="seg"><button data-src="g" aria-pressed="${!own}">Global</button><button data-src="o" aria-pressed="${!!own}">Own colour</button></div><input type="color" id="zc" value="${own || G}" ${own ? '' : 'disabled'} style="width:56px;height:34px"></div>
+        <div class="pre">${SW.map(([n, h]) => `<button data-c="${h}" title="${n}" aria-label="${n}" aria-pressed="${h === own}" style="background:${h}"></button>`).join('')}</div>`}
+    </div>
+    <div class="dr-col"><span class="lbl">colour tuning</span><p class="helptext">Scales red, green and blue so whites match across devices.</p>
+      <div class="row"><div class="tw"><div style="background:#fff"></div><span class="lbl">sent</span></div><div class="tw"><div style="background:#fff"></div><span class="lbl">shown</span></div></div>
+      ${['red', 'green', 'blue'].map((n) => `<div class="slider"><span><span class="lbl">${n}</span><span class="num">1.00</span></span><input type="range" min="0" max="100" value="100"></div>`).join('')}
+      <div class="slider"><span><span class="lbl">gamma</span><span class="num">2.2</span></span><input type="range" min="10" max="30" value="22"></div>
+    </div></div></div>`;
+}
+
+function draw() {
+  const ch = D.filter(changed);
+  const mouse = D.find((d) => d.k === 'mouse');
+  $('#page').innerHTML = `<div class="hd"><h1>Devices</h1><span class="sub">${D.reduce((a, d) => a + (d.sticks || 1), 0)} devices · ${ch.length ? `${ch.length} changed` : 'all on the global look'}</span><span class="grow"></span><button class="btn" id="resetall">Reset all to the global look</button><button class="btn">Rescan</button></div>
+    <div class="bento">
+      <div class="case"><div class="zone-lbl"><span class="lbl">inside the case</span><span class="lbl" style="color:var(--dim)">laid out like the PC</span></div>
+        <div class="cgrid">${D.filter((d) => d.area).map(tile).join('')}</div></div>
+      <div><div class="zone-lbl"><span class="lbl">on the desk</span></div><div class="desk2">
+        <div class="g bt all"><div class="top"><div class="grow"><div class="ty">every device</div><div class="nm">All</div></div><button class="tg" data-on="*" aria-pressed="${allOn}" aria-label="All lights on"></button></div>
+          <div class="foot"><span class="cw" style="display:block;background:${allOn ? G : '#1b1c1e'}" title="Global colour, set on Lighting"></span>${scrub('*', allB, 'All devices')}</div></div>
+        ${tile(mouse)}</div></div>
+    </div>
+    ${drawer()}`;
+}
+
+const page = $('#page');
+page.addEventListener('click', (e) => {
+  const t = e.target;
+  if (t.closest('[data-on]')) { const k = t.closest('[data-on]').dataset.on; if (k === '*') allOn = !allOn; else { const d = D.find((x) => x.k === k); d.off = !d.off; } return draw(); }
+  if (t.closest('.scrub, input')) return;
+  if (t.closest('#resetall')) { D.forEach((d) => { d.off = false; d.b = 100; d.own = {}; if (d.fanWhite) d.fanWhite = 240; }); return draw(); }
+  if (t.closest('[data-reset]')) { const d = D.find((x) => x.k === sel); d.off = false; d.b = 100; d.own = {}; if (d.fanWhite) d.fanWhite = 240; return draw(); }
+  const d = D.find((x) => x.k === sel);
+  if (t.closest('[data-z]')) { zone = +t.closest('[data-z]').dataset.z; return draw(); }
+  if (t.closest('[data-src]')) { if (t.closest('[data-src]').dataset.src === 'g') delete d.own[zone]; else d.own[zone] = d.own[zone] || G; return draw(); }
+  if (t.closest('[data-c]')) { d.own[zone] = t.closest('[data-c]').dataset.c; return draw(); }
+  const b = t.closest('.bt[data-k]'); if (b && b.dataset.k !== sel) { sel = b.dataset.k; zone = 0; draw(); }
+});
+page.addEventListener('input', (e) => {
+  const t = e.target, d = D.find((x) => x.k === (t.dataset.cw || sel));
+  if (t.dataset.cw) { d.zones.forEach((_, i) => { if (!(d.k === 'cool' && i === 1)) d.own[i] = t.value; }); sel = d.k; draw(); }
+  else if (t.id === 'zc') { d.own[zone] = t.value; draw(); }
+  else if (t.id === 'fw') { d.fanWhite = +t.value; draw(); }
+});
+// Brightness scrub: drag across, or arrow keys (Shift for 1%).
+const setB = (k, v) => { v = Math.max(0, Math.min(100, Math.round(v))); if (k === '*') allB = v; else D.find((x) => x.k === k).b = v; draw(); const s = page.querySelector(`[data-bright="${k}"]`); s && s.focus(); };
+page.addEventListener('pointerdown', (e) => {
+  const s = e.target.closest('.scrub'); if (!s) return;
+  e.preventDefault(); const k = s.dataset.bright;
+  const at = (ev) => { const r = page.querySelector(`[data-bright="${k}"]`).getBoundingClientRect(); setB(k, ((ev.clientX - r.left) / r.width) * 100); };
+  at(e); const up = () => { removeEventListener('pointermove', at); removeEventListener('pointerup', up); };
+  addEventListener('pointermove', at); addEventListener('pointerup', up);
+});
+page.addEventListener('keydown', (e) => {
+  const s = e.target.closest('.scrub');
+  if (!s) { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bt[data-k]')) { e.preventDefault(); e.target.click(); } return; }
+  const v = +s.getAttribute('aria-valuenow'), st = e.shiftKey ? 1 : 5, n = { ArrowRight: v + st, ArrowUp: v + st, ArrowLeft: v - st, ArrowDown: v - st, Home: 0, End: 100 }[e.key];
+  if (n != null) { e.preventDefault(); setB(s.dataset.bright, n); }
+});
+// mock bar
+const win = $('#win');
+$('#w').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; win.classList.remove('w760', 'w390'); b.dataset.w && win.classList.add(b.dataset.w); $('#w').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); };
+$('#gl').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; win.classList.toggle('flat', !!b.dataset.g); $('#gl').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); };
+draw();
+</script>
+</body>
+</html>
