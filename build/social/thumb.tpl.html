@@ -19,7 +19,7 @@ html, body { margin: 0; width: 1280px; height: 640px; overflow: hidden; color: v
 /* near-black, the faint lighting glow top left and a cold hint bottom right */
 body { position: relative; background: radial-gradient(55% 70% at 12% 0%, rgba(200,50,60,.10), transparent 70%), radial-gradient(45% 60% at 100% 100%, rgba(143,211,224,.06), transparent 70%), #0a0b0c; }
 .v { display: none; position: absolute; inset: 0; padding: 56px 64px; }
-body[data-v="a"] #a, body[data-v="b"] #b, body[data-v="c"] #c { display: block; }
+body[data-v="a"] #a, body[data-v="b"] #b, body[data-v="c"] #c, body[data-v="d"] #d { display: block; }
 .brand { font: 500 15px/1 var(--mono); letter-spacing: .24em; color: var(--soft); display: flex; align-items: center; gap: 12px; }
 .brand img { width: 28px; height: 28px; }
 h1 { margin: 0; font-weight: 500; letter-spacing: -.015em; line-height: 1.04; }
@@ -68,6 +68,23 @@ body[data-v="c"] #c { display: flex; flex-direction: column; align-items: center
 #c .figs { display: flex; gap: 18px; margin-top: 40px; }
 #c .figs .stage { width: 150px; height: 112px; }
 #c svg.line { position: absolute; left: 0; right: 0; bottom: 0; }
+
+/* D: wordmark, curve and figures together */
+#d .left { position: absolute; left: 64px; top: 64px; width: 520px; }
+#d .mark { display: flex; align-items: center; gap: 28px; }
+#d .mark img { width: 128px; height: 128px; }
+#d .mark .w { font: 500 44px/1 var(--mono); letter-spacing: .2em; }
+#d .mark span { color: var(--acc); }
+#d .sub { margin-top: 34px; font: 400 25px/1.35 var(--sans); color: var(--ink); letter-spacing: 0; max-width: 470px; }
+#d .sub2 { margin-top: 12px; font: 400 15px/1.5 var(--mono); color: var(--soft); }
+#d .figs { position: absolute; left: 40px; top: 372px; width: 520px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; opacity: .8; }
+#d .figs .stage { height: 110px; border: 0; background: none; --hl-plate: #0b0c0d; }
+#d .figs .lbl { display: block; margin: 2px 0 0 24px; color: var(--dim); font-weight: 400; }
+#d .panel { position: absolute; right: 56px; top: 64px; width: 560px; height: 430px; padding: 20px 22px; }
+#d .panel .head { display: flex; justify-content: space-between; align-items: baseline; }
+#d .panel .head b { font-weight: 500; font-size: 18px; }
+#d .panel svg.curve { display: block; margin-top: 22px; width: 516px; height: auto; }
+#d .foot { bottom: 48px; }
 </style>
 </head>
 <body data-v="a">
@@ -77,9 +94,9 @@ body[data-v="c"] #c { display: flex; flex-direction: column; align-items: center
   <h1>Lighting, fans and sensors in one window.</h1>
   <div class="sub">A free, open source SignalRGB replacement for Windows.</div>
   <div class="row">
-    <div class="card glass"><div class="stage" id="st-ring"></div><div class="cap"><b>Lighting</b><span class="lbl">Every RGB device</span></div></div>
-    <div class="card glass"><div class="stage" id="st-chip"></div><div class="cap"><b>Sensors</b><span class="lbl">Live temps</span></div></div>
-    <div class="card glass"><div class="stage" id="st-fan"></div><div class="cap"><b>Fans</b><span class="lbl">Curves, 25% floor</span></div></div>
+    <div class="card glass"><div class="stage" data-fig="ring"></div><div class="cap"><b>Lighting</b><span class="lbl">Every RGB device</span></div></div>
+    <div class="card glass"><div class="stage" data-fig="chip"></div><div class="cap"><b>Sensors</b><span class="lbl">Live temps</span></div></div>
+    <div class="card glass"><div class="stage" data-fig="fan"></div><div class="cap"><b>Fans</b><span class="lbl">Curves, 25% floor</span></div></div>
   </div>
   <div class="foot"><span>Made by Julian · Powered by OpenRGB</span><span>github.com/gigolajulian/kelvinrgb</span></div>
 </section>
@@ -124,18 +141,35 @@ body[data-v="c"] #c { display: flex; flex-direction: column; align-items: center
   <div class="foot"><span>Made by Julian · Powered by OpenRGB</span><span>Replaces SignalRGB</span></div>
 </section>
 
+<section class="v" id="d">
+  <div class="left">
+    <div class="mark"><img src="../../build/icon.svg" alt=""><div class="w">KELVIN<span>RGB</span></div></div>
+    <div class="sub">Lighting, fans and sensors in one window.</div>
+    <div class="sub2">Free and open source. Replaces SignalRGB on Windows.</div>
+  </div>
+  <div class="figs">
+    <div><div class="stage" data-fig="ring"></div><span class="lbl">Lighting</span></div>
+    <div><div class="stage" data-fig="chip"></div><span class="lbl">Sensors</span></div>
+    <div><div class="stage" data-fig="fan"></div><span class="lbl">Fans</span></div>
+  </div>
+  <div class="panel glass"><div class="head"><b>Cooling</b><span class="lbl">CPU fan · floor 25%</span></div><div class="slot"></div></div>
+  <div class="foot"><span>Made by Julian · Powered by OpenRGB</span><span>github.com/gigolajulian/kelvinrgb</span></div>
+</section>
+
 <script>/*KERNEL*/</script>
 <script>
 HL.inject(document);
 const queue = ["ring", "chip", "fan"];
 window.hairline = (f) => {
-  const name = queue.shift(), stage = document.getElementById("st-" + name);
+  const name = queue.shift(), v = new URLSearchParams(location.search).get("v") || "a", stage = document.querySelector(`#${v} [data-fig="${name}"]`);
+  if (!stage) return;
   stage.setAttribute("data-hairline", f.name);
   const svg = HL.mk("svg", { viewBox: "80 55 240 210", preserveAspectRatio: "xMidYMid meet", "aria-hidden": "true" }, stage);
   const read = { textContent: "" };
   f.mount({ stage, svg, read }, f.range[1]);
 };
 document.body.dataset.v = new URLSearchParams(location.search).get("v") || "a";
+document.querySelector("#d .slot").append(document.querySelector("#b svg.curve").cloneNode(true));
 </script>
 <script>{/*RING*/}</script>
 <script>{/*CHIP*/}</script>
