@@ -65,6 +65,20 @@ function tune(hex, dev = {}) {
   return '#' + [n >> 16 & 255, n >> 8 & 255, n & 255]
     .map((v, i) => Math.round(255 * Math.min(1, Math.pow(v / 255, gm / 2.2) * g[i])).toString(16).padStart(2, '0')).join('');
 }
+// HSV for the colour pad: hue 0..360, saturation and value 0..1.
+function hsv(hex) {
+  const n = parseInt(hex.slice(1), 16), [r, g, b] = [n >> 16 & 255, n >> 8 & 255, n & 255].map((v) => v / 255);
+  const mx = Math.max(r, g, b), c = mx - Math.min(r, g, b);
+  const h = !c ? 0 : mx === r ? ((g - b) / c) % 6 : mx === g ? (b - r) / c + 2 : (r - g) / c + 4;
+  return [(h * 60 + 360) % 360, mx ? c / mx : 0, mx];
+}
+function fromHsv(h, s, v) {
+  const f = (n) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return '#' + [f(5), f(3), f(1)].map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+}
+const hueHex = (h) => fromHsv(h, 1, 1);
+// Lighting zone ids are 'deviceKey:zone'; keys can hold colons ("I2C: 0x70"), so split on the last one.
+const zsplit = (z) => { const i = z.lastIndexOf(':'); return [z.slice(0, i), z.slice(i + 1)]; };
 function fanHex(v) { // yellow to white, measured on the Wraith blade
   const t = Math.max(0, Math.min(1, ((v ?? 240) - 184) / 56));
   return '#' + [[255, 255], [199, 255], [90, 255]].map(([a, b]) => Math.round(a + (b - a) * t).toString(16).padStart(2, '0')).join('');
@@ -116,41 +130,243 @@ const pages = {
     },
   },
 
+  // Focus grid: one tile per device (same-name sticks such as the four DRAM modules share one tile), brightness
+  // on each tile, click a tile to open its colour in place. Colour is per zone in settings; "whole device" sets every zone.
   lighting: {
-    build() {
-      const L = S.lighting;
-      main.innerHTML = `<div class="hd"><h1>Lighting</h1><span class="sub">One look for every light. Single zones are set in Devices.</span></div>
-      <div class="g"><span class="lbl">effect</span><div class="fx" id="l-fx" style="margin-top:10px"></div></div>
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
-        <div class="g" style="display:flex;flex-direction:column;gap:14px">
-          <div class="row"><span class="lbl">colour</span><span class="grow"></span><input type="text" id="l-hex" class="num" value="${L.color}" aria-label="Hex colour" style="width:100px"></div>
-          <input type="color" id="l-color" value="${L.color}" aria-label="Colour">
-          <div class="pre" id="l-pre"></div>
-        </div>
-        <div class="g" style="display:flex;flex-direction:column;gap:16px">
-          ${slider('l-speed', 'speed', 0, 100, L.speed)}
-          ${slider('l-bright', 'brightness', 0, 100, L.brightness)}
-          <div><span class="lbl">what's lit</span><div class="list" style="margin-top:6px" id="l-lit"></div></div>
-        </div>
-      </div>`;
-      $('#l-fx').onclick = (e) => { const b = e.target.closest('[data-fx]'); if (b) setLighting({ effect: b.dataset.fx }); };
-      $('#l-color').oninput = (e) => setLighting({ color: e.target.value }, false);
-      $('#l-hex').onchange = (e) => { const v = e.target.value.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) setLighting({ color: v.toLowerCase() }); else e.target.value = S.lighting.color; };
-      $('#l-pre').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) setLighting({ color: b.dataset.c }); };
-      $('#l-speed').oninput = (e) => { $('#l-speed-v').textContent = e.target.value; setLighting({ speed: +e.target.value }, false); };
-      $('#l-bright').oninput = (e) => { $('#l-bright-v').textContent = e.target.value; setLighting({ brightness: +e.target.value }, false); };
-      this.paint();
+    open: null, // group key of the open tile
+    hue: null, // the pad's hue, kept so greys (saturation or value 0) don't reset it to red
+    zone: null, // in the open tile: null = whole device, else 'deviceKey:zoneIndex' or 'deviceKey:*' for one stick
+    dragging: false,
+    sig: '',
+    groups() {
+      const out = [], byName = new Map();
+      for (const d of ST.devices) {
+        const twins = ST.devices.filter((x) => x.name === d.name && x.type === d.type);
+        if (twins.length > 1) { if (byName.has(d.name)) continue; byName.set(d.name, 1); }
+        out.push({ key: d.key, name: d.name, type: typeLabel(d.type), devs: twins.length > 1 ? twins : [d] });
+      }
+      return out;
     },
+    build() {
+      this.dragging = false; // a tray change can rebuild mid-drag
+      main.innerHTML = `<div class="g lg-all" id="l-all"></div><div class="lgrid" id="l-grid"></div>`;
+      const all = $('#l-all'), grid = $('#l-grid');
+      all.onclick = (e) => {
+        const b = e.target.closest('[data-fx],[data-c]'); if (!b) return;
+        setLighting(b.dataset.fx ? { effect: b.dataset.fx } : { color: b.dataset.c });
+      };
+      all.oninput = (e) => {
+        const t = e.target;
+        if (t.id === 'l-color') setLighting({ color: t.value }, false);
+        if (t.id === 'l-speed') { $('#l-speed-v').textContent = t.value; setLighting({ speed: +t.value }, false); }
+        if (t.id === 'l-bright') { $('#l-bright-v').textContent = t.value + '%'; t.style.setProperty('--p', t.value + '%'); setLighting({ brightness: +t.value }, false); }
+      };
+      all.onchange = (e) => {
+        if (e.target.id !== 'l-hex') return;
+        const v = e.target.value.trim();
+        if (/^#[0-9a-f]{6}$/i.test(v)) setLighting({ color: v.toLowerCase() }); else e.target.value = S.lighting.color;
+      };
+      grid.onclick = (e) => this.click(e);
+      grid.oninput = (e) => this.input(e);
+      grid.onchange = () => this.draw();
+      grid.onkeydown = (e) => this.key(e);
+      grid.onpointerdown = (e) => this.drag(e);
+      this.paint();
+      this.draw();
+    },
+    // The global bar. Rebuilt on effect or colour changes from here, the footer or the tray.
     paint() {
-      const c = S.lighting.color;
-      const FX = { static: c, breathing: `linear-gradient(90deg,#111,${c},#111)`, spectrum: 'linear-gradient(90deg,#c8323c,#ff6a1a,#13a3a3,#2f5bff,#8a5cff)', wave: `repeating-linear-gradient(90deg,${c} 0 14px,#111 14px 28px)`, off: '#111' };
-      $('#l-fx').innerHTML = EFFECTS.map(([k, l]) => `<button data-fx="${k}" aria-pressed="${k === S.lighting.effect}"><span class="pv" style="background:${FX[k]}"></span>${l}</button>`).join('');
-      $('#l-pre').innerHTML = SWATCHES.map(([n, h]) => `<button data-c="${h}" aria-label="${n}" title="${n}" aria-pressed="${h === c}" style="background:${h}"></button>`).join('');
-      if (document.activeElement !== $('#l-hex')) $('#l-hex').value = c;
+      const L = S.lighting, c = L.color, anim = ['breathing', 'spectrum', 'wave'].includes(L.effect);
+      const FX = { static: c, breathing: `linear-gradient(90deg,#111,${c},#111)`, spectrum: 'linear-gradient(90deg,#c8323c,#ff6a1a,#13a3a3,#2f5bff,#8a5cff)', wave: `repeating-linear-gradient(90deg,${c} 0 5px,#111 5px 10px)`, off: '#111' };
+      const a = document.activeElement, keep = a && (a.id ? '#' + a.id : a.dataset.fx ? `[data-fx="${a.dataset.fx}"]` : a.dataset.c ? `#l-all [data-c="${a.dataset.c}"]` : null);
+      $('#l-all').innerHTML = `<span class="lbl">every device</span>
+        <div class="fx">${EFFECTS.map(([k, l]) => `<button data-fx="${k}" aria-pressed="${k === L.effect}"><span class="pv" style="background:${FX[k]}"></span>${l}</button>`).join('')}</div>
+        <div class="lg-col"><input type="color" id="l-color" class="cdot" value="${c}" aria-label="Colour"><input type="text" id="l-hex" class="num" value="${c}" aria-label="Hex colour">
+          <div class="pre">${SWATCHES.map(([n, h]) => `<button data-c="${h}" aria-label="${n}" title="${n}" aria-pressed="${h === c}" style="background:${h}"></button>`).join('')}</div></div>
+        <div class="lg-sl">${anim ? `<label class="ctl"><span class="lbl">speed</span><input type="range" id="l-speed" min="0" max="100" value="${L.speed}"><span class="v num" id="l-speed-v">${L.speed}</span></label>` : ''}
+          <label class="ctl"><span class="lbl">brightness</span><input type="range" class="br" id="l-bright" min="0" max="100" value="${L.brightness}" style="--p:${L.brightness}%"><span class="v num" id="l-bright-v">${L.brightness}%</span></label></div>`;
+      if (keep && $(keep)) $(keep).focus();
+    },
+    // ---- per group helpers ----
+    group(k) { return this.groups().find((g) => g.key === k); },
+    dev(d) { return S.devices[d.key] || {}; },
+    colourZones(d) { return d.zones.map((z, i) => i).filter((i) => !isWraithFan(d, d.zones[i])); },
+    // the colour a group or zone shows in the picker, and whether it is its own
+    current(g, zone) {
+      if (zone) {
+        const [k, zi] = zsplit(zone), d = g.devs.find((x) => x.key === k), zs = this.dev(d).zones || {};
+        const own = zi === '*' ? this.colourZones(d).map((i) => zs[i]).find(Boolean) : zs[zi];
+        return { hex: own || S.lighting.color, own: !!own };
+      }
+      const owns = g.devs.flatMap((d) => this.colourZones(d).map((i) => (this.dev(d).zones || {})[i]));
+      const first = owns.find(Boolean);
+      return { hex: first || S.lighting.color, own: !!first, mixed: owns.some((o) => o !== first) };
+    },
+    setColour(g, hex) {
+      const sel = this.zone ? zsplit(this.zone) : null;
+      for (const d of g.devs) {
+        if (sel && sel[0] !== d.key) continue;
+        const zones = {};
+        for (const i of this.colourZones(d)) if (!sel || sel[1] === '*' || +sel[1] === i) zones[i] = hex;
+        pages.devices.patch(d.key, { zones });
+      }
+      if (page === 'lighting' && ST) this.refresh();
+    },
+    setBright(g, v) {
+      v = Math.max(0, Math.min(100, Math.round(v)));
+      for (const d of g.devs) pages.devices.patch(d.key, { brightness: v });
+      for (const el of main.querySelectorAll(`[data-bright="${CSS.escape(g.key)}"]`)) {
+        el.style.setProperty('--p', v + '%'); el.setAttribute('aria-valuenow', v);
+        if (el.value != null) el.value = v;
+        const out = el.parentElement.querySelector('.bv'); if (out) out.textContent = v + '%';
+      }
+      this.refresh();
+    },
+    changed(g) {
+      return g.devs.some((d) => { const x = this.dev(d); return x.off || (x.brightness ?? 100) !== 100 || Object.keys(x.zones || {}).length || (isWraith(d) && (x.fanWhite ?? 240) !== 240); });
+    },
+    // ---- drawing ----
+    leds(g) {
+      const L = S.lighting, b = g.devs[0] ? (this.dev(g.devs[0]).brightness ?? 100) : 100;
+      const cells = g.devs.flatMap((d) => (d.zones.length ? d.zones.map((_z, zi) => zoneColor(d, zi)) : ['#1b1c1e'])).slice(0, 16);
+      return `<span class="leds" style="opacity:${(0.15 + 0.85 * (L.brightness / 100) * (b / 100)).toFixed(2)}">${cells.map((c) => `<i style="background:${c}"></i>`).join('')}</span>`;
+    },
+    icon(g, size, hi) {
+      if (g.devs.length < 2) return deviceIcon(g.type, size, hi);
+      const s = Math.round(size * 0.62);
+      return `<span class="stack" style="--s:${s}px">${g.devs.map(() => deviceIcon(g.type, s, hi)).join('')}</span>`;
+    },
+    sub(g) { return g.devs.length > 1 ? `${g.type} · ${g.devs.length} sticks` : g.type === 'Board' ? 'Motherboard' : g.type; },
+    on(g) { return g.devs.some((d) => !this.dev(d).off); },
+    tile(g) {
+      const b = this.dev(g.devs[0]).brightness ?? 100;
+      return `<div class="g ltile" data-open="${esc(g.key)}" role="group" aria-label="${esc(g.name)}">
+        ${this.changed(g) ? '<span class="chg" title="Changed from the global look"></span>' : ''}
+        <button class="tg" data-on="${esc(g.key)}" aria-pressed="${this.on(g)}" aria-label="${esc(g.name)} on"></button>
+        <button class="art" data-open="${esc(g.key)}" aria-label="Open ${esc(g.name)} colour">${this.icon(g, 92, false)}</button><div class="ty">${esc(this.sub(g))}</div>
+        <div class="nm${this.on(g) ? '' : ' dim'}" title="${esc(g.name)}">${esc(g.name)}</div><span data-leds="${esc(g.key)}">${this.leds(g)}</span>
+        <div class="scrub" data-bright="${esc(g.key)}" role="slider" tabindex="0" aria-label="${esc(g.name)} brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${b}" style="--p:${b}%"><i></i><span class="bv">${b}%</span></div></div>`;
+    },
+    big(g) {
+      const b = this.dev(g.devs[0]).brightness ?? 100, z = this.zone;
+      const fanDev = z && g.devs.find((d) => d.key === zsplit(z)[0]);
+      const fan = fanDev && zsplit(z)[1] !== '*' && isWraithFan(fanDev, fanDev.zones[+zsplit(z)[1]]);
+      const canColour = g.devs.some((d) => this.colourZones(d).length);
+      const cur = this.current(g, z), [h0, s, v] = hsv(cur.hex), h = this.hue ??= h0;
+      const chips = g.devs.length > 1
+        ? g.devs.map((d, i) => [`${d.key}:*`, `Stick ${i + 1}`, zoneColor(d, 0)])
+        : g.devs[0].zones.map((zz, i) => [`${g.devs[0].key}:${i}`, zz.name, zoneColor(g.devs[0], i)]);
+      const status = !canColour ? 'brightness only, no zones reported' : cur.mixed ? 'mixed colours' : cur.own ? `own colour ${cur.hex}` : 'global colour';
+      const picker = fan
+        ? `<div class="col"><span class="sw" style="width:56px;height:56px;background:${zoneColor(fanDev, +zsplit(z)[1])}"></span><p class="helptext">This LED only has a working blue input, so it goes from yellow to white. White from about 240.</p></div>
+           <div class="col"><label class="ctl"><span class="lbl">fan white</span><input type="range" class="warm" id="l-fanw" min="160" max="255" value="${this.dev(fanDev).fanWhite ?? 240}"><span class="v num" id="l-fanw-v">${this.dev(fanDev).fanWhite ?? 240}</span></label>${this.brightRow(g, b)}${this.resetRow(g)}</div>`
+        : `<div class="sv" id="l-sv" data-h="${h.toFixed(1)}" role="slider" tabindex="0" aria-label="Saturation and brightness of the colour" aria-valuenow="${Math.round(s * 100)}" aria-valuetext="${cur.hex}" style="--base:${hueHex(h)}"><b style="left:${s * 100}%;top:${(1 - v) * 100}%;background:${cur.hex}"></b></div>
+           <div class="col"><label class="ctl"><span class="lbl">hue</span><input type="range" class="hu" id="l-hue" min="0" max="359" value="${Math.round(h)}"><span class="v num" id="l-hue-v">${cur.hex}</span></label>
+             <div class="pre ind">${SWATCHES.map(([n, hx]) => `<button data-c="${hx}" aria-label="${n}" title="${n}" aria-pressed="${cur.own && hx === cur.hex}" style="background:${hx}"></button>`).join('')}</div>
+             ${this.brightRow(g, b)}${this.resetRow(g)}</div>`;
+      return `<div class="g ltile open" data-g="${esc(g.key)}">
+        <button class="btn done" data-close="1">Done</button>
+        <div class="oh">${this.icon(g, 110, true)}<div class="grow"><div class="ty">${esc(this.sub(g))}</div><div class="nm">${esc(g.name)}</div>
+          <div class="row" style="margin-top:6px;gap:10px"><span data-leds="${esc(g.key)}">${this.leds(g)}</span><span class="sub" id="l-status">${status}</span>
+          <button class="tg" data-on="${esc(g.key)}" aria-pressed="${this.on(g)}" aria-label="${esc(g.name)} on"></button></div></div></div>
+        ${chips.length > 1 || fan ? `<div class="chips"><button class="chip" data-zone="" aria-pressed="${!z}">Whole device</button>${chips.map(([k, n, c]) => `<button class="chip" data-zone="${esc(k)}" aria-pressed="${z === k}"><span class="sw" style="background:${c}"></span>${esc(n)}</button>`).join('')}</div>` : ''}
+        <div class="body2${canColour ? '' : ' nocol'}">${canColour || fan ? picker : `<div class="col">${this.brightRow(g, b)}${this.resetRow(g)}</div>`}</div></div>`;
+    },
+    brightRow(g, b) { return `<label class="ctl"><span class="lbl">brightness</span><input type="range" class="br" data-bright="${esc(g.key)}" min="0" max="100" value="${b}" style="--p:${b}%"><span class="v num bv">${b}%</span></label>`; },
+    resetRow(g) { return `<div class="row" style="margin-top:auto"><button class="btn" data-reset="${esc(g.key)}" ${this.changed(g) ? '' : 'disabled'}>Back to the global look</button></div>`; },
+    draw() {
+      const grid = $('#l-grid'); if (!grid || page !== 'lighting') return;
+      if (!ST.devices.length) { grid.innerHTML = `<div class="g"><p class="helptext">${esc(ST.openrgb.msg)}. Waiting for OpenRGB.</p></div>`; return; }
+      const gs = this.groups();
+      if (this.open && !gs.find((g) => g.key === this.open)) this.open = this.zone = null;
+      const a = document.activeElement, fk = a && a.dataset && ['open', 'on', 'bright', 'zone', 'reset', 'c'].find((x) => x in a.dataset), fv = fk && a.dataset[fk], fid = a && a.id;
+      grid.innerHTML = gs.map((g) => (g.key === this.open ? this.big(g) : this.tile(g))).join('');
+      this.sig = ST.devices.map((d) => d.key).join();
+      const back = (fid && $('#' + fid)) || (fk && [...grid.querySelectorAll(`[data-${fk}]`)].find((x) => x.dataset[fk] === fv));
+      if (back) back.focus();
+    },
+    // Colours and labels only, so a drag or a focused control survives.
+    refresh() {
+      const grid = $('#l-grid'); if (!grid) return;
+      const lb = $('#l-bright');
+      if (lb && document.activeElement !== lb) { lb.value = S.lighting.brightness; lb.style.setProperty('--p', S.lighting.brightness + '%'); $('#l-bright-v').textContent = S.lighting.brightness + '%'; }
+      for (const g of this.groups()) {
+        const l = grid.querySelector(`[data-leds="${CSS.escape(g.key)}"]`); if (l) l.innerHTML = this.leds(g);
+        if (g.key !== this.open) continue;
+        const cur = this.current(g, this.zone);
+        if ($('#l-status')) $('#l-status').textContent = cur.mixed ? 'mixed colours' : cur.own ? `own colour ${cur.hex}` : 'global colour';
+        if ($('#l-hue-v')) $('#l-hue-v').textContent = cur.hex;
+        const knob = $('#l-sv b'); if (knob) knob.style.background = cur.hex;
+        for (const c of grid.querySelectorAll('.chip[data-zone]')) {
+          const [k, zi] = zsplit(c.dataset.zone), d = g.devs.find((x) => x.key === k), sw = c.querySelector('.sw');
+          if (d && sw) sw.style.background = zoneColor(d, zi === '*' ? 0 : +zi);
+        }
+      }
+    },
+    click(e) {
+      const t = e.target.closest('button,[data-open]'); if (!t) return;
+      const ds = t.dataset, g = this.group(ds.on || ds.reset || ds.open || this.open);
+      if (ds.on) {
+        const off = this.on(g);
+        for (const d of g.devs) pages.devices.patch(d.key, { off });
+      } else if (ds.reset) {
+        for (const d of g.devs) pages.devices.patch(d.key, { off: false, brightness: 100, fanWhite: 240, zones: Object.fromEntries(Object.keys(this.dev(d).zones || {}).map((i) => [i, null])) });
+      } else if (ds.c) { this.setColour(g, ds.c); }
+      else if ('zone' in ds) this.zone = ds.zone || null;
+      else if (ds.close) { const k = this.open; this.open = this.zone = null; this.draw(); const el = $(`button[data-open="${CSS.escape(k)}"]`); if (el) el.focus(); return; }
+      else if (ds.open) { if (e.target.closest('.scrub')) return; this.open = ds.open; this.zone = null; this.hue = null; this.draw(); $('[data-close]').focus(); return; }
+      else return;
+      if ('zone' in ds || ds.c || ds.reset) this.hue = null;
+      this.draw();
+    },
+    input(e) {
+      const t = e.target, g = this.group(t.dataset.bright || this.open); if (!g) return;
+      if (t.dataset.bright) this.setBright(g, +t.value);
+      else if (t.id === 'l-hue') {
+        const [, s, v] = hsv(this.current(g, this.zone).hex);
+        this.setColour(g, fromHsv(+t.value, s < 0.05 ? 1 : s, v < 0.05 ? 1 : v));
+        this.hue = +t.value;
+        const sv = $('#l-sv'); if (sv) { sv.dataset.h = t.value; sv.style.setProperty('--base', hueHex(+t.value)); }
+      } else if (t.id === 'l-fanw') {
+        const d = g.devs.find((x) => x.key === zsplit(this.zone)[0]);
+        $('#l-fanw-v').textContent = t.value; pages.devices.patch(d.key, { fanWhite: +t.value }); this.refresh();
+      }
+    },
+    key(e) {
+      const t = e.target;
+      if (e.key === 'Escape' && this.open) { e.preventDefault(); this.click({ target: $('[data-close]') }); return; }
+      const dir = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key]; if (!dir) return;
+      const step = e.shiftKey ? 1 : 5;
+      if (t.matches('.scrub')) { e.preventDefault(); this.setBright(this.group(t.dataset.bright), +t.getAttribute('aria-valuenow') + dir * step); }
+      else if (t.id === 'l-sv') {
+        e.preventDefault();
+        const g = this.group(this.open), [, s, v] = hsv(this.current(g, this.zone).hex), d = step / 100;
+        const horiz = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+        this.svTo(g, Math.max(0, Math.min(1, s + (horiz ? dir * d : 0))), Math.max(0, Math.min(1, v + (horiz ? 0 : dir * d))));
+      }
+    },
+    svTo(g, s, v) {
+      const sv = $('#l-sv'), hex = fromHsv(+sv.dataset.h, s, v);
+      this.setColour(g, hex);
+      const b = $('#l-sv b'); b.style.left = s * 100 + '%'; b.style.top = (1 - v) * 100 + '%';
+      sv.setAttribute('aria-valuetext', hex);
+    },
+    // Scrub bars and the colour pad: drag, then one redraw on release.
+    drag(e) {
+      const el = e.target.closest('.scrub,#l-sv'); if (!el) return;
+      e.preventDefault(); el.setPointerCapture(e.pointerId); el.focus(); this.dragging = true;
+      const g = this.group(el.dataset.bright || this.open), r = el.getBoundingClientRect();
+      const at = (ev) => {
+        const x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+        if (el.id === 'l-sv') this.svTo(g, x, 1 - y); else this.setBright(g, x * 100);
+      };
+      at(e);
+      el.onpointermove = at;
+      el.onpointerup = el.onpointercancel = () => { el.onpointermove = el.onpointerup = el.onpointercancel = null; this.dragging = false; this.draw(); };
     },
     live() {
-      $('#l-lit').innerHTML = ST.devices.length ? ST.devices.map((d) => `<div><span class="tag">${typeLabel(d.type)}</span><span class="grow">${esc(d.name)}</span>${d.zones.map((_z, zi) => `<span class="sw" style="width:14px;height:14px;background:${zoneColor(d, zi)}"></span>`).join('')}</div>`).join('')
-        : `<span class="helptext">${esc(ST.openrgb.msg)}. Waiting for OpenRGB.</span>`;
+      if (this.dragging || !$('#l-grid')) return;
+      if (ST.devices.map((d) => d.key).join() !== this.sig) this.draw(); else this.refresh();
     },
   },
 
