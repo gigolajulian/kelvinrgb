@@ -8,8 +8,8 @@ Updated 2026-11-21 by the KelvinRGB home thread. Repo: github.com/gigolajulian/k
 - One writer per folder at a time.
 
 ## Release
-- Latest release: v1.1.3, 2026-11-21 (deletes leftover downloaded installers on start, PR #15). Installed on this PC: 1.1.1 (2026-11-21), update in the app to get 1.1.3.
-- History, all 2026-11-21: 0.3.3 sidecar DLLs ship again, Setup sheet, bundled PawnIO 2.2.0, footer version | 0.3.4 Lighting focus grid | 0.3.5 NZXT Smart Device V2 fan control | 0.3.6 and 0.3.7 installer closes the running app and updates in place, "Game check" splash label | 1.0.0 "v1 beta" | 1.1.0 Drivers page (versions, updates) | 1.1.1 installer fix (#16) | 1.1.2 splash ticks every point in order, 15 s limit (#17) | 1.1.3 leftover installer cleanup (#15).
+- Latest release: v1.1.4, 2026-11-21 ("Check for updates" stays clickable after Up to date, PR #18). Installed on this PC: 1.1.1 (2026-11-21), update in the app to get 1.1.4.
+- History, all 2026-11-21: 0.3.3 sidecar DLLs ship again, Setup sheet, bundled PawnIO 2.2.0, footer version | 0.3.4 Lighting focus grid | 0.3.5 NZXT Smart Device V2 fan control | 0.3.6 and 0.3.7 installer closes the running app and updates in place, "Game check" splash label | 1.0.0 "v1 beta" | 1.1.0 Drivers page (versions, updates) | 1.1.1 installer fix (#16) | 1.1.2 splash ticks every point in order, 15 s limit (#17) | 1.1.3 leftover installer cleanup (#15) | 1.1.4 update check stays clickable (#18).
 - Installer bug in 0.3.7 and 1.0.0: their `customCheckAppRunning` ran `--quit` even when the app was closed, which started it, so the next update failed with exit 2 ("uninstall failed"). Fixed in 1.1.1. Updating from an installed 0.3.7 or 1.0: rename `C:\Program Files\KelvinRGB\KelvinRGB.exe` first, or uninstall in Windows Settings (settings are kept).
 - Updates come from GitHub releases on the public repo. No token in the app.
 - Build: `npm run dist`, NSIS installer in `dist/`, installs to `C:\Program Files\KelvinRGB`. `npm start` asks for admin (`RGB_NO_ELEVATE=1` skips it).
