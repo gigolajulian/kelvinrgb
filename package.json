@@ -9,7 +9,7 @@
     "build:sidecar": "powershell -ExecutionPolicy Bypass -File sidecar/build.ps1",
     "test": "node --test test/math.test.js test/conflicts.test.js test/validate.test.js test/guard.test.js test/update.test.js",
     "postinstall": "node scripts/patch-sdk.js",
-    "dist": "npm run build:sidecar && electron-builder --win nsis"
+    "dist": "npm run build:sidecar && node scripts/fetch-pawnio.js && electron-builder --win nsis"
   },
   "dependencies": {
     "bufferpack": "0.0.6",
@@ -39,6 +39,13 @@
         "filter": [
           "sidecar.exe",
           "lib/**"
+        ]
+      },
+      {
+        "from": "setup",
+        "to": "setup",
+        "filter": [
+          "PawnIO_setup.exe"
         ]
       }
     ],

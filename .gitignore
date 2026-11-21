@@ -4,3 +4,4 @@ sidecar/sidecar.exe
 verify/
 shot*.png
 dist/
+setup/
