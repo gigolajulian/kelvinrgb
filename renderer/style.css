@@ -139,7 +139,8 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .sheet li.on .dot { background: var(--bad); }
 .sheet li.off .dot { background: var(--ok); }
 .sheet li.off .state { color: var(--ok); }
-.sheet li.on .state { color: var(--bad); }
+.sheet li.on .state { color: var(--soft); }
+.sheet li { min-height: 46px; }
 .cf-actions { margin-top: 8px; }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { *, .sheet { transition: none !important; animation: none !important; } }

@@ -436,30 +436,45 @@ function tick() { // soft two-note chime when a row turns green
     o.start(t); o.stop(t + 0.5);
   });
 }
+const cfPending = new Map(); // name -> time Close all was pressed
+let cfData = null;
+const canClose = (x) => x.running && (x.closable || x.service);
 function conflicts(c) {
   const el = $('#conflicts');
-  if (!c) { el.hidden = true; cfLast = ''; return; }
+  if (!c) { el.hidden = true; cfLast = ''; cfData = null; cfPending.clear(); return; }
   const key = JSON.stringify(c);
   if (key === cfLast) return;
   const opening = !cfLast;
   const was = opening ? [] : JSON.parse(cfLast);
   if (c.some((x) => !x.running && was.find((w) => w.name === x.name)?.running)) tick();
-  cfLast = key;
-  const left = c.filter((x) => x.running).length;
-  $('#cf-count').textContent = left ? `conflicts · ${left} of ${c.length} running` : `conflicts · all ${c.length} closed`;
-  $('#cf-list').innerHTML = c.map((x) => `<li class="${x.running ? 'on' : 'off'}"><span class="dot"></span>
-    <span class="grow">${esc(x.label)}<small>${esc(x.note)}</small></span>
-    ${!x.running ? '<span class="lbl state">closed</span>'
-      : x.closable ? `<button class="btn" data-close="${esc(x.name)}">Close</button>`
-      : x.service ? `<button class="btn" data-close="${esc(x.name)}">Stop service</button>`
-      : '<span class="lbl state">close it yourself</span>'}</li>`).join('');
-  const done = $('#cf-done');
-  done.textContent = left ? 'Continue anyway' : 'Continue';
-  done.classList.toggle('p', !left);
-  el.hidden = false;
-  if (opening || !left) ($('#cf-list [data-close]') || done).focus();
+  cfLast = key; cfData = c;
+  drawConflicts(opening);
 }
-$('#cf-list').onclick = (e) => { const b = e.target.closest('[data-close]'); if (b) { b.disabled = true; b.textContent = 'Closing'; rgb.conflictClose(b.dataset.close); } };
+function drawConflicts(opening) {
+  const c = cfData, now = Date.now();
+  const left = c.filter((x) => x.running).length;
+  const state = (x) => !x.running ? 'closed'
+    : !(x.closable || x.service) ? 'close it yourself'
+    : cfPending.has(x.name) ? (now - cfPending.get(x.name) < 8000 ? 'closing' : 'still running') : 'running';
+  $('#cf-count').textContent = left ? `${left} of ${c.length} running` : `all ${c.length} closed`;
+  $('#cf-list').innerHTML = c.map((x) => `<li class="${x.running ? 'on' : 'off'}"><span class="dot"></span>
+    <span class="grow">${esc(x.label)}${x.note && x.note !== x.name ? `<small>${esc(x.note)}</small>` : ''}</span>
+    <span class="lbl state">${state(x)}</span></li>`).join('');
+  const closable = c.filter(canClose), busy = closable.some((x) => state(x) === 'closing');
+  const all = $('#cf-all'), done = $('#cf-done');
+  all.hidden = !closable.length;
+  all.disabled = busy;
+  all.textContent = busy ? 'Closing' : closable.some((x) => cfPending.has(x.name)) ? 'Try again' : 'Close all';
+  done.textContent = left ? 'Continue anyway' : 'Continue';
+  done.classList.toggle('p', !closable.length);
+  $('#conflicts').hidden = false;
+  if (opening || !left) (all.hidden ? done : all).focus();
+}
+$('#cf-all').onclick = () => {
+  for (const x of cfData.filter(canClose)) { cfPending.set(x.name, Date.now()); rgb.conflictClose(x.name); }
+  drawConflicts();
+  setTimeout(() => cfData && drawConflicts(), 8100); // flip any that refused to "still running"
+};
 $('#cf-done').onclick = () => rgb.conflictDone();
 document.addEventListener('keydown', (e) => { if (cfLast && e.key === 'Escape') rgb.conflictDone(); });
 
