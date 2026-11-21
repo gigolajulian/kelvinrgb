@@ -1,4 +1,4 @@
-// Called by main.js with executeJavaScript: step(i, secs) as start-up steps finish (1..4), done() to fade out.
+// Called by main.js with executeJavaScript: step(i, secs) as start-up steps finish (1..4), done(reached) to fade out.
 const N = 4;
 window.step = (i, secs) => {
   i = Math.max(0, Math.min(N, i | 0));
@@ -8,4 +8,11 @@ window.step = (i, secs) => {
     if (secs && j === i - 1 && li.lastElementChild.textContent === '') li.lastElementChild.textContent = `${secs}s`;
   });
 };
-window.done = () => { window.step(N, ''); document.getElementById('d').classList.add('done'); };
+// Points past `reached` never finished (no OpenRGB, no admin, the game started): marked skipped, not ticked.
+// With skipped points the tile holds 1.2 s longer so they can be read (main.js waits to match).
+window.done = (reached = N) => {
+  const fade = () => document.getElementById('d').classList.add('done');
+  if (reached >= N) { window.step(N, ''); return fade(); }
+  document.querySelectorAll('#steps li').forEach((li, j) => { if (j >= reached) { li.className = 'skip'; li.lastElementChild.textContent = 'skipped'; } });
+  setTimeout(fade, 1200);
+};
