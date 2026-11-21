@@ -215,43 +215,46 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 @keyframes sheet-in { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { *, .sheet { transition: none !important; animation: none !important; } }
 
-/* ---------- Devices: mixer ---------- */
+/* ---------- Devices: bento ---------- */
 /* What differs from the global look, one pill each, × undoes it. */
 .changes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 28px; }
 .pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 4px 0 10px; border-radius: 13px; border: 1px solid rgba(143,211,224,.35); background: rgba(143,211,224,.08); font-size: 12px; }
 .pill b { font-weight: 500; color: var(--acc); }
 .pill button { width: 20px; height: 20px; border: 0; border-radius: 50%; background: none; color: var(--soft); font-size: 14px; line-height: 1; }
 .pill button:hover { background: rgba(255,255,255,.08); color: var(--ink); }
-/* One channel strip per device; scrolls sideways when the window is narrow. */
-.changes, .desk, .drawer { flex: none; } /* main is a flex column: keep these at their own height */
-.desk { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-.desk::-webkit-scrollbar { height: 6px; }
-.desk::-webkit-scrollbar-track { background: transparent; }
-.desk::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 3px; }
-.desk::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.24); }
-.desk::-webkit-scrollbar-button { display: none; }
-.strip { flex: 1 1 0; min-width: 96px; max-width: 150px; position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px 12px;
-  border-radius: 12px; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(26px) saturate(150%); cursor: pointer; }
-.strip:hover { border-color: var(--line2); }
-.strip.sel { border-color: var(--acc); }
-.strip.all { flex: 0 0 120px; max-width: none; cursor: default; background: rgba(143,211,224,.06); border-color: rgba(143,211,224,.3); }
-.strip.off .ch, .strip.off .val { opacity: .4; }
-.strip .ty { font: 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
-.strip .nm { font-size: 12.5px; text-align: center; line-height: 1.25; height: 31px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.strip.all .nm { font-weight: 600; }
-.strip .chg { position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); }
-.strip .ch { display: flex; gap: 10px; align-items: stretch; height: 200px; }
-.strip .leds { display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; width: 9px; }
-.strip .leds i { height: 13px; border-radius: 2px; }
-.strip .allsw { width: 9px; border-radius: 3px; }
-.strip .val { font-size: 12px; color: var(--soft); }
-.strip .val.moved { color: var(--acc); }
-/* Fader: a 4px track filled to the value and a flat cap. Drag it, or arrow keys when focused. */
-.fd { position: relative; width: 24px; cursor: ns-resize; touch-action: none; border-radius: 4px; }
-.fd i { position: absolute; left: 10px; width: 4px; top: 0; bottom: 0; border-radius: 2px; background: linear-gradient(0deg, var(--acc) var(--p), rgba(255,255,255,.14) var(--p)); }
-.fd b { position: absolute; left: 1px; width: 22px; height: 12px; border-radius: 4px; background: var(--ink); bottom: calc(var(--p) - 6px); }
-.fd:focus-visible { outline-offset: 4px; }
-/* The selected device, laid out wide under the desk. */
+/* Bento: tiles laid out like the PC. Case slots: cooler, RAM, board on top, graphics card and the first hub below.
+   Any other in-case device flows after them; the desk column holds All and the peripherals. */
+.changes, .bento, .drawer { flex: none; } /* main is a flex column: keep these at their own height */
+.bento { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 230px; align-items: start; }
+.bento .zl { display: block; padding: 0 2px 8px; }
+.case { display: grid; gap: 12px; grid-template-columns: minmax(0,1.25fr) minmax(212px,.85fr) minmax(0,1fr); grid-template-areas: "cool ram board" "gpu gpu hub"; }
+.desk2 { display: flex; flex-direction: column; gap: 12px; }
+.bt { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px; min-height: 236px; cursor: pointer; }
+.bt:hover { border-color: var(--line2); }
+.bt.sel { border-color: var(--acc); }
+.bt.off .art, .bt.off .sticks, .bt.off .leds, .bt.off .scrub, .bt.off .nm { opacity: .42; }
+.bt .top { display: flex; align-items: flex-start; gap: 10px; }
+.bt .ty { font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
+.bt .nm { font-size: 14px; font-weight: 500; line-height: 1.25; }
+.bt .art { flex: 1; display: grid; place-items: center; min-height: 110px; border: 0; border-radius: 8px; background: none; padding: 0; }
+.bt .chg { position: absolute; left: 6px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); }
+.bt .leds { align-self: center; }
+.bt .foot { display: flex; align-items: center; gap: 10px; }
+.bt .foot .scrub { margin: 0; flex: 1; }
+.bt .cw { width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1px solid var(--line2); }
+.bt .cw::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.bt .cw.follow::-webkit-color-swatch { -webkit-mask: linear-gradient(135deg, #000 45%, transparent 45% 55%, #000 55%); } /* the mock's slash: follows the global colour */
+.bt .cw.mixed::-webkit-color-swatch { opacity: 0; }
+.sticks { flex: 1; display: flex; gap: 2px; justify-content: center; align-items: center; }
+.sticks .st { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 2px; border: 0; border-radius: 8px; background: none; }
+.sticks .st[aria-pressed=true] { background: color-mix(in srgb, var(--acc) 8%, transparent); }
+.sticks .st i { width: 8px; height: 22px; border-radius: 2px; }
+.bt.all { min-height: 0; cursor: default; background: color-mix(in srgb, var(--acc) 6%, transparent); border-color: color-mix(in srgb, var(--acc) 30%, transparent); }
+.a-cool { grid-area: cool; } .a-ram { grid-area: ram; } .a-board { grid-area: board; } .a-hub { grid-area: hub; min-height: 200px; }
+.a-gpu { grid-area: gpu; min-height: 200px; } .a-gpu .art { min-height: 90px; }
+@media (max-width: 1240px) { .bento { grid-template-columns: minmax(0, 1fr); } .desk2 { flex-direction: row; flex-wrap: wrap; } .desk2 > * { flex: 1 1 220px; } }
+@media (max-width: 1000px) { .case { grid-template-columns: minmax(0,1fr) minmax(212px,1fr); grid-template-areas: "cool ram" "gpu gpu" "board hub"; } }
+/* The selected device, laid out wide under the tiles. */
 .drawer { display: flex; flex-direction: column; gap: 14px; }
 .dr-hd { gap: 14px; }
 .dr-name { font-size: 16px; font-weight: 600; }
@@ -271,7 +274,7 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .ic .pl { fill: #141619; }
 .ic.hi path, .ic.hi ellipse { stroke: var(--acc); }
 .ic g { transition: transform .24s cubic-bezier(.2,.8,.2,1); }
-.strip:hover .ic g:not(:first-child), .drawer:hover .ic g:not(:first-child), .ltile:hover .ic g:not(:first-child) { transform: translateY(-2.5px); }
-.strip:hover .ic:not(.hi) :is(path, ellipse), .ltile:hover .ic:not(.hi) :is(path, ellipse) { stroke: var(--ink); }
-@media (prefers-reduced-motion: reduce) { .ic g { transition: none; } .strip:hover .ic g:not(:first-child), .drawer:hover .ic g:not(:first-child), .ltile:hover .ic g:not(:first-child) { transform: none; } }
+.bt:hover .ic g:not(:first-child), .drawer:hover .ic g:not(:first-child), .ltile:hover .ic g:not(:first-child) { transform: translateY(-2.5px); }
+.bt:hover .ic:not(.hi) :is(path, ellipse), .ltile:hover .ic:not(.hi) :is(path, ellipse) { stroke: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .ic g { transition: none; } .bt:hover .ic g:not(:first-child), .drawer:hover .ic g:not(:first-child), .ltile:hover .ic g:not(:first-child) { transform: none; } }
 
