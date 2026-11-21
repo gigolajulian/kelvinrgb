@@ -64,7 +64,7 @@ What the app does: every 4 s it checks for `r5apex.exe`, `r5apex_dx12.exe` and `
 
 - `main.js`: window, OpenRGB client, lighting loop, sidecar manager, fan curves, Apex guard.
 - `lib/math.js`: color tuning, effects, curve math (tested in `test/`, run `npm test`).
-- `renderer/`: the UI (Lighting, Devices, Cooling, Monitoring).
+- `renderer/`: the UI (Lighting, Drivers, Cooling, Monitoring).
 - `sidecar/`: LibreHardwareMonitor bridge (`sidecar.cs`, `build.ps1`, `fetch-deps.mjs`).
 
 Settings live in `%APPDATA%\kelvinrgb\settings.json`.

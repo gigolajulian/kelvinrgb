@@ -215,57 +215,28 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 @keyframes sheet-in { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { *, .sheet { transition: none !important; animation: none !important; } }
 
-/* ---------- Devices: bento ---------- */
-/* What differs from the global look, one pill each, × undoes it. */
-.changes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 28px; }
-.pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 4px 0 10px; border-radius: 13px; border: 1px solid rgba(143,211,224,.35); background: rgba(143,211,224,.08); font-size: 12px; }
-.pill b { font-weight: 500; color: var(--acc); }
-.pill button { width: 20px; height: 20px; border: 0; border-radius: 50%; background: none; color: var(--soft); font-size: 14px; line-height: 1; }
-.pill button:hover { background: rgba(255,255,255,.08); color: var(--ink); }
-/* Bento: tiles laid out like the PC. Case slots: cooler, RAM, board on top, graphics card and the first hub below.
-   Any other in-case device flows after them; the desk column holds All and the peripherals. */
-.changes, .bento, .drawer { flex: none; } /* main is a flex column: keep these at their own height */
-.bento { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 230px; align-items: start; }
-.bento .zl { display: block; padding: 0 2px 8px; }
-.case { display: grid; gap: 12px; grid-template-columns: minmax(0,1.25fr) minmax(212px,.85fr) minmax(0,1fr); grid-template-areas: "cool ram board" "gpu gpu hub"; }
-.desk2 { display: flex; flex-direction: column; gap: 12px; }
-.bt { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px; min-height: 236px; cursor: pointer; }
-.bt:hover { border-color: var(--line2); }
-.bt.sel { border-color: var(--acc); }
-.bt.off .art, .bt.off .sticks, .bt.off .leds, .bt.off .scrub, .bt.off .nm { opacity: .42; }
-.bt .top { display: flex; align-items: flex-start; gap: 10px; }
-.bt .ty { font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
-.bt .nm { font-size: 14px; font-weight: 500; line-height: 1.25; }
-.bt .art { flex: 1; display: grid; place-items: center; min-height: 110px; border: 0; border-radius: 8px; background: none; padding: 0; }
-.bt .chg { position: absolute; left: 6px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); }
-.bt .leds { align-self: center; }
-.bt .foot { display: flex; align-items: center; gap: 10px; }
-.bt .foot .scrub { margin: 0; flex: 1; }
-.bt .cw { width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1px solid var(--line2); }
-.bt .cw::-webkit-color-swatch { border: 0; border-radius: 50%; }
-.bt .cw.follow::-webkit-color-swatch { -webkit-mask: linear-gradient(135deg, #000 45%, transparent 45% 55%, #000 55%); } /* the mock's slash: follows the global colour */
-.bt .cw.mixed::-webkit-color-swatch { opacity: 0; }
-.sticks { flex: 1; display: flex; gap: 2px; justify-content: center; align-items: center; }
-.sticks .st { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 2px; border: 0; border-radius: 8px; background: none; }
-.sticks .st[aria-pressed=true] { background: color-mix(in srgb, var(--acc) 8%, transparent); }
-.sticks .st i { width: 8px; height: 22px; border-radius: 2px; }
-.bt.all { min-height: 0; cursor: default; background: color-mix(in srgb, var(--acc) 6%, transparent); border-color: color-mix(in srgb, var(--acc) 30%, transparent); }
-.a-cool { grid-area: cool; } .a-ram { grid-area: ram; } .a-board { grid-area: board; } .a-hub { grid-area: hub; min-height: 200px; }
-.a-gpu { grid-area: gpu; min-height: 200px; } .a-gpu .art { min-height: 90px; }
-@media (max-width: 1240px) { .bento { grid-template-columns: minmax(0, 1fr); } .desk2 { flex-direction: row; flex-wrap: wrap; } .desk2 > * { flex: 1 1 220px; } }
-@media (max-width: 1000px) { .case { grid-template-columns: minmax(0,1fr) minmax(212px,1fr); grid-template-areas: "cool ram" "gpu gpu" "board hub"; } }
-/* The selected device, laid out wide under the tiles. */
-.drawer { display: flex; flex-direction: column; gap: 14px; }
-.dr-hd { gap: 14px; }
-.dr-name { font-size: 16px; font-weight: 600; }
-.dr-body { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 28px; }
-.dr-col { display: flex; flex-direction: column; gap: 12px; }
-.drawer input[type=color] { width: 56px; height: 34px; flex: none; }
-.drawer input[type=color]:disabled { opacity: .45; cursor: default; }
-.drawer .seg button { white-space: nowrap; }
+/* ---------- Drivers ---------- */
+/* Drivers: one five-column grid per section, rows drawn with display: contents. */
+.drv { display: grid; grid-template-columns: minmax(180px, 1.6fr) 132px 132px minmax(150px, 1fr) 118px; gap: 0 14px; align-items: center; margin-top: 12px; }
+.drv > .hrow, .drv > .r { display: contents; }
+.drv .hrow > * { padding: 0 4px 8px; }
+.drv .r > * { padding: 12px 4px; border-top: 1px solid var(--line); min-height: 58px; display: flex; flex-direction: column; justify-content: center; }
+.drv .span2 { grid-column: span 2; }
+.drv .nm { font-size: 14px; } .drv .what { font-size: 12px; color: var(--dim); margin-top: 2px; }
+.drv .v { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 13px var(--mono); font-variant-numeric: tabular-nums; }
+.drv .v.dim { color: var(--dim); }
+.drv .st { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--soft); }
+.drv .st .dot { width: 8px; height: 8px; } .dot.acc { background: var(--acc); }
+.drv .act { align-items: flex-end; }
+.drv .act .btn { min-width: 96px; }
+#v .helptext { margin: 12px 4px 0; }
+.guard { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--warn); }
+@media (max-width: 1100px) { .drv { grid-template-columns: minmax(160px, 1fr) 120px 120px minmax(120px, 1fr); } .drv .act { grid-column: 1 / -1; align-items: flex-start; border-top: 0 !important; padding-top: 0 !important; min-height: 0 !important; } .drv .hrow .act { display: none; } }
+/* Colour tuning in the open Lighting tile. */
+.tune { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.tune .col { display: flex; flex-direction: column; gap: 10px; }
 .tw { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .tw div { height: 30px; border-radius: 6px; }
-@media (max-width: 1100px) { .dr-body { grid-template-columns: minmax(0,1fr); } }
 
 /* Hairline device icons (icons.js): one stroke, plates filled with the ground, teal only on the chosen device.
    Hover lifts the parts off their base by a hair and brightens the line: ease-out, under 300 ms, transform and stroke only. */
@@ -274,7 +245,7 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .ic .pl { fill: #141619; }
 .ic.hi path, .ic.hi ellipse { stroke: var(--acc); }
 .ic g { transition: transform .24s cubic-bezier(.2,.8,.2,1); }
-.bt:hover .ic g:not(:first-child), .drawer:hover .ic g:not(:first-child), .ltile:hover .ic g:not(:first-child) { transform: translateY(-2.5px); }
-.bt:hover .ic:not(.hi) :is(path, ellipse), .ltile:hover .ic:not(.hi) :is(path, ellipse) { stroke: var(--ink); }
-@media (prefers-reduced-motion: reduce) { .ic g { transition: none; } .bt:hover .ic g:not(:first-child), .drawer:hover .ic g:not(:first-child), .ltile:hover .ic g:not(:first-child) { transform: none; } }
+.ltile:hover .ic g:not(:first-child) { transform: translateY(-2.5px); }
+.ltile:hover .ic:not(.hi) :is(path, ellipse) { stroke: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .ic g { transition: none; } .ltile:hover .ic g:not(:first-child) { transform: none; } }
 
