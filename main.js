@@ -252,6 +252,7 @@ function checkGuard() {
     state.guard = active;
     if (active) {
       log('apex guard: game running, releasing fans and lighting, stopping OpenRGB');
+      endSplash(); // sensors and lighting wait for the game, so don't hold the splash for them
       state.openrgb = { ok: false, msg: 'paused for apex' };
       state.sensors = { ...state.sensors, ok: false, msg: 'paused for apex' };
       push();
@@ -567,7 +568,8 @@ function updateTray(force) {
 // A small glass tile centred where the window will open. The logo's own ring fills as start-up steps finish
 // (Game check: Apex or EAC, sensors, OpenRGB, lighting), each row ticks off with its time, then the tile fades and the window shows.
 const SPLASH_W = 340, SPLASH_H = 440;
-let splash = null, splashStep = 0, splashAt = 0, splashLast = 0, splashEnding = false;
+let splash = null, splashStep = 0, splashAt = 0, splashEnding = false, splashTicking = false;
+const splashDone = new Map(); // point (1..4) -> when it finished
 function openSplash() {
   const b = win.getBounds();
   splash = new BrowserWindow({
@@ -580,24 +582,31 @@ function openSplash() {
   splash.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   splash.loadFile(path.join(__dirname, 'renderer', 'splash.html'));
   splash.once('ready-to-show', () => splash && splash.showInactive());
-  splashAt = splashLast = Date.now();
-  setTimeout(endSplash, 6000); // never hold the app back longer than this, OpenRGB can be slow to start
+  splashAt = Date.now();
+  setTimeout(endSplash, 15000); // a point that never finishes (no OpenRGB, no admin) shows as skipped
 }
 function stepSplash(i) {
-  if (!splash || splashEnding || i <= splashStep) return;
-  splashStep = i;
-  const secs = ((Date.now() - splashLast) / 1000).toFixed(1); splashLast = Date.now();
+  if (!splash || splashEnding || splashDone.has(i)) return;
+  splashDone.set(i, Date.now());
+  advanceSplash();
+}
+// Points tick strictly in order, one at a time so each is seen. One that finished early (OpenRGB is often ready
+// before the sensors) waits for the ones before it. The window opens only after the 4th.
+function advanceSplash() {
+  if (splashTicking || !splash || splashEnding || !splashDone.has(splashStep + 1)) return;
+  splashTicking = true;
+  const i = ++splashStep, secs = (Math.max(0, splashDone.get(i) - (splashDone.get(i - 1) ?? splashAt)) / 1000).toFixed(1);
   splash.webContents.executeJavaScript(`step(${i}, ${JSON.stringify(secs)})`).catch(() => {});
-  if (i >= 4) endSplash();
+  setTimeout(() => { splashTicking = false; if (splashStep >= 4) endSplash(); else advanceSplash(); }, 300);
 }
 function endSplash() {
   if (!splash || splashEnding) return;
   splashEnding = true;
   const wait = Math.max(0, 1600 - (Date.now() - splashAt)); // long enough to read the steps, not a flicker
   setTimeout(() => {
-    splash.webContents.executeJavaScript('done()').catch(() => {});
+    splash.webContents.executeJavaScript(`done(${splashStep})`).catch(() => {}); // points after splashStep show as skipped
     // the ring is full and the tile fades: show the real window, drop the splash just after
-    setTimeout(() => { const s = splash; splash = null; showWindow(); setTimeout(() => s.destroy(), 200); }, 450);
+    setTimeout(() => { const s = splash; splash = null; showWindow(); setTimeout(() => s.destroy(), 200); }, splashStep >= 4 ? 450 : 1650);
   }, wait);
 }
 
