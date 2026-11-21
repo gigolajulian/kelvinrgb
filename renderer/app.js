@@ -71,7 +71,8 @@ function fanHex(v) { // yellow to white, measured on the Wraith blade
 }
 function zoneColor(d, zi) {
   const z = d.zones[zi], dev = S.devices[d.key] || {};
-  if (isWraithFan(d, z)) return S.lighting.on ? fanHex(dev.fanWhite) : '#1b1c1e';
+  if (isWraithFan(d, z)) return fanHex(S.lighting.on && !dev.off ? dev.fanWhite : 0); // red + green never turn off
+  if (dev.off) return '#1b1c1e';
   if (!lightsOn()) return '#1b1c1e';
   return (dev.zones && dev.zones[zi]) || tune(S.lighting.color, dev);
 }
@@ -153,88 +154,161 @@ const pages = {
     },
   },
 
+  // Mixer: an All strip and one channel strip per device (icon, live zone colours, brightness fader, on/off).
+  // The selected device's zones, colour and tuning sit in the panel below. Everything that differs from the
+  // global look is listed at the top with an undo.
   devices: {
-    sel: null, // { key, zone } zone = index or null for the whole device
+    sel: null, // device key
+    zone: 0,
+    dragging: false,
     build() {
       const devs = ST.devices;
-      if (!this.sel || !devs.find((d) => d.key === this.sel.key)) this.sel = devs[0] ? { key: devs[0].key, zone: null } : null;
-      main.innerHTML = `<div class="hd"><h1>Devices</h1><span class="sub">Every light OpenRGB found. Click a zone to give it its own colour.</span><span class="grow"></span><button class="btn" id="d-reset-all">Reset all to global</button><button class="btn" id="d-rescan">Rescan</button></div>
-      ${devs.length ? `<div class="grid" style="grid-template-columns:minmax(0,1fr) 300px;align-items:start">
-        <div class="g" style="padding:6px 16px"><div class="list" id="d-rows"></div><p class="helptext" style="margin:10px 0 6px">Dashed ring = follows global. Solid = its own colour.</p></div>
-        <div class="g" style="display:flex;flex-direction:column;gap:14px" id="d-ed"></div></div>`
+      if (!devs.find((d) => d.key === this.sel)) { this.sel = devs[0] ? devs[0].key : null; this.zone = 0; }
+      main.innerHTML = `<div class="hd"><h1>Devices</h1><span class="sub" id="d-count"></span><span class="grow"></span><button class="btn" id="d-reset-all">Reset all to the global look</button><button class="btn" id="d-rescan">Rescan</button></div>
+      ${devs.length ? '<div class="changes" id="d-chg"></div><div class="desk" id="d-desk"></div><div class="g drawer" id="d-ed"></div>'
         : `<div class="g"><p class="helptext">${esc(ST.openrgb.msg)}. No devices yet. Is OpenRGB installed, with its SDK server on?</p></div>`}`;
       $('#d-rescan').onclick = () => rgb.rescan();
-      $('#d-reset-all').onclick = () => { for (const d of devs) if ((S.devices[d.key] || {}).zones) { const zones = Object.fromEntries(Object.keys(S.devices[d.key].zones).map((k) => [k, null])); S.devices[d.key].zones = {}; rgb.device(d.key, { zones }); } this.build(); };
+      $('#d-reset-all').onclick = () => { for (const d of devs) this.resetDevice(d); this.draw(); };
       if (!devs.length) return;
-      $('#d-rows').onclick = (e) => {
-        const b = e.target.closest('[data-k]'); if (!b) return;
-        this.sel = { key: b.dataset.k, zone: b.dataset.z === '' ? null : +b.dataset.z };
-        this.rows(); this.editor();
-      };
-      this.rows(); this.editor();
-    },
-    rows() {
-      $('#d-rows').innerHTML = ST.devices.map((d) => {
-        const dev = S.devices[d.key] || {};
-        const on = (zi) => this.sel.key === d.key && this.sel.zone === zi;
-        return `<div><span class="tag">${typeLabel(d.type)}</span><button class="devname" data-k="${esc(d.key)}" data-z="" aria-pressed="${on(null)}">${esc(d.name)}</button><div class="chips">${d.zones.map((z, zi) => {
-          const own = isWraithFan(d, z) || (dev.zones && dev.zones[zi]);
-          return `<button class="chip" data-k="${esc(d.key)}" data-z="${zi}" aria-pressed="${on(zi)}"><span class="sw${own ? '' : ' follow'}" style="background:${zoneColor(d, zi)}"></span>${esc(z.name)}</button>`;
-        }).join('') || `<span class="sub">${d.leds} leds</span>`}</div></div>`;
-      }).join('');
-    },
-    editor() {
-      const d = ST.devices.find((x) => x.key === this.sel.key); if (!d) return;
-      const k = d.key, cur = () => S.devices[k] || (S.devices[k] = {});
-      const ed = $('#d-ed'), zi = this.sel.zone;
-      if (zi !== null) { // one zone
-        const z = d.zones[zi], own = cur().zones && cur().zones[zi];
-        if (isWraithFan(d, z)) {
-          ed.innerHTML = `<div class="row"><span class="sw" style="width:38px;height:38px;background:${zoneColor(d, zi)}"></span><div><div style="font-weight:600">${esc(d.name)} · ${esc(z.name)}</div><div class="sub">Yellow to white only</div></div></div>
-            <input class="warm" type="range" id="d-fanw" min="160" max="255" value="${cur().fanWhite ?? 240}" aria-label="Yellow to white">
-            <div class="row sub" style="font-size:11px"><span>Yellow</span><span class="grow"></span><span>White</span></div>
-            <p class="helptext">This LED only has a working blue input, so it can only go from yellow to white. White from about 240.</p>`;
-          $('#d-fanw').oninput = (e) => { cur().fanWhite = +e.target.value; rgb.device(k, { fanWhite: +e.target.value }); this.rows(); ed.querySelector('.sw').style.background = zoneColor(d, zi); };
-          return;
+      const desk = $('#d-desk');
+      desk.onclick = (e) => {
+        const t = e.target.closest('[data-on]');
+        if (t) {
+          if (t.dataset.on === '*') setLighting({ on: !S.lighting.on }, false);
+          else this.patch(t.dataset.on, { off: !(S.devices[t.dataset.on] || {}).off });
+          this.draw(); return;
         }
-        ed.innerHTML = `<div class="row"><span class="sw" style="width:38px;height:38px;background:${zoneColor(d, zi)}"></span><div><div style="font-weight:600">${esc(d.name)} · ${esc(z.name)}</div><div class="sub">${own ? 'Own colour ' + own : 'Follows global'} · ${z.leds} leds</div></div></div>
-          ${seg('src', [['g', 'Global'], ['o', 'Own colour']], own ? 'o' : 'g')}
-          <input type="color" id="d-zc" value="${own || S.lighting.color}" aria-label="Zone colour" ${own ? '' : 'disabled style="opacity:.45"'}>
-          <div class="pre" id="d-pre">${SWATCHES.map(([n, h]) => `<button data-c="${h}" aria-label="${n}" title="${n}" aria-pressed="${h === own}" style="background:${h}"></button>`).join('')}</div>
-          <button class="btn" id="d-whole">Use for whole ${esc(typeLabel(d.type).toLowerCase())}</button>`;
-        const setZone = (hex) => { cur().zones = { ...cur().zones }; if (hex) cur().zones[zi] = hex; else delete cur().zones[zi]; rgb.device(k, { zones: { [zi]: hex } }); this.rows(); this.editor(); };
-        ed.querySelector('[data-seg]').onclick = (e) => { const b = e.target.closest('button'); if (b) setZone(b.dataset.v === 'o' ? (own || S.lighting.color) : null); };
-        $('#d-zc').onchange = (e) => setZone(e.target.value);
-        $('#d-pre').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) setZone(b.dataset.c); };
-        $('#d-whole').onclick = () => {
-          const zones = {}; d.zones.forEach((zz, j) => { if (!isWraithFan(d, zz)) zones[j] = own || null; });
-          cur().zones = Object.fromEntries(Object.entries(zones).filter(([, v]) => v));
-          rgb.device(k, { zones }); this.rows(); this.editor();
-        };
-        return;
+        const s = e.target.closest('.strip[data-k]');
+        if (s && !e.target.closest('.fd') && s.dataset.k !== this.sel) { this.sel = s.dataset.k; this.zone = 0; this.draw(); }
+      };
+      // Faders: drag, or arrow keys (Shift for 1%), Home and End.
+      const setFader = (fd, v) => {
+        v = Math.max(0, Math.min(100, Math.round(v)));
+        fd.style.setProperty('--p', v + '%'); fd.setAttribute('aria-valuenow', v);
+        const out = fd.closest('.strip').querySelector('.val'); out.textContent = v + '%';
+        if (fd.dataset.f === '*') setLighting({ brightness: v }, false);
+        else { out.classList.toggle('moved', v !== 100); this.patch(fd.dataset.f, { brightness: v }); }
+      };
+      desk.onpointerdown = (e) => {
+        const fd = e.target.closest('.fd'); if (!fd) return;
+        e.preventDefault(); fd.setPointerCapture(e.pointerId); fd.focus(); this.dragging = true;
+        const at = (ev) => { const r = fd.getBoundingClientRect(); setFader(fd, ((r.bottom - ev.clientY) / r.height) * 100); };
+        at(e);
+        fd.onpointermove = at;
+        fd.onpointerup = fd.onpointercancel = () => { fd.onpointermove = fd.onpointerup = fd.onpointercancel = null; this.dragging = false; this.top(); };
+      };
+      desk.onkeydown = (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.strip[data-k]')) { e.preventDefault(); e.target.click(); return; }
+        const fd = e.target.closest('.fd'); if (!fd) return;
+        const v = +fd.getAttribute('aria-valuenow'), step = e.shiftKey ? 1 : 5;
+        const next = { ArrowUp: v + step, ArrowRight: v + step, ArrowDown: v - step, ArrowLeft: v - step, Home: 0, End: 100 }[e.key];
+        if (next == null) return;
+        e.preventDefault(); setFader(fd, next); clearTimeout(this.kt); this.kt = setTimeout(() => this.top(), 400);
+      };
+      $('#d-chg').onclick = (e) => { const b = e.target.closest('[data-u]'); if (!b) return; const c = this.changes()[+b.dataset.u]; if (c) { this.patch(c.d.key, c.undo); this.draw(); } };
+      this.draw();
+    },
+    // Writes a device patch to the local copy and to main (main validates it again).
+    patch(k, p) {
+      const cur = S.devices[k] || (S.devices[k] = {});
+      const { zones, ...rest } = p;
+      Object.assign(cur, rest);
+      if (zones) { cur.zones = { ...cur.zones }; for (const [z, v] of Object.entries(zones)) { if (v) cur.zones[z] = v; else delete cur.zones[z]; } }
+      rgb.device(k, p);
+    },
+    resetDevice(d) {
+      const dev = S.devices[d.key]; if (!dev) return;
+      this.patch(d.key, { off: false, brightness: 100, gain: [1, 1, 1], gamma: 2.2, fanWhite: 240, zones: Object.fromEntries(Object.keys(dev.zones || {}).map((i) => [i, null])) });
+    },
+    // Every difference from the global look, one entry each, with the patch that undoes it.
+    changes() {
+      const out = [];
+      for (const d of ST.devices) {
+        const dev = S.devices[d.key] || {};
+        if (dev.off) out.push({ d, t: 'off', undo: { off: false } });
+        if (dev.brightness != null && dev.brightness !== 100) out.push({ d, t: `brightness ${dev.brightness}%`, undo: { brightness: 100 } });
+        const own = Object.keys(dev.zones || {});
+        if (own.length) out.push({ d, t: `own colour on ${own.length === d.zones.length ? 'every zone' : own.map((i) => (d.zones[i] ? d.zones[i].name : i)).join(', ')}`, undo: { zones: Object.fromEntries(own.map((i) => [i, null])) } });
+        if ((dev.gain && dev.gain.some((g) => g !== 1)) || (dev.gamma != null && dev.gamma !== 2.2)) out.push({ d, t: 'colour tuned', undo: { gain: [1, 1, 1], gamma: 2.2 } });
+        if (isWraith(d) && dev.fanWhite != null && dev.fanWhite !== 240) out.push({ d, t: `fan white ${dev.fanWhite}`, undo: { fanWhite: 240 } });
       }
-      // whole device: brightness and colour tuning
-      const cfg = cur(), g = cfg.gain || [1, 1, 1];
-      ed.innerHTML = `<div class="row"><div style="flex:1"><div style="font-weight:600">${esc(d.name)}</div><div class="sub">${typeLabel(d.type)} · ${d.leds} leds · ${d.zones.length} zones</div></div><button class="btn" id="d-identify">Identify</button></div>
-        ${slider('d-bright', 'device brightness', 0, 100, cfg.brightness ?? 100)}
-        <div><span class="lbl">colour tuning</span><p class="helptext" style="margin-top:4px">Scales red, green and blue so whites match across devices.</p></div>
-        <div class="row"><div style="flex:1;display:flex;flex-direction:column;gap:6px"><div style="height:36px;border-radius:6px;background:#fff"></div><span class="lbl">sent</span></div><div style="flex:1;display:flex;flex-direction:column;gap:6px"><div id="d-after" style="height:36px;border-radius:6px"></div><span class="lbl">shown</span></div></div>
-        ${slider('d-r', 'red', 0, 100, Math.round(g[0] * 100), g[0].toFixed(2))}
-        ${slider('d-g', 'green', 0, 100, Math.round(g[1] * 100), g[1].toFixed(2))}
-        ${slider('d-b', 'blue', 0, 100, Math.round(g[2] * 100), g[2].toFixed(2))}
-        ${slider('d-gamma', 'gamma', 10, 30, Math.round((cfg.gamma || 2.2) * 10), (cfg.gamma || 2.2).toFixed(1))}
-        <div class="row"><button class="btn" id="d-reset">Reset tuning</button><button class="btn" id="d-copy">Copy to all</button></div>`;
+      return out;
+    },
+    draw() { this.top(); this.editor(); },
+    // Count, the changed list and the desk. Skipped while a fader is held so the drag isn't cut.
+    top() {
+      if (this.dragging || page !== 'devices' || !$('#d-desk')) return;
+      const a = document.activeElement, fk = a && a.dataset && ['f', 'on', 'u', 'k'].find((x) => x in a.dataset), fv = fk && a.dataset[fk];
+      const ch = this.changes(), changed = new Set(ch.map((c) => c.d.key)), L = S.lighting;
+      $('#d-count').textContent = `${ST.devices.length} devices · ${changed.size ? `${changed.size} changed` : 'all on the global look'}`;
+      $('#d-chg').innerHTML = ch.length
+        ? `<span class="lbl">changed</span>${ch.map((c, i) => `<span class="pill"><b>${esc(c.d.name)}</b>${esc(c.t)}<button data-u="${i}" aria-label="Undo ${esc(c.t)} on ${esc(c.d.name)}">×</button></span>`).join('')}`
+        : '<span class="helptext">Every device follows the global look from Lighting.</span>';
+      const fader = (k, v, label) => `<div class="fd" data-f="${esc(k)}" role="slider" tabindex="0" aria-label="${esc(label)} brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}" style="--p:${v}%"><i></i><b></b></div>`;
+      const all = `<div class="strip all"><div class="ty">every device</div><div class="nm">All</div>
+        <div class="ch"><span class="allsw" style="background:${lightsOn() ? L.color : '#1b1c1e'}"></span>${fader('*', L.brightness, 'All devices')}</div>
+        <div class="val num">${L.brightness}%</div><button class="tg" data-on="*" aria-pressed="${L.on}" aria-label="All lights on"></button></div>`;
+      const strip = (d) => {
+        const dev = S.devices[d.key] || {}, b = dev.brightness ?? 100, sel = d.key === this.sel;
+        const dim = (0.15 + 0.85 * (L.brightness / 100) * (b / 100)).toFixed(2);
+        const leds = d.zones.length ? d.zones.flatMap((z, zi) => Array(Math.max(1, Math.min(4, z.leds))).fill(zi)).slice(0, 12) : [0];
+        return `<div class="strip${sel ? ' sel' : ''}${dev.off ? ' off' : ''}" data-k="${esc(d.key)}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="Edit ${esc(d.name)}">${changed.has(d.key) ? '<span class="chg" title="Changed from the global look"></span>' : ''}
+          ${deviceIcon(typeLabel(d.type), 40, sel)}<div class="ty">${esc(typeLabel(d.type))}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div>
+          <div class="ch"><div class="leds" style="opacity:${dim}">${leds.map((zi) => `<i style="background:${d.zones.length ? zoneColor(d, zi) : '#1b1c1e'}"></i>`).join('')}</div>${fader(d.key, b, d.name)}</div>
+          <div class="val num${b !== 100 ? ' moved' : ''}">${b}%</div>
+          <button class="tg" data-on="${esc(d.key)}" aria-pressed="${!dev.off}" aria-label="${esc(d.name)} on"></button></div>`;
+      };
+      $('#d-desk').innerHTML = all + ST.devices.map(strip).join('');
+      if (fk) { const el = [...main.querySelectorAll(`[data-${fk}]`)].find((x) => x.dataset[fk] === fv); if (el) el.focus(); }
+    },
+    // The selected device: zones and their colour on the left, colour tuning on the right.
+    editor() {
+      const d = ST.devices.find((x) => x.key === this.sel); if (!d) return;
+      const k = d.key, cur = () => S.devices[k] || {}, ed = $('#d-ed');
+      if (this.zone >= d.zones.length) this.zone = 0;
+      const zi = this.zone, z = d.zones[zi], own = z && (cur().zones || {})[zi], g = cur().gain || [1, 1, 1], gm = cur().gamma || 2.2;
+      const zoneUi = !z ? `<p class="helptext">${d.leds} LEDs, no zones reported.</p>`
+        : isWraithFan(d, z) ? `<div class="row"><span class="sw" style="width:30px;height:30px;background:${zoneColor(d, zi)}"></span><span class="helptext">This LED only has a working blue input, so it goes from yellow to white. White from about 240.</span></div>
+            ${slider('d-fanw', 'fan white', 160, 255, cur().fanWhite ?? 240)}`
+        : `<div class="row">${seg('src', [['g', 'Global'], ['o', 'Own colour']], own ? 'o' : 'g')}<input type="color" id="d-zc" value="${own || S.lighting.color}" aria-label="${esc(z.name)} colour" ${own ? '' : 'disabled'}></div>
+            <div class="pre" id="d-pre">${SWATCHES.map(([n, h]) => `<button data-c="${h}" aria-label="${n}" title="${n}" aria-pressed="${h === own}" style="background:${h}"></button>`).join('')}</div>
+            ${d.zones.length > 1 ? '<button class="btn" id="d-whole">Use for every zone</button>' : ''}`;
+      ed.innerHTML = `<div class="row dr-hd">${deviceIcon(typeLabel(d.type), 52, true)}<div class="grow"><div class="dr-name">${esc(d.name)}</div><div class="sub">${esc(typeLabel(d.type))} · ${d.leds} LEDs · ${d.zones.length} zone${d.zones.length === 1 ? '' : 's'}</div></div>
+          <button class="btn" id="d-identify">Identify</button><button class="btn" id="d-reset">Reset this device</button></div>
+        <div class="dr-body">
+          <div class="dr-col"><span class="lbl">zones</span>
+            <div class="chips" id="d-zones">${d.zones.map((zz, i) => { const o = isWraithFan(d, zz) || (cur().zones || {})[i];
+              return `<button class="chip" data-z="${i}" aria-pressed="${i === zi}"><span class="sw${o ? '' : ' follow'}" style="background:${zoneColor(d, i)}"></span>${esc(zz.name)}</button>`; }).join('')}</div>
+            ${z ? `<div class="sub">${esc(z.name)} · ${isWraithFan(d, z) ? 'fan white' : own ? `own colour ${own}` : 'follows the global colour'}</div>` : ''}
+            ${zoneUi}</div>
+          <div class="dr-col"><span class="lbl">colour tuning</span><p class="helptext">Scales red, green and blue so whites match across devices.</p>
+            <div class="row"><div class="tw"><div style="background:#fff"></div><span class="lbl">sent</span></div><div class="tw"><div id="d-after"></div><span class="lbl">shown</span></div></div>
+            ${slider('d-r', 'red', 0, 100, Math.round(g[0] * 100), g[0].toFixed(2))}
+            ${slider('d-g', 'green', 0, 100, Math.round(g[1] * 100), g[1].toFixed(2))}
+            ${slider('d-b', 'blue', 0, 100, Math.round(g[2] * 100), g[2].toFixed(2))}
+            ${slider('d-gamma', 'gamma', 10, 30, Math.round(gm * 10), gm.toFixed(1))}
+            <div class="row"><button class="btn" id="d-tune-reset">Reset tuning</button><button class="btn" id="d-copy">Copy tuning to every device</button></div></div>
+        </div>`;
       const paintAfter = () => ($('#d-after').style.background = tune('#ffffff', cur()));
       paintAfter();
       $('#d-identify').onclick = () => rgb.identify(k);
-      $('#d-bright').oninput = (e) => { $('#d-bright-v').textContent = e.target.value; cur().brightness = +e.target.value; rgb.device(k, { brightness: +e.target.value }); };
+      $('#d-reset').onclick = () => { this.resetDevice(d); this.draw(); };
+      $('#d-zones').onclick = (e) => { const b = e.target.closest('[data-z]'); if (b) { this.zone = +b.dataset.z; this.editor(); } };
+      const setZone = (hex) => { this.patch(k, { zones: { [zi]: hex } }); this.draw(); };
+      if (z && isWraithFan(d, z)) $('#d-fanw').oninput = (e) => { $('#d-fanw-v').textContent = e.target.value; this.patch(k, { fanWhite: +e.target.value }); this.top(); };
+      else if (z) {
+        ed.querySelector('[data-seg]').onclick = (e) => { const b = e.target.closest('button'); if (b) setZone(b.dataset.v === 'o' ? (own || S.lighting.color) : null); };
+        $('#d-zc').onchange = (e) => setZone(e.target.value);
+        $('#d-pre').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) setZone(b.dataset.c); };
+        if ($('#d-whole')) $('#d-whole').onclick = () => { const zones = {}; d.zones.forEach((zz, j) => { if (!isWraithFan(d, zz)) zones[j] = own || null; }); this.patch(k, { zones }); this.draw(); };
+      }
       ['r', 'g', 'b'].forEach((ch, i) => ($(`#d-${ch}`).oninput = (e) => {
         const gain = [...(cur().gain || [1, 1, 1])]; gain[i] = e.target.value / 100;
-        $(`#d-${ch}-v`).textContent = gain[i].toFixed(2); cur().gain = gain; rgb.device(k, { gain }); paintAfter(); this.rows();
+        $(`#d-${ch}-v`).textContent = gain[i].toFixed(2); this.patch(k, { gain }); paintAfter(); this.top();
       }));
-      $('#d-gamma').oninput = (e) => { const gamma = e.target.value / 10; $('#d-gamma-v').textContent = gamma.toFixed(1); cur().gamma = gamma; rgb.device(k, { gamma }); paintAfter(); this.rows(); };
-      $('#d-reset').onclick = () => { cur().gain = [1, 1, 1]; cur().gamma = 2.2; rgb.device(k, { gain: [1, 1, 1], gamma: 2.2 }); this.editor(); this.rows(); };
-      $('#d-copy').onclick = () => { for (const x of ST.devices) { const t = S.devices[x.key] || (S.devices[x.key] = {}); t.gain = cur().gain || [1, 1, 1]; t.gamma = cur().gamma || 2.2; rgb.device(x.key, { gain: t.gain, gamma: t.gamma }); } this.rows(); };
+      $('#d-gamma').oninput = (e) => { const gamma = e.target.value / 10; $('#d-gamma-v').textContent = gamma.toFixed(1); this.patch(k, { gamma }); paintAfter(); this.top(); };
+      $('#d-tune-reset').onclick = () => { this.patch(k, { gain: [1, 1, 1], gamma: 2.2 }); this.draw(); };
+      $('#d-copy').onclick = () => { for (const x of ST.devices) this.patch(x.key, { gain: [...(cur().gain || [1, 1, 1])], gamma: cur().gamma || 2.2 }); this.draw(); };
     },
     live() {},
   },
@@ -419,6 +493,7 @@ function setLighting(patch, rebuild = true) {
   rgb.lighting(patch);
   footer();
   if (page === 'lighting') { if (rebuild) pages.lighting.paint(); if (ST) pages.lighting.live(); }
+  if (page === 'devices') pages.devices.top(); // the footer and tray change the All strip too
 }
 function footer() {
   const L = S.lighting;
@@ -534,5 +609,5 @@ rgb.get().then((r) => {
   onState(r.state);
   rgb.onState(onState);
   // the tray menu changed something: take main's copy and redraw
-  rgb.onSettings((s) => { S = s; applyGlass(); footer(); if (page === 'lighting' || page === 'settings') go(page); });
+  rgb.onSettings((s) => { S = s; applyGlass(); footer(); if (page === 'lighting' || page === 'settings') go(page); if (page === 'devices') pages.devices.top(); });
 });
