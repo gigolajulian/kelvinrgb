@@ -42,7 +42,7 @@ const DEFAULTS = {
   fans: {},    // control id -> { mode: bios|curve|fixed, sensor, points, shape, fixed }
   closeConflicts: true, // show the conflict list when RGB apps that fight us run (lib/conflicts.js)
   glass: true, // Windows 11 acrylic behind the window
-  splash: true, // Bloom splash at launch (renderer/splash.html)
+  splash: true, // start-up splash (renderer/splash.html)
 };
 let settings = structuredClone(DEFAULTS);
 try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
@@ -120,6 +120,7 @@ async function loadDevices() {
   log(`OpenRGB: ${state.devices.map((d) => d.name).join(', ')}`);
   push();
   startRender();
+  stepSplash(4); // lighting painted
 }
 
 function startRender() {
@@ -440,13 +441,15 @@ function updateTray(force) {
   ]));
 }
 
-// ---------- splash (Bloom) ----------
-// A transparent, click-through window over the main window's bounds. The ring turns amber to teal as start-up
-// steps finish (Apex checked, sensors, OpenRGB), then a panel opens out of it and the real window takes over.
-let splash = null, splashStep = 0, splashAt = 0, splashEnding = false;
+// ---------- splash (D: logo ring + steps) ----------
+// A small glass tile centred where the window will open. The logo's own ring fills as start-up steps finish
+// (Apex check, sensors, OpenRGB, lighting), each row ticks off with its time, then the tile fades and the window shows.
+const SPLASH_W = 340, SPLASH_H = 440;
+let splash = null, splashStep = 0, splashAt = 0, splashLast = 0, splashEnding = false;
 function openSplash() {
+  const b = win.getBounds();
   splash = new BrowserWindow({
-    ...win.getBounds(), transparent: true, frame: false, resizable: false, movable: false, skipTaskbar: true, alwaysOnTop: true,
+    x: Math.round(b.x + (b.width - SPLASH_W) / 2), y: Math.round(b.y + (b.height - SPLASH_H) / 2), width: SPLASH_W, height: SPLASH_H, transparent: true, frame: false, resizable: false, movable: false, skipTaskbar: true, alwaysOnTop: true,
     focusable: false, hasShadow: false, show: false, backgroundColor: '#00000000',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
   });
@@ -455,23 +458,24 @@ function openSplash() {
   splash.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   splash.loadFile(path.join(__dirname, 'renderer', 'splash.html'));
   splash.once('ready-to-show', () => splash && splash.showInactive());
-  splashAt = Date.now();
-  setTimeout(endSplash, 5000); // never hold the app back longer than this, OpenRGB can be slow to start
+  splashAt = splashLast = Date.now();
+  setTimeout(endSplash, 6000); // never hold the app back longer than this, OpenRGB can be slow to start
 }
 function stepSplash(i) {
-  if (!splash || i <= splashStep) return;
+  if (!splash || splashEnding || i <= splashStep) return;
   splashStep = i;
-  splash.webContents.executeJavaScript(`step(${i})`).catch(() => {});
-  if (i >= 3) endSplash();
+  const secs = ((Date.now() - splashLast) / 1000).toFixed(1); splashLast = Date.now();
+  splash.webContents.executeJavaScript(`step(${i}, ${JSON.stringify(secs)})`).catch(() => {});
+  if (i >= 4) endSplash();
 }
 function endSplash() {
   if (!splash || splashEnding) return;
   splashEnding = true;
-  const wait = Math.max(0, 1400 - (Date.now() - splashAt)); // long enough to read as a moment, not a flicker
+  const wait = Math.max(0, 1600 - (Date.now() - splashAt)); // long enough to read the steps, not a flicker
   setTimeout(() => {
-    splash.webContents.executeJavaScript('step(4); done()').catch(() => {});
-    // the panel has filled the window by now: show the real one, drop the splash just after
-    setTimeout(() => { const s = splash; splash = null; showWindow(); setTimeout(() => s.destroy(), 150); }, 950);
+    splash.webContents.executeJavaScript('done()').catch(() => {});
+    // the ring is full and the tile fades: show the real window, drop the splash just after
+    setTimeout(() => { const s = splash; splash = null; showWindow(); setTimeout(() => s.destroy(), 200); }, 450);
   }, wait);
 }
 
