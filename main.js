@@ -43,6 +43,7 @@ const DEFAULTS = {
   closeConflicts: true, // show the conflict list when RGB apps that fight us run (lib/conflicts.js)
   glass: true, // Windows 11 acrylic behind the window
   splash: true, // start-up splash (renderer/splash.html)
+  setupSeen: false, // the first-run Setup sheet was shown once
 };
 let settings = structuredClone(DEFAULTS);
 try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
@@ -365,7 +366,35 @@ on('openLog', () => shell.openPath(logFile)); // fixed path, nothing taken from 
 on('quit', () => app.quit());
 on('autostart', (v) => setAutostart(v === true));
 on('update', (a) => { if (a === 'check') updater.check(true); else if (a === 'install') updater.install(); else if (a === 'releases') shell.openExternal(U.RELEASES); else if (a === 'openrgb') shell.openExternal('https://openrgb.org'); });
+on('setupSeen', () => { settings.setupSeen = true; save(); });
+on('setup', (a) => {
+  if (state.guard || setupBusy) return; // nothing installs while Apex or EAC runs
+  if (a === 'recheck') return checkSetup();
+  if (a === 'openrgb') return shell.openExternal('https://openrgb.org/releases.html');
+  if (a !== 'pawnio') return;
+  if (!fs.existsSync(PAWNIO_SETUP)) return shell.openExternal('https://pawnio.eu');
+  setupBusy = 'pawnio'; checkSetup();
+  execFile(PAWNIO_SETUP, ['-install'], (e) => {
+    log(e ? `setup: PawnIO installer: ${e.message.trim()}` : 'setup: PawnIO installer finished');
+    setupBusy = '';
+    checkSetup(() => { if (pawnio) stopSidecar().then(startSidecar); }); // the sidecar only finds fan headers once the driver runs
+  });
+});
 state.version = app.getVersion();
+
+// ---------- setup ----------
+// The bundled PawnIO installer sits under resources/, admin-owned, like the sidecar. Without it, Install opens the download page.
+const PAWNIO_SETUP = path.join(app.isPackaged ? process.resourcesPath : __dirname, 'setup', 'PawnIO_setup.exe');
+let pawnio = false, setupBusy = '';
+function checkSetup(then) {
+  execFile(SYS('sc.exe'), ['query', 'PawnIO'], { windowsHide: true }, (e, out) => {
+    pawnio = !e && /RUNNING/.test(out);
+    state.setup = { openrgb: !!findOpenRgb(), pawnio, busy: setupBusy, bundled: fs.existsSync(PAWNIO_SETUP) };
+    push();
+    if (then) then();
+  });
+}
+checkSetup();
 
 // ---------- updates ----------
 const updater = U.create({

@@ -447,6 +447,7 @@ const pages = {
           <div><span class="t"><span>OpenRGB server</span><span>127.0.0.1 : 6742</span></span><span class="mono sub" id="s-orgb"></span></div>
           <div><span class="t"><span>Sensors</span><span>LibreHardwareMonitor sidecar</span></span><span class="mono sub" id="s-sens"></span></div>
           <div><span class="t"><span>Fan floor</span><span>No fan goes below this</span></span><span class="mono">${FLOOR}%</span></div>
+          <div><span class="t"><span>Setup</span><span>OpenRGB, the PawnIO driver and fan control: what each is and whether it runs</span></span><button class="btn" id="s-setup">Open</button></div>
           <div><span class="t"><span>Log file</span><span>%APPDATA%\\KelvinRGB\\log.txt, reset each launch</span></span><button class="btn" id="s-log">Open</button></div>
         </div></div>
         <div class="g" style="padding:6px 16px"><div class="set">
@@ -456,6 +457,7 @@ const pages = {
         </div></div>
       </div>`;
       $('#s-quit').onclick = () => rgb.quit();
+      $('#s-setup').onclick = openSetup;
       $('#s-auto').onclick = (e) => { if (ST?.autostart?.supported) rgb.autostart(e.currentTarget.getAttribute('aria-pressed') !== 'true'); };
       const flip = (b) => { const v = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', v); return v; };
       $('#s-conf').onclick = (e) => { S.closeConflicts = flip(e.currentTarget); rgb.closeConflicts(S.closeConflicts); };
@@ -549,6 +551,59 @@ function tick() { // soft two-note chime when a row turns green
 const cfPending = new Map(); // name -> time Close all was pressed
 let cfData = null;
 const canClose = (x) => x.running && (x.closable || x.service);
+// ---------- setup ----------
+// Shown once on first run, and at start whenever a piece is missing. Settings opens it any time.
+let suOpen = false, suMounted = false, suAuto = false;
+const setupNeeds = (s) => !s.setup.openrgb || !s.setup.pawnio || s.sensors.admin === false;
+function openSetup() {
+  suOpen = true; $('#setup').hidden = false;
+  rgb.setup('recheck');
+  if (!suMounted) { suMounted = true; mountFigures(); }
+  drawSetup(); $('#su-done').focus();
+}
+function closeSetup() {
+  suOpen = false; $('#setup').hidden = true;
+  if (!S.setupSeen) { S.setupSeen = true; rgb.setupSeen(); }
+}
+function mountFigures() {
+  HL.inject(document);
+  document.querySelectorAll('#setup [data-fig]').forEach((stage) => {
+    const f = FIGURES[stage.dataset.fig], out = stage.querySelector('.su-read');
+    stage.setAttribute('data-hairline', f.name); stage.setAttribute('role', 'img'); stage.setAttribute('aria-label', f.means);
+    const svg = HL.mk('svg', { viewBox: '0 0 400 320', 'aria-hidden': 'true' }, stage);
+    let t = null;
+    const read = { get textContent() { return t; }, set textContent(v) { t = String(v ?? ''); out.textContent = t; } };
+    f.mount({ stage, svg, read }, f.range[1]);
+    if (t === null) read.textContent = 'rest';
+  });
+}
+function drawSetup() {
+  if (!suOpen || !ST || !ST.setup) return;
+  const x = ST.setup, n = ST.controls.length;
+  const rows = {
+    openrgb: x.openrgb ? ['ok', 'Installed', ''] : ['need', 'Not found', 'Get OpenRGB'],
+    pawnio: x.busy === 'pawnio' ? ['wait', 'Installing', ''] : x.pawnio ? ['ok', 'Running', ''] : ['need', 'Not installed', x.bundled ? 'Install' : 'Get PawnIO'],
+    fans: n ? ['ok', 'Ready · ' + n + ' fan header' + (n === 1 ? '' : 's'), '']
+      : ST.sensors.admin === false ? ['need', 'Start KelvinRGB as admin', '']
+      : !x.pawnio ? ['wait', 'Waits for the driver', '']
+      : ['need', ST.sensors.ok ? 'No fan headers found' : 'Sensor service: ' + ST.sensors.msg, ''],
+  };
+  for (const [k, [s, t, b]] of Object.entries(rows)) {
+    const el = $('#setup [data-k=' + k + '] .su-status'), btn = el.querySelector('.btn');
+    el.dataset.s = s; el.querySelector('.t').textContent = t;
+    btn.textContent = b; btn.hidden = !b; btn.disabled = !!ST.guard; btn.classList.toggle('p', s === 'need');
+  }
+  $('#su-what-pawnio').textContent = 'Kernel driver from pawnio.eu · 3.4 MB · ' + (x.bundled ? 'ships with KelvinRGB' : 'opens the download page') + ' · asks Windows for admin once';
+  const left = Object.values(rows).filter((r) => r[0] === 'need').length;
+  $('#su-sub').textContent = ST.guard ? 'Apex or Easy Anti-Cheat is running. Setup waits until the game closes.'
+    : left ? (left === 1 ? 'One needs' : left + ' need') + ' your attention on this PC. Each card says what it is and why KelvinRGB needs it.'
+    : 'Everything is in place. You can open this again from Settings.';
+}
+$('#setup').addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) rgb.setup(b.dataset.act); });
+$('#su-done').onclick = closeSetup;
+$('#setup').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSetup(); });
+addEventListener('focus', () => { if (suOpen) rgb.setup('recheck'); }); // back from the browser after a download
+
 function conflicts(c) {
   const el = $('#conflicts');
   if (!c) { el.hidden = true; cfLast = ''; cfData = null; cfPending.clear(); return; }
@@ -608,6 +663,8 @@ function onState(s) {
   const u = s.update || {}, fv = $('#ft-ver'), up = u.action === 'install';
   fv.textContent = `v${s.version || ''}` + (up || /^(Downloading|Installing)/.test(u.text || '') ? ` · ${u.text.toLowerCase()}` : '');
   fv.classList.toggle('up', up); fv.disabled = !up;
+  if (!suAuto && s.setup && !s.conflicts && (!S.setupSeen || setupNeeds(s))) { suAuto = true; openSetup(); }
+  drawSetup();
   health('st-guard', !s.guard, s.guard, s.guard ? 'Apex guard active' : 'Apex guard idle');
   if ((page === 'devices' && devicesChanged) || (page === 'fans' && fansChanged)) pages[page].build();
   pages[page].live();

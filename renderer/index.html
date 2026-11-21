@@ -45,6 +45,39 @@
     <div class="row cf-actions"><span class="grow"></span><button class="btn" id="cf-done">Continue anyway</button><button class="btn p" id="cf-all">Close all</button></div>
   </div>
 </div>
+<div class="scrim" id="setup" hidden>
+  <div class="sheet wide" role="dialog" aria-modal="true" aria-labelledby="su-title" aria-describedby="su-sub">
+    <span class="lbl">Setup</span>
+    <h2 id="su-title">Three pieces run your lights and fans</h2>
+    <p class="sub" id="su-sub"></p>
+    <div class="su-parts">
+      <section class="su-part" data-k="openrgb">
+        <div class="su-stage" data-fig="ring"><span class="su-read"></span></div>
+        <h3>Lighting <span class="lbl">OpenRGB</span></h3>
+        <p class="sub">Talks to the lights on your RAM, graphics card, cooler, board and hub. KelvinRGB runs it quietly in the background.</p>
+        <div class="su-what" id="su-what-openrgb">Download from openrgb.org · about 49 MB · GPL-2</div>
+        <div class="su-status"><span class="dot"></span><span class="t grow"></span><button class="btn" data-act="openrgb"></button></div>
+      </section>
+      <section class="su-part" data-k="pawnio">
+        <div class="su-stage" data-fig="chip"><span class="su-read"></span></div>
+        <h3>Driver <span class="lbl">PawnIO</span></h3>
+        <p class="sub">A signed driver that lets KelvinRGB read the board's sensor chip: temperatures, fan speeds and fan headers.</p>
+        <div class="su-what" id="su-what-pawnio">Kernel driver from pawnio.eu · 3.4 MB · asks Windows for admin once</div>
+        <div class="su-status"><span class="dot"></span><span class="t grow"></span><button class="btn" data-act="pawnio"></button></div>
+      </section>
+      <section class="su-part" data-k="fans">
+        <div class="su-stage" data-fig="fan"><span class="su-read"></span></div>
+        <h3>Fan control <span class="lbl">Sensor service</span></h3>
+        <p class="sub">Reads every sensor and drives your fan headers. Fans never drop below 25%, and go back to BIOS when KelvinRGB closes.</p>
+        <div class="su-what" id="su-what-fans">Built into KelvinRGB · LibreHardwareMonitor 0.9.6 · needs KelvinRGB started as admin</div>
+        <div class="su-status"><span class="dot"></span><span class="t grow"></span><button class="btn" data-act="fans"></button></div>
+      </section>
+    </div>
+    <div class="row cf-actions"><span class="su-note grow">Nothing installs without your click. While Apex or Easy Anti-Cheat runs, setup waits.</span><button class="btn p" id="su-done">Continue</button></div>
+  </div>
+</div>
+<script src="hairline/kernel.js"></script>
+<script src="hairline/figures.js"></script>
 <script src="icons.js"></script>
 <script src="app.js"></script>
 </body>

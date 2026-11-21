@@ -151,6 +151,21 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .sheet li.on .state { color: var(--soft); }
 .sheet li { min-height: 46px; }
 .cf-actions { margin-top: 8px; }
+/* Setup: the first-run sheet, three cards with a hairline figure each */
+.sheet.wide { width: min(940px, calc(100% - 48px)); max-height: calc(100% - 48px); overflow: auto; }
+.su-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 6px; }
+.su-part { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.035); }
+.su-stage { position: relative; border: 1px solid var(--line); border-radius: 9px; background: #121417; overflow: hidden; --hl-plate: #121417; --hl-hi: var(--acc); }
+.su-read { position: absolute; top: 9px; right: 11px; z-index: 1; font: 11px/1 var(--mono); color: var(--soft); font-variant-numeric: tabular-nums; pointer-events: none; }
+.su-part h3 { margin: 2px 0 0; font-size: 15px; font-weight: 500; display: flex; align-items: baseline; gap: 8px; }
+.su-part h3 .lbl { font-size: 10px; }
+.su-part .sub { margin: 0; }
+.su-what { font-family: var(--mono); font-size: 11px; color: var(--dim); line-height: 1.6; }
+.su-status { margin-top: auto; display: flex; align-items: center; gap: 10px; min-height: 34px; font-size: 13px; }
+.su-status .dot { width: 8px; height: 8px; background: var(--dim); transition: background-color .25s; }
+.su-status[data-s=ok] .dot { background: var(--ok); }
+.su-status[data-s=need] .dot { background: var(--warn); }
+.su-note { font-size: 12px; color: var(--dim); }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { *, .sheet { transition: none !important; animation: none !important; } }
 
