@@ -61,7 +61,8 @@ const state = {
   log: [],
 };
 let win;
-function push() { if (win && !win.isDestroyed()) win.webContents.send('state', state); updateTray(); }
+// A hidden window gets nothing: it would only redraw for nobody. showWindow() sends the latest state.
+function push() { if (win && !win.isDestroyed() && win.isVisible()) win.webContents.send('state', state); updateTray(); }
 // The installed app has no console, so the log also goes to %APPDATA%\KelvinRGB\log.txt (reset each launch).
 const logFile = path.join(app.getPath('userData'), 'log.txt');
 try { fs.writeFileSync(logFile, ''); } catch {}
@@ -283,6 +284,7 @@ function handleConflicts(tasklistCsv) {
   const names = [...new Set([...C.toClose(lastProcs).map((p) => p.name), ...C.toWarn(lastProcs)])].filter((n) => !declined.has(n.toLowerCase()));
   if (!names.length) return firstCheckDone();
   state.conflicts = names.map((n) => ({ name: n, label: C.label(n), note: C.WARN[n] || n, closable: C.closable(n), service: !!C.service(n), running: true }));
+  if (win && !win.isVisible()) showWindow(); // the prompt needs a visible window (hidden ones get no state)
   push();
 }
 function stopConflictService(name) {
@@ -348,9 +350,9 @@ function applyGlass() { if (win && process.platform === 'win32') win.setBackgrou
 const ICON = path.join(__dirname, 'renderer', 'icon.png');
 const ICO = path.join(__dirname, 'renderer', 'icon.ico');
 let tray = null;
-let trayKey = '';
+let trayKey = '', trayStatus = '', trayAt = 0;
 const EFFECT_NAMES = { static: 'Static', breathing: 'Breathing', spectrum: 'Spectrum', wave: 'Wave', off: 'Off' };
-function showWindow() { if (!win) return; win.setSkipTaskbar(false); if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+function showWindow() { if (!win) return; win.setSkipTaskbar(false); if (win.isMinimized()) win.restore(); win.show(); win.focus(); push(); }
 function hideWindow() { if (win) { win.hide(); win.setSkipTaskbar(true); } }
 function temp(re, hwRe) {
   for (const h of state.hw) if (hwRe.test(h.type)) { const s = h.sensors.find((x) => x.type === 'Temperature' && re.test(x.name)) || h.sensors.find((x) => x.type === 'Temperature'); if (s) return Math.round(s.value); }
@@ -363,10 +365,11 @@ function updateTray(force) {
   const L = settings.lighting, cpu = temp(/Tctl|Package|Tdie/, /^Cpu$/), gpu = temp(/GPU Core|Edge/, /^Gpu/);
   const lights = state.guard ? 'paused for Apex' : L.on ? EFFECT_NAMES[L.effect] : 'off';
   const temps = [cpu != null && `CPU ${cpu} °C`, gpu != null && `GPU ${gpu} °C`].filter(Boolean).join(' · ') || 'sensors starting';
-  const key = JSON.stringify([lights, temps, state.openrgb.msg, state.sensors.msg, state.guard, settings.glass, settings.closeConflicts, L.effect, L.on]);
-  if (key === trayKey && !force) return;
-  trayKey = key;
-  tray.setToolTip(`KelvinRGB\nLights ${lights}\n${temps}`.slice(0, 127));
+  const status = JSON.stringify([lights, state.openrgb.msg, state.sensors.msg, state.guard, settings.glass, settings.closeConflicts, L.effect, L.on]);
+  tray.setToolTip(`KelvinRGB\nLights ${lights}\n${temps}`.slice(0, 127)); // cheap, every tick
+  // Rebuilding the menu is not: only when status or settings change, temps at most every 10 s.
+  if (!force && status === trayStatus && (temps === trayKey || Date.now() - trayAt < 10000)) return;
+  trayKey = temps; trayStatus = status; trayAt = Date.now();
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: `Lights ${lights}`, enabled: false },
     { label: temps, enabled: false },
