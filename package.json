@@ -1,6 +1,6 @@
 {
   "name": "kelvinrgb",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "description": "One dark window for PC lighting, fans and sensors, on OpenRGB and LibreHardwareMonitor.",
   "main": "main.js",
@@ -62,9 +62,9 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": true,
-      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh",
       "shortcutName": "KelvinRGB"
     },
     "directories": {
