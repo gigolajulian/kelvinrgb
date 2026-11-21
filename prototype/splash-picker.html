@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KelvinRGB splash prototype</title>
+<!-- PROTOTYPE, throwaway. Three loading splashes for KelvinRGB, switchable with ?variant=A|B|C and the bar at the bottom.
+     Each one sits on a fake desktop so the glass reads the way it will on Windows. Nothing here ships. -->
+<style>
+:root{
+  --acc:#8fd3e0;--ink:#e6e7e8;--soft:#9aa0a6;--dim:#6c7177;
+  --line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.12);
+  --glass:rgba(22,24,27,.55);--ok:#7fd49b;--glow:#c8323c;
+  --mono:'Cascadia Mono',Consolas,ui-monospace,monospace;
+  --sans:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
+  --amber:#ff8a3d;--cream:#fff4e6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;color:var(--ink);font:14px/1.45 var(--sans);background:#050607}
+
+/* fake desktop: a dark wallpaper with some colour for the acrylic to pick up */
+.desk{position:fixed;inset:0;background:
+  radial-gradient(40% 50% at 22% 30%,rgba(200,50,60,.35),transparent 70%),
+  radial-gradient(35% 45% at 78% 70%,rgba(60,110,160,.30),transparent 70%),
+  radial-gradient(60% 60% at 50% 110%,rgba(255,138,61,.12),transparent 70%),
+  linear-gradient(160deg,#101216,#07080a)}
+.desk::after{content:"";position:absolute;left:0;right:0;bottom:0;height:48px;background:rgba(18,19,22,.82);backdrop-filter:blur(30px);border-top:1px solid var(--line)}
+html.plain .desk{background:#0b0c0e}
+
+.stage{position:fixed;inset:0 0 48px;display:grid;place-items:center}
+.v{display:none}
+.v.on{display:block}
+
+/* shared icon: the real icon geometry */
+.ico{display:block}
+
+/* ---------- A: Ring ---------- */
+/* Square glass tile. The icon's ring draws itself as the progress, one status line under the name. */
+.a{width:300px;padding:34px 0 26px;border-radius:22px;background:var(--glass);backdrop-filter:blur(40px) saturate(140%);
+  border:1px solid var(--line2);text-align:center;opacity:0;transform:scale(.96);animation:in .5s cubic-bezier(.2,.8,.2,1) forwards}
+.a .ring{width:132px;height:132px;margin:0 auto;position:relative}
+.a .ring svg{position:absolute;inset:0}
+.a .track{stroke:rgba(255,255,255,.07)}
+.a .prog{stroke-dasharray:390;stroke-dashoffset:390;transition:stroke-dashoffset .6s cubic-bezier(.3,.7,.2,1)}
+.a h1{margin:22px 0 4px;font:600 19px var(--sans);letter-spacing:.01em}
+.a .st{font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--soft);height:16px}
+.a .ver{margin-top:14px;font:10px var(--mono);color:var(--dim)}
+.a.done{animation:out .45s ease forwards}
+
+/* ---------- B: Checklist ---------- */
+/* Wide, low strip. Icon on the left, each start-up step on its own row so you can see which one is slow. */
+.b{width:480px;display:flex;gap:22px;align-items:center;padding:22px 26px;border-radius:16px;background:var(--glass);
+  backdrop-filter:blur(40px) saturate(140%);border:1px solid var(--line2);opacity:0;transform:translateY(8px);animation:in .45s cubic-bezier(.2,.8,.2,1) forwards}
+.b .left{flex:none;text-align:center}
+.b .name{margin-top:10px;font:600 14px var(--sans)}
+.b ul{list-style:none;margin:0;padding:0 0 0 22px;flex:1;border-left:1px solid var(--line)}
+.b li{display:flex;align-items:center;gap:10px;height:30px;font:12px var(--mono);color:var(--dim);transition:color .3s}
+.b li i{width:8px;height:8px;border-radius:50%;border:1px solid var(--line2);flex:none;transition:all .3s}
+.b li.run{color:var(--ink)}
+.b li.run i{border-color:var(--acc);animation:pulse 1s ease-in-out infinite}
+.b li.ok{color:var(--soft)}
+.b li.ok i{background:var(--ok);border-color:var(--ok)}
+.b li span:last-child{margin-left:auto;color:var(--dim);font-size:11px}
+.b.done{animation:out .4s ease forwards}
+
+/* ---------- C: Bloom ---------- */
+/* No window at all. The ring floats on the desktop, turns through the lighting colours, then opens into the app. */
+.c{position:relative;width:420px;height:420px;display:grid;place-items:center}
+.c .halo{position:absolute;inset:60px;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--hue) 22%,transparent),transparent);transition:background .8s}
+.c svg{position:relative;animation:spin 2.6s linear infinite}
+.c .seg{transition:stroke .8s}
+.c .cap{position:absolute;bottom:58px;left:0;right:0;text-align:center;font:11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);opacity:.8}
+.c .app{position:absolute;inset:auto;width:46px;height:46px;border-radius:50%;border:1px solid var(--line2);background:var(--glass);backdrop-filter:blur(40px);opacity:0}
+.c.done svg{animation:shrink .5s cubic-bezier(.5,0,.75,0) forwards}
+.c.done .halo,.c.done .cap{transition:opacity .3s;opacity:0}
+.c.done .app{animation:open .7s .35s cubic-bezier(.2,.8,.2,1) forwards}
+
+@keyframes in{to{opacity:1;transform:none}}
+@keyframes out{to{opacity:0;transform:scale(.98)}}
+@keyframes pulse{50%{box-shadow:0 0 0 4px rgba(143,211,224,.15)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shrink{to{transform:scale(.2);opacity:0}}
+@keyframes open{0%{opacity:1}100%{opacity:1;width:760px;height:460px;border-radius:14px}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* ---------- prototype bar (not part of any design) ---------- */
+.bar{position:fixed;left:50%;bottom:62px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:4px;
+  background:#0b0b0c;border:1px solid #2a2926;font:11px 'IBM Plex Mono',var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#e8e8ea;z-index:9}
+.bar button{white-space:nowrap;background:none;border:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;padding:7px 10px;cursor:pointer}
+.bar button:hover{background:#1a1a1c}
+.bar .lab{padding:0 12px;min-width:210px;text-align:center}
+.bar .lab b{color:#5fc4c8;font-weight:500}
+.bar .sep{width:1px;height:18px;background:#2a2926;margin:0 4px}
+.bar .on{color:#5fc4c8}
+.state{position:fixed;left:12px;top:10px;font:10px 'IBM Plex Mono',var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#7c7f88;z-index:9}
+.help{position:fixed;right:12px;top:10px;max-width:300px;padding:12px 14px;background:#0b0b0c;border:1px solid #2a2926;font:12px/1.5 'IBM Plex Mono',var(--mono);color:#9a968f;z-index:9}
+</style>
+</head>
+<body>
+<div class="desk"></div>
+<div class="stage">
+
+  <!-- A -->
+  <div class="v" data-v="A" data-name="Ring">
+    <div class="a">
+      <div class="ring">
+        <svg viewBox="0 0 132 132" width="132" height="132">
+          <defs>
+            <linearGradient id="ga" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#ff8a3d"/><stop offset=".5" stop-color="#fff4e6"/><stop offset="1" stop-color="#8fd3e0"/></linearGradient>
+          </defs>
+          <circle class="track" cx="66" cy="66" r="62" fill="none" stroke-width="7"/>
+          <circle class="prog" cx="66" cy="66" r="62" fill="none" stroke="url(#ga)" stroke-width="7" stroke-linecap="round" transform="rotate(-90 66 66)"/>
+        </svg>
+        <svg class="ico" viewBox="0 0 256 256" width="76" height="76" style="position:absolute;left:28px;top:28px"><use href="#icon"/></svg>
+      </div>
+      <h1>KelvinRGB</h1>
+      <div class="st"></div>
+      <div class="ver">v0.2.2</div>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="v" data-v="B" data-name="Checklist">
+    <div class="b">
+      <div class="left">
+        <svg class="ico" viewBox="0 0 256 256" width="64" height="64"><use href="#icon"/></svg>
+        <div class="name">KelvinRGB</div>
+      </div>
+      <ul>
+        <li><i></i><span>Checking for Apex</span><span></span></li>
+        <li><i></i><span>Sensors and fans</span><span></span></li>
+        <li><i></i><span>OpenRGB server</span><span></span></li>
+        <li><i></i><span>Restoring lighting</span><span></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="v" data-v="C" data-name="Bloom">
+    <div class="c" style="--hue:#ff8a3d">
+      <div class="halo"></div>
+      <svg viewBox="0 0 160 160" width="160" height="160">
+        <circle class="seg" cx="80" cy="80" r="56" fill="none" stroke="#ff8a3d" stroke-width="16" stroke-linecap="round" stroke-dasharray="250 102"/>
+      </svg>
+      <div class="cap">KelvinRGB</div>
+      <div class="app"></div>
+    </div>
+  </div>
+</div>
+
+<div class="state" id="state"></div>
+<div class="help" id="help" hidden>
+  A: square tile, the ring fills as it loads.<br>
+  B: wide strip, one row per start-up step.<br>
+  C: no window, just the ring on the desktop, then the app opens out of it.<br><br>
+  ← → switch. R replays. Pace: fast is a warm start, slow is a cold boot.<br>
+  Pick one, then tell Claude "splash A" (or B, C, or a mix).
+</div>
+<div class="bar">
+  <button id="prev" aria-label="Previous variant">←</button>
+  <span class="lab" id="lab"></span>
+  <button id="next" aria-label="Next variant">→</button>
+  <span class="sep"></span>
+  <button id="replay">Replay</button>
+  <button id="pace">Pace fast</button>
+  <button id="wall">Wallpaper on</button>
+  <button id="q">?</button>
+</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="kg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#ff8a3d"/><stop offset=".5" stop-color="#fff4e6"/><stop offset="1" stop-color="#8fd3e0"/></linearGradient>
+    <linearGradient id="kb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2e33"/><stop offset="1" stop-color="#0a0b0c"/></linearGradient>
+    <linearGradient id="ks" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".05"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <clipPath id="kc"><path d="M128 8C30 8 8 30 8 128s22 120 120 120 120-22 120-120S226 8 128 8Z"/></clipPath>
+    <filter id="kf" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+    <g id="icon"><g clip-path="url(#kc)">
+      <rect width="256" height="256" fill="url(#kb)"/>
+      <circle cx="128" cy="128" r="62" fill="none" stroke="url(#kg)" stroke-width="34" opacity=".22" filter="url(#kf)"/>
+      <circle cx="128" cy="128" r="62" fill="none" stroke="url(#kg)" stroke-width="28"/>
+      <rect width="256" height="128" fill="url(#ks)"/>
+    </g></g>
+  </defs>
+</svg>
+
+<script>
+const KEYS = ['A', 'B', 'C'];
+const STEPS = ['Checking for Apex', 'Starting sensors', 'Connecting OpenRGB', 'Restoring lighting'];
+const $ = (s, r = document) => r.querySelector(s);
+// #a / #b / #c on the artifact (it passes only a plain hash), ?variant= when opened as a file.
+let cur = (location.hash.slice(1) || new URLSearchParams(location.search).get('variant') || 'A').toUpperCase();
+if (!KEYS.includes(cur)) cur = 'A';
+let slow = false, timers = [];
+try { slow = localStorage.getItem('ks-pace') === 'slow'; } catch {}
+
+function later(ms, fn) { timers.push(setTimeout(fn, ms)); }
+function stateLine(s) { $('#state').textContent = `variant ${cur} · ${slow ? 'slow' : 'fast'} · ${s}`; }
+
+// Re-mount the variant so its CSS entrance runs again, then walk the four start-up steps.
+function play() {
+  timers.forEach(clearTimeout); timers = [];
+  document.querySelectorAll('.v').forEach((v) => v.classList.toggle('on', v.dataset.v === cur));
+  const host = $(`.v[data-v="${cur}"]`), el = host.firstElementChild;
+  const fresh = el.cloneNode(true); el.replaceWith(fresh);
+  $('#lab').innerHTML = `<b>${cur}</b> · ${host.dataset.name}`;
+  try { history.replaceState(null, '', `#${cur.toLowerCase()}`); } catch {}
+  const step = slow ? 900 : 380, start = 450;
+  STEPS.forEach((s, i) => later(start + i * step, () => tick(fresh, i, s)));
+  later(start + STEPS.length * step, () => tick(fresh, STEPS.length, 'Ready'));
+  later(start + STEPS.length * step + 450, () => { fresh.classList.add('done'); stateLine('done, app opens'); });
+}
+
+function tick(el, i, s) {
+  stateLine(`${i}/${STEPS.length} ${s}`);
+  if (cur === 'A') {
+    $('.prog', el).style.strokeDashoffset = 390 - 390 * (i / STEPS.length);
+    $('.st', el).textContent = s;
+  } else if (cur === 'B') {
+    el.querySelectorAll('li').forEach((li, j) => {
+      li.className = j < i ? 'ok' : j === i ? 'run' : '';
+      if (j === i - 1) li.lastElementChild.textContent = `${slow ? 0.9 : 0.4}s`;
+    });
+  } else {
+    const hues = ['#ff8a3d', '#ffc79a', '#fff4e6', '#c4e6ec', '#8fd3e0'];
+    el.style.setProperty('--hue', hues[i]);
+    $('.seg', el).setAttribute('stroke', hues[i]);
+  }
+}
+
+function go(d) { cur = KEYS[(KEYS.indexOf(cur) + d + KEYS.length) % KEYS.length]; play(); }
+$('#prev').onclick = () => go(-1);
+$('#next').onclick = () => go(1);
+$('#replay').onclick = play;
+$('#pace').onclick = () => { slow = !slow; try { localStorage.setItem('ks-pace', slow ? 'slow' : 'fast'); } catch {} $('#pace').textContent = `Pace ${slow ? 'slow' : 'fast'}`; play(); };
+$('#wall').onclick = () => { const p = document.documentElement.classList.toggle('plain'); $('#wall').textContent = `Wallpaper ${p ? 'off' : 'on'}`; };
+$('#q').onclick = () => { $('#help').hidden = !$('#help').hidden; $('#q').classList.toggle('on', !$('#help').hidden); };
+addEventListener('keydown', (e) => {
+  if (e.target.closest('input,textarea,[contenteditable]')) return;
+  if (e.key === 'ArrowLeft') go(-1);
+  if (e.key === 'ArrowRight') go(1);
+  if (e.key === 'r' || e.key === 'R') play();
+});
+$('#pace').textContent = `Pace ${slow ? 'slow' : 'fast'}`;
+play();
+</script>
+</body>
+</html>
