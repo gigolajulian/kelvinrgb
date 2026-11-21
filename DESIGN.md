@@ -38,4 +38,5 @@ One line each, checked on every mock and build:
 - Plex loads from the bundled files (check on a PC without Plex installed). Done on `redesign/glass` (3eb82fb).
 - SVG text in app.js uses `var(--mono)`, never a hard-coded font.
 - Numbers tabular. Lighting colors never tint the interface beyond the ambient glow.
+- A swatch that shows a colour value (quick colours, device chips, the Lighting pad) is content, not chrome. Selected rings on swatches use `--ink` and give way to the focus ring.
 - Check with glass on and off (`html.flat`).

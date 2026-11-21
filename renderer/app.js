@@ -36,6 +36,21 @@ const memUsed = () => pick(/^Memory$/, 'Data', /Memory Used|Used Memory/);
 const cpuLoad = () => pick(/^Cpu$/, 'Load', /CPU Total/);
 const gpuLoad = () => pick(/^Gpu/, 'Load', /GPU Core/);
 const gpuClock = () => pick(/^Gpu/, 'Clock', /GPU Core/);
+const memAvail = () => pick(/^Memory$/, 'Data', /Memory Available|Available Memory/);
+const cpuPower = () => pick(/^Cpu$/, 'Power', /Package/);
+function cpuClock() { // average of the per-core clocks, MHz
+  const c = sensors().filter((s) => /^Cpu$/.test(s.hwType) && s.type === 'Clock' && /^Core #\d+$/.test(s.name) && s.value > 0);
+  return c.length ? c.reduce((a, s) => a + s.value, 0) / c.length : null;
+}
+// What the Drivers page flags, shared so Home and Drivers never disagree.
+function driverSummary() {
+  const V = ST.drivers, u = ST.update || {};
+  // same colours as the Drivers page: red counts as missing, orange as an update
+  const missing = (V.windows || []).filter((w) => w.tone === 'bad').length + (V.pawnio?.tone === 'bad' ? 1 : 0);
+  const ups = [u.kind === 'available', V.openrgb?.tone === 'warn', V.pawnio?.tone === 'warn', ...(V.windows || []).map((w) => w.tone === 'warn')].filter(Boolean).length;
+  const text = [missing && `${missing} driver${missing > 1 ? 's' : ''} missing`, ups && `${ups} update${ups > 1 ? 's' : ''}`].filter(Boolean).join(' · ');
+  return { missing, ups, n: missing + ups, text, checking: !!V.checking || !V.at };
+}
 // Why the Cooling page has no fans, and the one step that fixes it.
 function fanHelp() {
   const m = ST ? ST.sensors : { ok: false, msg: 'starting' };
@@ -111,40 +126,131 @@ function patchDev(k, p) {
 
 // ---------- pages ----------
 const pages = {
+  // One page: readouts with the last minute, quick lighting, fan presets with each fan, system and drivers.
   home: {
     build() {
-      main.innerHTML = `<div class="hd"><h1 id="h-title">KelvinRGB</h1><span class="sub" id="h-sub"></span></div>
-      <div class="grid c4">
-        <div class="g"><span class="lbl">cpu</span><div class="big" style="margin:10px 0 8px"><span id="h-cpu">-</span><small>°C</small></div><div class="meter"><i id="h-cpu-m"></i></div><div class="sub" style="margin-top:8px" id="h-cpu-s"></div></div>
-        <div class="g"><span class="lbl">gpu</span><div class="big" style="margin:10px 0 8px"><span id="h-gpu">-</span><small>°C</small></div><div class="meter"><i id="h-gpu-m"></i></div><div class="sub" style="margin-top:8px" id="h-gpu-s"></div></div>
-        <div class="g"><span class="lbl">memory</span><div class="big" style="margin:10px 0 8px"><span id="h-mem">-</span><small>%</small></div><div class="meter"><i id="h-mem-m"></i></div><div class="sub" style="margin-top:8px" id="h-mem-s"></div></div>
-        <div class="g"><span class="lbl">fans</span><div class="big" style="margin:10px 0 8px"><span id="h-fans">-</span><small id="h-fans-of"></small></div><div class="meter"><i id="h-fans-m" style="background:var(--ok)"></i></div><div class="sub" style="margin-top:8px" id="h-fans-s"></div></div>
+      const ICON = {
+        cpu: '<path d="M10 3 17 7 10 11 3 7Z"/><path d="M3 7v2l7 4 7-4V7"/><path d="M10 5.5 13 7 10 8.5 7 7Z"/>',
+        gpu: '<path d="M2 8 12 3 18 6 8 11Z"/><path d="M2 8v2l6 3 10-5V6"/><circle cx="10" cy="7" r="1.6"/>',
+        mem: '<path d="M2 10 14 4 18 6 6 12Z"/><path d="M2 10v2l4 2 12-6V6"/><path d="M6 9.5l1-.5M9 8l1-.5M12 6.5l1-.5"/>',
+        fans: '<ellipse cx="10" cy="9" rx="7" ry="4"/><path d="M10 9c1.5-2.5 4-2.5 4-1M10 9c-1.5 2.5-4 2.5-4 1M10 9c-3-1-3-3-1.5-3M10 9c3 1 3 3 1.5 3"/>',
+      };
+      const tile = (k, l, u, sp) => `<div class="g ht-t"><div class="row"><svg class="h-ic" viewBox="0 0 20 16" aria-hidden="true">${ICON[k]}</svg><span class="lbl grow">${l}</span><span class="sub num" id="h-${k}-r"></span></div>
+        <div class="big"><span id="h-${k}">-</span><small id="h-${k}-u">${u}</small></div><div class="sub num" id="h-${k}-s"></div>
+        ${sp ? `<div id="h-${k}-sp">${spark()}</div>` : `<div class="meter"><i id="h-${k}-m" style="background:var(--ok)"></i></div>`}</div>`;
+      main.innerHTML = `<div class="home">
+      <div class="hd"><h1 id="h-title">KelvinRGB</h1><span class="sub" id="h-sub"></span></div>
+      <div class="grid ht">${tile('cpu', 'cpu', '°C', 1)}${tile('gpu', 'gpu', '°C', 1)}${tile('mem', 'memory', '%', 1)}${tile('fans', 'fans', '')}</div>
+      <div class="grid hc">
+        <div class="g hq" id="h-light">
+          <div class="row"><span class="lbl grow">lighting</span><button class="btn" data-go="lighting">Devices</button></div>
+          <div class="row"><span class="sw" id="h-sw"></span><div class="grow"><div class="hq-n" id="h-fx"></div><div class="sub" id="h-fx-s"></div></div><button class="tg" id="h-on" aria-label="Lights on"></button></div>
+          <div class="fx">${EFFECTS.map(([k, l]) => `<button data-fx="${k}">${l}</button>`).join('')}</div>
+          <label class="ctl"><span class="lbl">brightness</span><input type="range" class="br" id="h-bright" min="0" max="100"><span class="v num" id="h-bright-v"></span></label>
+          <div class="chips hd-dev" id="h-dev"></div>
+        </div>
+        <div class="g hq" id="h-fan">
+          <div class="row"><span class="lbl grow">fans</span><button class="btn" data-go="fans">Curves</button></div>
+          ${seg('preset', Object.keys(PRESETS).map((p) => [p, p]), '')}
+          <div class="sub" id="h-fan-s"></div>
+          <div class="hl" id="h-fan-l"></div>
+        </div>
       </div>
-      <div class="grid c2">
-        <div class="g row" style="gap:16px"><span class="sw" id="h-sw" style="width:54px;height:54px"></span><div style="flex:1"><span class="lbl">lighting</span><div style="font-size:17px;font-weight:500;margin-top:4px" id="h-fx"></div><div class="sub" id="h-fx-s"></div></div><button class="btn" data-go="lighting">Change</button></div>
-        <div class="g"><div class="row" style="margin-bottom:4px"><span class="lbl">cpu load · last minute</span><span class="grow"></span><span class="num sub" id="h-load"></span></div><div id="h-spark">${spark()}</div></div>
-      </div>`;
+      <div class="grid hc2">
+        <div class="g hq"><div class="row"><span class="lbl grow">drivers</span><span class="sub" id="h-drv-at"></span><button class="btn" data-go="drivers">Drivers</button></div><div class="hl" id="h-drv"></div></div>
+        <div class="g hq"><div class="row"><span class="lbl grow">system</span><button class="btn" data-go="system">Sensors</button></div><div class="hl" id="h-sys"></div></div>
+      </div></div>`;
+      $('#h-light').onclick = (e) => {
+        if (e.target.id === 'h-on') return setLighting({ on: !S.lighting.on });
+        const b = e.target.closest('[data-fx]'); if (b) setLighting({ effect: b.dataset.fx, on: true });
+      };
+      $('#h-bright').oninput = (e) => setLighting({ brightness: +e.target.value }, false);
+      $('#h-fan').onclick = (e) => { const b = e.target.closest('[data-v]'); if (b && !b.disabled) this.preset(b.dataset.v); };
+      $('#h-drv').onclick = (e) => { if (e.target.closest('[data-upd]')) rgb.update('install'); };
+      if (ST && !ST.drivers.at && !ST.drivers.checking) rgb.drivers('check'); // once per run, same as the Drivers page
+    },
+    // Every fan gets the preset curve; label, sensor and shape stay. Main clamps to the floor again.
+    preset(name) {
+      for (const c of ST.controls) {
+        const cur = S.fans[c.id] || {};
+        S.fans[c.id] = { fixed: 50, ...cur, mode: 'curve', shape: cur.shape || 'smooth', points: structuredClone(PRESETS[name]), sensor: cur.sensor || (cpuTemp() && cpuTemp().id) };
+        rgb.fan(c.id, S.fans[c.id]);
+      }
+      pages.fans.edit = null; // the Fans page reloads from settings
+      this.live();
     },
     live() {
-      const ct = cpuTemp(), gt = gpuTemp(), ml = memLoad(), mu = memUsed(), cl = cpuLoad(), gl = gpuLoad();
+      if (!$('#h-light')) return;
+      const ct = cpuTemp(), gt = gpuTemp(), ml = memLoad(), mu = memUsed(), ma = memAvail(), cl = cpuLoad(), gl = gpuLoad(), gc = gpuClock(), cp = cpuPower(), cc = cpuClock();
       const hot = (ct && ct.value >= 85) || (gt && gt.value >= 85);
-      const fans = ST.controls, spinning = fans.filter((c) => (fanRpm(c) || 0) > 0).length;
+      const fans = ST.controls, rpms = fans.map(fanRpm), spinning = rpms.filter((r) => r > 0).length;
+      const ram = mu && ma ? `${Math.round(mu.value + ma.value)} GB` : '';
+      const join = (...a) => a.filter(Boolean).join(' · ');
+      const line = (k, v, dot, act = '') => `<div><span class="k">${dot ? `<span class="dot ${dot}"></span>` : ''}${esc(k)}</span><span class="v">${esc(v)}</span>${act}</div>`;
       $('#h-title').textContent = !ST.sensors.ok ? 'Starting up' : hot ? 'Running hot' : 'All good';
       $('#h-sub').textContent = ST.guard ? 'Apex is running, so lights and fans are handed back.'
         : !ST.sensors.ok ? `Waiting for sensors (${ST.sensors.msg}) and OpenRGB (${ST.openrgb.msg}).`
-        : hot ? 'A temperature is over 85 °C.' : `${lightsOn() ? 'Lights on' : 'Lights off'}, fans on your settings, nothing over limit.`;
-      $('#h-cpu').textContent = val(ct); $('#h-cpu-m').style.width = pct(ct) + '%'; $('#h-cpu-s').textContent = cl ? `${val(cl)}% load` : '';
-      $('#h-gpu').textContent = val(gt); $('#h-gpu-m').style.width = pct(gt) + '%'; $('#h-gpu-s').textContent = gl ? `${val(gl)}% load` : '';
-      $('#h-mem').textContent = val(ml); $('#h-mem-m').style.width = pct(ml) + '%'; $('#h-mem-s').textContent = mu ? `${val(mu, 1)} GB used` : '';
-      $('#h-fans').textContent = fans.length ? spinning : '-'; $('#h-fans-of').textContent = fans.length ? `of ${fans.length}` : '';
-      $('#h-fans-m').style.width = fans.length ? (spinning / fans.length) * 100 + '%' : '0';
+        : hot ? 'A temperature is over 85 °C.' : 'Nothing over limit. The lines show the last minute.';
+
+      $('#h-cpu').textContent = val(ct); $('#h-cpu-r').textContent = cp ? `${val(cp)} W` : '';
+      $('#h-cpu-s').textContent = join(cl && `${val(cl)}% load`, cc && `${(cc / 1000).toFixed(2)} GHz`);
+      $('#h-cpu-sp').innerHTML = spark(ct && ct.id, 100);
+      $('#h-gpu').textContent = val(gt); $('#h-gpu-r').textContent = gc ? `${val(gc)} MHz` : '';
+      $('#h-gpu-s').textContent = gl ? `${val(gl)}% load` : '';
+      $('#h-gpu-sp').innerHTML = spark(gt && gt.id, 100);
+      $('#h-mem').textContent = val(ml); $('#h-mem-r').textContent = ram;
+      $('#h-mem-s').textContent = mu ? `${val(mu, 1)} GB used` : '';
+      $('#h-mem-sp').innerHTML = spark(ml && ml.id, 100);
+      $('#h-fans').textContent = fans.length ? spinning : '-'; $('#h-fans-u').textContent = fans.length ? `of ${fans.length}` : '';
+      const on = rpms.filter((r) => r > 0);
+      $('#h-fans-r').textContent = on.length ? `${Math.round(on.reduce((a, r) => a + r, 0) / on.length)} rpm avg` : '';
       $('#h-fans-s').textContent = `spinning · ${FLOOR}% floor`;
-      $('#h-sw').style.background = lightsOn() ? S.lighting.color : '#1b1c1e';
-      $('#h-fx').textContent = S.lighting.on ? EFFECTS.find((e) => e[0] === S.lighting.effect)[1] : 'Lights off';
+      $('#h-fans-m').style.width = fans.length ? (spinning / fans.length) * 100 + '%' : '0';
+
+      const L = S.lighting;
+      $('#h-sw').style.background = lightsOn() ? L.color : '#1b1c1e';
+      $('#h-fx').textContent = L.on ? EFFECTS.find((e) => e[0] === L.effect)[1] : 'Lights off';
       const own = ST.devices.reduce((a, d) => a + Object.keys((S.devices[d.key] || {}).zones || {}).length, 0);
-      $('#h-fx-s').textContent = `${ST.devices.length} devices${own ? ` · ${own} zones with their own colour` : ''}`;
-      $('#h-load').textContent = cl ? `${val(cl)}%` : '';
-      $('#h-spark').innerHTML = spark(cl && cl.id, 100);
+      $('#h-fx-s').textContent = `${L.color} · ${ST.devices.length} devices${own ? ` · ${own} zones with their own colour` : ''}`;
+      $('#h-on').setAttribute('aria-pressed', L.on);
+      $$('#h-light [data-fx]').forEach((b) => b.setAttribute('aria-pressed', L.on && b.dataset.fx === L.effect));
+      const br = $('#h-bright');
+      if (document.activeElement !== br) br.value = L.brightness;
+      br.style.setProperty('--p', br.value + '%'); $('#h-bright-v').textContent = br.value + '%';
+      // Rows with buttons only rebuild when their content changes, so focus and clicks survive state ticks.
+      const put = (sel, html) => { const el = $(sel); if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; } };
+      put('#h-dev', (ST.devices.length ? pages.lighting.groups() : []).map((g) => {
+        const d = g.devs[0], z = pages.lighting.colourZones(d)[0] ?? 0;
+        return `<button class="chip" data-go="lighting"><span class="sw" style="background:${zoneColor(d, z)}"></span>${esc(g.name)}${g.devs.length > 1 ? ` × ${g.devs.length}` : ''}</button>`;
+      }).join(''));
+
+      const cur = fans.length ? Object.keys(PRESETS).find((p) => fans.every((c) => S.fans[c.id]?.mode === 'curve' && JSON.stringify(S.fans[c.id].points) === JSON.stringify(PRESETS[p]))) : null;
+      $$('#h-fan [data-v]').forEach((b) => { b.setAttribute('aria-pressed', b.dataset.v === cur); b.disabled = !fans.length || !!ST.guard; });
+      $('#h-fan-s').textContent = !fans.length || ST.guard ? fanHelp()
+        : `${cur ? `${cur} on all ${fans.length} fans` : 'Custom curves'} · never below ${FLOOR}%`;
+      $('#h-fan-l').innerHTML = fans.map((c, i) => {
+        const duty = c.value >= 0 ? Math.round(c.value) : null;
+        return `<div><span class="k">${esc(fanName(c))}</span><span class="v">${rpms[i] != null ? `${rpms[i]} rpm` : ''}</span><span class="meter"><i style="width:${duty ?? 0}%"></i></span><span class="v p">${duty != null ? duty + '%' : '-'}</span></div>`;
+      }).join('');
+
+      const hw = (re) => (ST.hw.find((h) => re.test(h.type)) || {}).name;
+      $('#h-sys').innerHTML = [['Board', hw(/^Motherboard$/)], ['CPU', hw(/^Cpu$/)], ['Graphics', hw(/^Gpu/)], ['Memory', ram]]
+        .filter((r) => r[1]).map(([k, v]) => line(k, v)).join('');
+
+      const V = ST.drivers, u = ST.update || {}, d = driverSummary();
+      const tag = (v) => String(v || '').replace(/^(release_|v)/i, '').replace(/^(\d+\.\d+\.\d+)\.0$/, '$1');
+      const part = (x) => (x?.act === 'update' ? [`${tag(x.installed)} · ${tag(x.latest)} out`, 'warn'] : x?.installed ? [`${tag(x.installed)} · up to date`, 'ok'] : ['not installed', 'warn']);
+      const win = V.windows || [], wbad = win.filter((w) => w.state !== 'ok' && !w.inboxOk).length, up = u.kind === 'available';
+      $('#h-drv-at').textContent = d.checking ? 'checking' : `checked ${new Date(V.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      const head = (t) => `<div class="hh"><span class="lbl">${t}</span></div>`;
+      put('#h-drv', !V.at ? line('Reading drivers from Windows', '', 'acc') : [
+        head('windows'),
+        line('Drivers', wbad ? `${wbad} of ${win.length} missing` : `${win.length} of ${win.length} in place`, wbad ? 'warn' : 'ok'),
+        line('PawnIO', ...part(V.pawnio)),
+        head('kelvinrgb'),
+        line('KelvinRGB', up ? `${ST.version} · ${u.v} ready` : `${ST.version} · up to date`, up ? 'warn' : 'ok', up && !ST.guard ? '<button class="btn p" data-upd="1">Update</button>' : ''),
+        line('OpenRGB', ...part(V.openrgb)),
+      ].join(''));
     },
   },
 
@@ -470,7 +576,6 @@ const pages = {
         const latest = w.wu == null || w.state === 'none' ? '' : w.wu ? 'newer out' : 'nothing newer';
         return row(w.name, `${w.what} ${w.device}`, inst, latest, w.tone || 'dim', status, btn(`data-drv="${esc(w.id)}"`, w.state === 'ok' || w.inboxOk ? 'Open site' : 'Get driver', w.state !== 'ok' && !w.inboxOk));
       }).join('');
-      const missing = (V.windows || []).filter((w) => w.tone === 'bad').length + (P.tone === 'bad' ? 1 : 0);
       $('#v-win').innerHTML = sec('windows drivers', '', head('driver', 'installed', 'latest') + pawn + win,
         V.at ? "Everything this PC's hardware needs after a Windows reset. Latest is what Windows Update offers; the maker's site can be newer. Green: up to date. Orange: an update is out. Red: missing, or on Windows' basic driver." : 'Reading drivers from Windows.');
 
@@ -489,7 +594,7 @@ const pages = {
       $('#v-app').innerHTML = sec('kelvinrgb', '', head('part', 'installed', 'latest') + kelvin + orgb + sens,
         (V.msg ? `<span style="color:var(--bad)">${esc(V.msg)}.</span> ` : '') + 'Each download is checked against its pinned hash, runs once, then gets deleted.');
 
-      const ups = [up, O.tone === 'warn', P.tone === 'warn', ...(V.windows || []).map((w) => w.tone === 'warn')].filter(Boolean).length;
+      const { missing, ups } = driverSummary();
       $('#v-sub').textContent = `${gs.length} devices · ${(V.windows || []).length + 1} drivers · ${[missing && `${missing} missing`, ups && `${ups} update${ups > 1 ? 's' : ''}`].filter(Boolean).join(' · ') || 'all set'}`
         + (V.checking ? ' · checking' : V.at ? ` · checked ${new Date(V.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '');
       $('#v-check').disabled = !!V.checking;
@@ -598,7 +703,7 @@ const pages = {
     build() {
       main.innerHTML = `<div class="hd"><h1>System</h1><span class="sub">Live readings from LibreHardwareMonitor. The line is the last minute.</span></div>
       <div class="grid c4" id="y-tiles"></div>
-      <div class="g"><details id="y-all"><summary class="lbl">all sensors</summary><table class="sensors" id="y-tbl"></table></details></div>`;
+      <div class="g"><details id="y-all" open><summary class="lbl">all sensors</summary><table class="sensors" id="y-tbl"></table></details></div>`;
       $('#y-all').ontoggle = () => this.live();
     },
     live() {
@@ -681,20 +786,38 @@ function setLighting(patch, rebuild = true) {
   rgb.lighting(patch);
   footer();
   if (page === 'lighting') { if (rebuild) pages.lighting.paint(); if (ST) pages.lighting.live(); }
+  if (page === 'home' && ST) pages.home.live();
 }
 function footer() {
   const L = S.lighting;
   const c = lightsOn() ? L.color : '#1b1c1e';
-  $('#ft-swatch').style.background = c;
   document.documentElement.style.setProperty('--glow', L.effect === 'spectrum' && L.on ? '#8a5cff' : c);
   document.documentElement.classList.toggle('dark-lights', !lightsOn());
-  $('#ft-effect').textContent = L.on ? EFFECTS.find((e) => e[0] === L.effect)[1] : 'Lights off';
-  $('#ft-sub').textContent = `${L.color} · all devices`;
+  $$('#ft-dots button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.c === L.color));
   $('#ft-power').setAttribute('aria-pressed', L.on);
   $('#ft-bright').value = L.brightness;
   $('#ft-bright-v').textContent = L.brightness;
 }
 $('#ft-ver').onclick = () => rgb.update('install');
+// Footer quick colours: six slots from my gel set. Right-click a slot to pick its colour; kept in this PC's localStorage.
+const QUICK = ['#ffe2bf', '#b3121f', '#e0561b', '#2448ff', '#0b7f7a', '#7a4dff'];
+let quick = QUICK;
+try { const q = JSON.parse(localStorage.getItem('quickColours')); if (Array.isArray(q) && q.length === 6 && q.every((h) => /^#[0-9a-f]{6}$/i.test(h))) quick = q; } catch { /* first run */ }
+function drawQuick() {
+  $('#ft-dots').innerHTML = quick.map((h, i) => `<button data-c="${h}" data-i="${i}" aria-label="Colour ${h}" title="${h} · right-click to change" style="background:${h}"></button>`).join('') + '<input type="color" id="ft-pick" tabindex="-1" aria-hidden="true">';
+  if (S) footer();
+}
+drawQuick();
+$('#ft-dots').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) setLighting({ color: b.dataset.c, on: true }); };
+$('#ft-dots').oncontextmenu = (e) => {
+  const b = e.target.closest('[data-c]'); if (!b) return;
+  e.preventDefault();
+  const pk = $('#ft-pick'), i = +b.dataset.i;
+  pk.value = quick[i];
+  pk.oninput = () => { b.style.background = pk.value; setLighting({ color: pk.value, on: true }, false); };
+  pk.onchange = () => { quick = quick.map((h, j) => (j === i ? pk.value : h)); try { localStorage.setItem('quickColours', JSON.stringify(quick)); } catch { /* not saved */ } drawQuick(); };
+  pk.click();
+};
 $('#ft-power').onclick = () => setLighting({ on: !S.lighting.on });
 $('#ft-bright').oninput = (e) => setLighting({ brightness: +e.target.value }, false);
 $$('nav [data-page]').forEach((b) => (b.onclick = () => go(b.dataset.page)));
@@ -854,5 +977,5 @@ rgb.get().then((r) => {
   onState(r.state);
   rgb.onState(onState);
   // the tray menu changed something: take main's copy and redraw
-  rgb.onSettings((s) => { S = s; applyGlass(); footer(); if (page === 'lighting' || page === 'settings') go(page); });
+  rgb.onSettings((s) => { S = s; applyGlass(); footer(); if (page === 'lighting' || page === 'settings') go(page); if (page === 'home') pages.home.live(); });
 });
