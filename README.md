@@ -2,6 +2,10 @@
 
 Made by Julian Gigola. Powered by [OpenRGB](https://openrgb.org).
 
+[![Latest release](https://img.shields.io/github/v/release/gigolajulian/kelvinrgb?label=download&color=8fd3e0)](https://github.com/gigolajulian/kelvinrgb/releases/latest)
+
+**[Download the latest KelvinRGB for Windows](https://github.com/gigolajulian/kelvinrgb/releases/latest)**: run `KelvinRGB.Setup.<version>.exe`. Free. Updates install from inside the app.
+
 One dark window for the PC: lighting on every component, fan curves, live sensors and per-device color tuning. It replaces the SignalRGB interface using free engines:
 
 - **Lighting:** [OpenRGB](https://openrgb.org) as an SDK server on port 6742, driven by the `openrgb-sdk` npm package.
@@ -10,7 +14,9 @@ One dark window for the PC: lighting on every component, fan curves, live sensor
 
 ## Install
 
-Build the installer and run it:
+Download the installer from [the latest release](https://github.com/gigolajulian/kelvinrgb/releases/latest) and run it. It includes the PawnIO driver, and the first-run Setup sheet helps install OpenRGB.
+
+Or build the installer yourself:
 ```bash
 npm run dist
 ```
