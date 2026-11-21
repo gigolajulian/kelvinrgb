@@ -8,6 +8,7 @@ const { Client } = require('openrgb-sdk');
 const M = require('./lib/math');
 const C = require('./lib/conflicts');
 const V = require('./lib/validate');
+const G = require('./lib/guard');
 
 const FLOOR = 25;
 const GUARD_PROCS = ['r5apex.exe', 'r5apex_dx12.exe', 'easyanticheat.exe', 'easyanticheat_eos.exe'];
@@ -240,16 +241,27 @@ function checkGuard() {
     if (active === state.guard) return;
     state.guard = active;
     if (active) {
-      log('apex guard: game running, releasing fans and lighting');
-      clearInterval(renderTimer);
-      await stopSidecar();
-      if (client) { client.disconnect(); client = null; }
+      log('apex guard: game running, releasing fans and lighting, stopping OpenRGB');
       state.openrgb = { ok: false, msg: 'paused for apex' };
       state.sensors = { ...state.sensors, ok: false, msg: 'paused for apex' };
+      push();
+      await G.enter({
+        stopRender: () => clearInterval(renderTimer),
+        stopSidecar,
+        disconnect: () => { if (client) { client.removeAllListeners('disconnect'); client.disconnect(); client = null; } },
+        wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+        killOpenRgb: () => new Promise((r) => {
+          if (!names.includes('"openrgb.exe"')) return r();
+          if (!launchedOpenRgb) log('apex guard: OpenRGB was already running before KelvinRGB, stopping it anyway');
+          execFile(SYS('taskkill.exe'), ['/F', '/T', '/IM', 'OpenRGB.exe'], { windowsHide: true }, (e) => {
+            log(e ? `apex guard: could not stop OpenRGB: ${e.message.trim()}` : 'apex guard: OpenRGB server stopped');
+            r();
+          });
+        }),
+      });
     } else {
-      log('apex guard: game closed, resuming');
-      startSidecar();
-      connectOpenRgb();
+      log('apex guard: game closed, restarting OpenRGB and resuming');
+      G.leave({ startSidecar, allowRelaunch: () => { launchedOpenRgb = false; }, connect: connectOpenRgb });
     }
     push();
   });
