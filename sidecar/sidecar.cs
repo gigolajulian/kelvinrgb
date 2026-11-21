@@ -19,6 +19,7 @@ using System.Reflection;
 using System.Threading;
 using System.Web.Script.Serialization;
 using LibreHardwareMonitor.Hardware;
+using HidSharp;
 
 static class Program
 {
@@ -48,6 +49,7 @@ static class Core
     static readonly Dictionary<string, ISensor> Controls = new Dictionary<string, ISensor>();
     static readonly HashSet<string> Touched = new HashSet<string>();
     static Computer computer;
+    static NzxtHub hub; // NZXT fan hub, when one is connected (case fans often sit on it, not on the board)
     static int floor = 25;
     static bool unclean;
     static string markerPath;
@@ -82,12 +84,13 @@ static class Core
                 if (s.SensorType == SensorType.Control && s.Control != null && IsBoardFan(hw))
                     Controls[s.Identifier.ToString()] = s;
 
+        try { hub = NzxtHub.Open(Log); } catch (Exception ex) { Log("nzxt hub: " + ex.Message); }
         CheckMarker();
 
         Emit(new Dictionary<string, object> {
             { "type", "ready" }, { "floor", floor }, { "unclean", unclean },
             { "admin", new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent()).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator) },
-            { "controls", Controls.Count }
+            { "controls", Controls.Count + (hub != null ? 3 : 0) }
         });
 
         var reader = new Thread(delegate ()
@@ -165,15 +168,17 @@ static class Core
     static void SetDuty(string id, double duty)
     {
         ISensor s;
-        if (id == null || !Controls.TryGetValue(id, out s)) { Log("unknown control " + id); return; }
         float v = (float)Math.Max(floor, Math.Min(100, duty));
-        s.Control.SetSoftware(v);
+        if (hub != null && hub.Has(id)) hub.Set(id, (int)Math.Round(v));
+        else if (id == null || !Controls.TryGetValue(id, out s)) { Log("unknown control " + id); return; }
+        else s.Control.SetSoftware(v);
         if (Touched.Add(id)) WriteMarker();
     }
 
     static void Restore(string id)
     {
         ISensor s;
+        if (hub != null && hub.Has(id)) { hub.Set(id, 100); Touched.Remove(id); WriteMarker(); return; } // the hub has no BIOS: its own default is 100%
         if (id == null || !Controls.TryGetValue(id, out s)) return;
         if (unclean) s.Control.SetSoftware(100); // BIOS state was lost with the killed sidecar: hold full speed
         else s.Control.SetDefault();
@@ -213,7 +218,8 @@ static class Core
         foreach (string id in lines.Skip(2))
         {
             ISensor s;
-            if (Controls.TryGetValue(id, out s)) { s.Control.SetSoftware(100); Touched.Add(id); }
+            if (hub != null && hub.Has(id)) { hub.Set(id, 100); Touched.Add(id); }
+            else if (Controls.TryGetValue(id, out s)) { s.Control.SetSoftware(100); Touched.Add(id); }
         }
         WriteMarker();
         if (unclean) Log("previous sidecar exited without restoring fans; holding them at 100% until reboot or until the app sets a curve");
@@ -252,6 +258,21 @@ static class Core
                 { "mode", s.Control.ControlMode.ToString() }, { "ours", Touched.Contains(kv.Key) }
             });
         }
+        if (hub != null)
+        {
+            var rpms = new List<object>();
+            for (int i = 0; i < 3; i++)
+            {
+                if (hub.Mode[i] == 0) continue; // nothing plugged into this channel
+                string id = NzxtHub.Prefix + (i + 1);
+                rpms.Add(new Dictionary<string, object> { { "id", id + "/rpm" }, { "name", "Fan " + (i + 1) }, { "type", "Fan" }, { "index", i + 1 }, { "value", hub.Rpm[i] } });
+                controls.Add(new Dictionary<string, object> {
+                    { "id", id }, { "name", "Hub fan " + (i + 1) }, { "hw", hub.Name }, { "index", i + 1 }, { "value", hub.Duty[i] },
+                    { "mode", hub.Mode[i] == 2 ? "PWM" : "DC" }, { "ours", Touched.Contains(id) }, { "kind", "hub" }
+                });
+            }
+            hws.Add(new Dictionary<string, object> { { "id", "/nzxt" }, { "name", hub.Name }, { "type", "FanController" }, { "sensors", rpms } });
+        }
         Emit(new Dictionary<string, object> { { "type", "tick" }, { "unclean", unclean }, { "hw", hws }, { "controls", controls } });
     }
 
@@ -266,5 +287,83 @@ static class Core
         {
             try { Console.Out.WriteLine(Json.Serialize(o)); Console.Out.Flush(); } catch { }
         }
+    }
+}
+
+// NZXT Smart Device V2 and RGB & Fan Controller: three fan channels over HID.
+// Protocol from liquidctl (driver/smart_device.py, SmartDevice2): 64-byte reports, the first byte is the report id.
+//   60 02 01 E8 01 01 E8 01   start status reports every 0.5 s
+//   67 02 ...                 status: channel mode at 16.. (0 none, 1 DC, 2 PWM), rpm u16le at 24.., duty % at 40..
+//   62 01 <1<<ch> d1 d2 d3    fixed duty for one channel
+class NzxtHub
+{
+    public const string Prefix = "/nzxt/fan/";
+    static readonly int[] Pids = { 0x2006, 0x200d, 0x200f, 0x2009, 0x200e, 0x2010, 0x2011, 0x2019, 0x201f, 0x2020 };
+    public readonly int[] Rpm = new int[3], Duty = new int[3], Mode = new int[3];
+    public string Name;
+    HidStream stream;
+    int outLen;
+
+    public static NzxtHub Open(Action<string> log)
+    {
+        foreach (HidDevice d in DeviceList.Local.GetHidDevices(0x1e71))
+        {
+            if (Array.IndexOf(Pids, d.ProductID) < 0) continue;
+            HidStream s;
+            if (!d.TryOpen(out s)) { log("nzxt hub: could not open " + d.ProductID.ToString("x4")); continue; }
+            var h = new NzxtHub { stream = s, outLen = d.GetMaxOutputReportLength() };
+            try { h.Name = d.GetProductName().Trim(); } catch { h.Name = "NZXT fan hub"; }
+            if (string.IsNullOrEmpty(h.Name)) h.Name = "NZXT fan hub";
+            int inLen = d.GetMaxInputReportLength();
+            s.ReadTimeout = 2000;
+            h.Write(new byte[] { 0x60, 0x02, 0x01, 0xe8, 0x01, 0x01, 0xe8, 0x01 });
+            h.Write(new byte[] { 0x60, 0x03 });
+            var t = new Thread(delegate () { h.ReadLoop(inLen, log); });
+            t.IsBackground = true;
+            t.Start();
+            log("nzxt hub: " + h.Name + " (" + d.ProductID.ToString("x4") + ")");
+            return h;
+        }
+        return null;
+    }
+
+    void ReadLoop(int len, Action<string> log)
+    {
+        var buf = new byte[len];
+        while (true)
+        {
+            int n;
+            try { n = stream.Read(buf, 0, buf.Length); }
+            catch (TimeoutException) { continue; }
+            catch (Exception ex) { log("nzxt hub: stopped reading: " + ex.Message); return; }
+            if (n < 57 || buf[0] != 0x67 || buf[1] != 0x02) continue;
+            for (int i = 0; i < 3; i++)
+            {
+                Mode[i] = buf[16 + i] <= 2 ? buf[16 + i] : 0;
+                Rpm[i] = buf[24 + 2 * i] | (buf[25 + 2 * i] << 8);
+                Duty[i] = buf[40 + i];
+            }
+        }
+    }
+
+    public bool Has(string id)
+    {
+        int ch;
+        return id != null && id.StartsWith(Prefix) && int.TryParse(id.Substring(Prefix.Length), out ch) && ch >= 1 && ch <= 3;
+    }
+
+    public void Set(string id, int duty)
+    {
+        int ch = int.Parse(id.Substring(Prefix.Length)) - 1;
+        var msg = new byte[] { 0x62, 0x01, (byte)(1 << ch), 0, 0, 0 };
+        msg[3 + ch] = (byte)Math.Max(0, Math.Min(100, duty));
+        Write(msg);
+    }
+
+    void Write(byte[] data)
+    {
+        var b = new byte[outLen];
+        Array.Copy(data, b, data.Length);
+        lock (this) stream.Write(b);
     }
 }
