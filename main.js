@@ -130,6 +130,9 @@ function render() {
         : M.frame(L.effect, base, t, L.speed, i, d.leds);
       colors.push(M.tune(c, dev, flashing ? 1 : bright));
     }
+    // Wraith Prism fan blade: only its blue input works (red + green stay on as warm yellow), so blue sets yellow..white.
+    // Measured 2026-11-20: visible from ~192, midpoint ~224, white from ~240. See HANDOFF.
+    if (d.name === 'AMD Wraith Prism' && !flashing && colors[1]) colors[1] = { red: 255, green: 255, blue: L.on ? (dev.fanWhite ?? 240) : 0 };
     try { client.updateLeds(d.id, colors); } catch (e) { log(`updateLeds ${d.name}: ${e.message}`); }
   }
   for (const [k, until] of identify) if (until <= now) { identify.delete(k); startRender(); }

@@ -164,6 +164,8 @@ const pages = {
         <header class="top"><h1 style="margin:0;font-size:20px;font-weight:500">${esc(d.name)}</h1><span class="lbl">${typeLabel(d.type)} · ${d.leds} leds · ${d.zones.length} zones</span><span class="grow"></span><button class="btn" id="d-identify">Identify</button>${helpBtn('h-dev')}</header>
         <p class="helptext" id="h-dev" hidden>Brightness balances this device against the others. Tuning scales red, green and blue before colors are sent, so whites match across devices. Gamma 2.2 means unchanged.</p>
         <section class="panel">${slider('d-bright', 'device brightness', 0, 100, cfg.brightness ?? 100)}</section>
+        ${d.name === 'AMD Wraith Prism' ? `<section class="panel">${slider('d-fanw', 'fan blade · yellow to white', 160, 255, cfg.fanWhite ?? 240)}
+          <span class="lbl">The fan blade can only show yellow to white. It ignores the effect color. White from about 240.</span></section>` : ''}
         <section class="panel"><div class="row"><span class="lbl">color tuning</span><span class="grow"></span><span class="lbl">saved per device</span></div>
           <div class="row"><div style="flex:1;display:flex;flex-direction:column;gap:6px"><div style="height:44px;border-radius:6px;background:#ffffff"></div><span class="lbl">sent white</span></div>
           <div style="flex:1;display:flex;flex-direction:column;gap:6px"><div id="d-after" style="height:44px;border-radius:6px"></div><span class="lbl">after tuning</span></div></div>
@@ -186,6 +188,7 @@ const pages = {
       paintAfter();
       $('#d-identify').onclick = () => rgb.identify(k);
       $('#d-bright').oninput = (e) => { $('#d-bright-v').textContent = e.target.value; cur().brightness = +e.target.value; rgb.device(k, { brightness: +e.target.value }); };
+      if ($('#d-fanw')) $('#d-fanw').oninput = (e) => { $('#d-fanw-v').textContent = e.target.value; cur().fanWhite = +e.target.value; rgb.device(k, { fanWhite: +e.target.value }); };
       ['r', 'g', 'b'].forEach((ch, i) => ($(`#d-${ch}`).oninput = (e) => {
         const gain = [...(cur().gain || [1, 1, 1])]; gain[i] = e.target.value / 100;
         $(`#d-${ch}-v`).textContent = gain[i].toFixed(2); cur().gain = gain; rgb.device(k, { gain }); paintAfter();
