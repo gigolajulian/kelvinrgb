@@ -344,6 +344,26 @@ on('rescan', () => { if (client) { client.requestRescan(); setTimeout(() => load
 on('glass', (v) => { settings.glass = v === true; save(); applyGlass(); });
 on('openLog', () => shell.openPath(logFile)); // fixed path, nothing taken from the renderer
 on('quit', () => app.quit());
+on('autostart', (v) => setAutostart(v === true));
+
+// ---------- start with Windows ----------
+// A scheduled task at logon with highest privileges, so there is no admin prompt every login.
+// Installed build only: an elevated task must never point at an exe in a user-writable folder (dev runs from Documents).
+const TASK = 'KelvinRGB';
+const autostartSupported = () => app.isPackaged && process.execPath.toLowerCase().startsWith((process.env.ProgramFiles || 'C:\\Program Files').toLowerCase() + '\\');
+function readAutostart() {
+  state.autostart = { supported: autostartSupported(), on: false };
+  if (!state.autostart.supported) return;
+  execFile(SYS('schtasks.exe'), ['/Query', '/TN', TASK], { windowsHide: true }, (err) => { state.autostart.on = !err; push(); updateTray(true); });
+}
+function setAutostart(on) {
+  if (!autostartSupported()) return;
+  const args = on ? ['/Create', '/TN', TASK, '/TR', `"${process.execPath}" --hidden`, '/SC', 'ONLOGON', '/RL', 'HIGHEST', '/F'] : ['/Delete', '/TN', TASK, '/F'];
+  execFile(SYS('schtasks.exe'), args, { windowsHide: true }, (err, _out, se) => {
+    if (err) log(`autostart: ${(se || err.message).trim()}`); else log(`autostart: ${on ? 'on' : 'off'}`);
+    readAutostart();
+  });
+}
 function applyGlass() { if (win && process.platform === 'win32') win.setBackgroundMaterial(settings.glass ? 'acrylic' : 'none'); }
 
 // ---------- tray helper: status at a glance, click opens the app, right click for quick settings ----------
@@ -379,6 +399,7 @@ function updateTray(force) {
     { type: 'separator' },
     { label: 'Lights on', type: 'checkbox', checked: L.on, enabled: !state.guard, click: (m) => trayChange(() => { L.on = m.checked; startRender(); }) },
     { label: 'Effect', enabled: !state.guard, submenu: Object.entries(EFFECT_NAMES).map(([k, n]) => ({ label: n, type: 'radio', checked: L.effect === k, click: () => trayChange(() => { L.effect = k; startRender(); }) })) },
+    { label: state.autostart?.supported ? 'Start with Windows' : 'Start with Windows (installed app only)', type: 'checkbox', checked: !!state.autostart?.on, enabled: !!state.autostart?.supported, click: (m) => setAutostart(m.checked) },
     { label: 'Glass background', type: 'checkbox', checked: settings.glass !== false, click: (m) => trayChange(() => { settings.glass = m.checked; applyGlass(); }) },
     { label: 'Conflict check', type: 'checkbox', checked: settings.closeConflicts !== false, click: (m) => trayChange(() => { settings.closeConflicts = m.checked; declined.clear(); }) },
     { type: 'separator' },
@@ -415,6 +436,7 @@ app.whenReady().then(() => {
   win.on('minimize', (e) => { e.preventDefault(); hideWindow(); });
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16, quality: 'best' }));
   tray.on('click', showWindow);
+  readAutostart();
   updateTray(true);
   app.on('second-instance', showWindow);
   // Dev aid: RGB_SHOT=<folder> writes fans.txt and a screenshot of each page, starting at 10 s.

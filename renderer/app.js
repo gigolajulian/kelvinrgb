@@ -355,6 +355,7 @@ const pages = {
       <div class="grid c2" style="align-items:start">
         <div class="g" style="padding:6px 16px"><div class="set">
           <div><span class="t"><span>Conflict check</span><span>Asks to close NZXT CAM and SteelSeries when they hold the same devices</span></span>${tg('s-conf', S.closeConflicts !== false, 'Conflict check')}</div>
+          <div><span class="t"><span>Start with Windows</span><span id="s-auto-t">Opens in the tray when you sign in, without an admin prompt</span></span>${tg('s-auto', false, 'Start with Windows')}</div>
           <div><span class="t"><span>Glass background</span><span>Windows 11 acrylic behind the window</span></span>${tg('s-glass', S.glass !== false, 'Glass background')}</div>
           <div><span class="t"><span>Apex guard</span><span>Always on. Hands lights and fans back while Apex or Easy Anti-Cheat runs.</span></span><button class="tg" aria-pressed="true" disabled aria-label="Apex guard, always on" style="opacity:.45;cursor:default"></button></div>
         </div></div>
@@ -369,12 +370,19 @@ const pages = {
         </div></div>
       </div>`;
       $('#s-quit').onclick = () => rgb.quit();
+      $('#s-auto').onclick = (e) => { if (ST?.autostart?.supported) rgb.autostart(e.currentTarget.getAttribute('aria-pressed') !== 'true'); };
       const flip = (b) => { const v = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', v); return v; };
       $('#s-conf').onclick = (e) => { S.closeConflicts = flip(e.currentTarget); rgb.closeConflicts(S.closeConflicts); };
       $('#s-glass').onclick = (e) => { S.glass = flip(e.currentTarget); rgb.glass(S.glass); applyGlass(); };
       $('#s-log').onclick = () => rgb.openLog();
     },
-    live() { $('#s-orgb').textContent = ST.openrgb.msg; $('#s-sens').textContent = ST.sensors.msg; },
+    live() {
+      $('#s-orgb').textContent = ST.openrgb.msg; $('#s-sens').textContent = ST.sensors.msg;
+      const a = ST.autostart || {}, b = $('#s-auto');
+      b.setAttribute('aria-pressed', !!a.on); // the switch shows what Windows has, set by main after each change
+      b.disabled = !a.supported; b.style.opacity = a.supported ? '' : '.45';
+      if (!a.supported) $('#s-auto-t').textContent = 'Works in the installed app. Running from the code folder it stays off, for safety.';
+    },
   },
 };
 
