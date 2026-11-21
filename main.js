@@ -473,7 +473,7 @@ function updateTray(force) {
 
 // ---------- splash (D: logo ring + steps) ----------
 // A small glass tile centred where the window will open. The logo's own ring fills as start-up steps finish
-// (Apex check, sensors, OpenRGB, lighting), each row ticks off with its time, then the tile fades and the window shows.
+// (Game check: Apex or EAC, sensors, OpenRGB, lighting), each row ticks off with its time, then the tile fades and the window shows.
 const SPLASH_W = 340, SPLASH_H = 440;
 let splash = null, splashStep = 0, splashAt = 0, splashLast = 0, splashEnding = false;
 function openSplash() {
@@ -543,7 +543,8 @@ app.whenReady().then(() => {
   tray.on('click', showWindow);
   readAutostart();
   updateTray(true);
-  app.on('second-instance', showWindow);
+  // A second launch shows the window; the installer's `KelvinRGB.exe --quit` closes this copy cleanly before an update.
+  app.on('second-instance', (_e, argv) => (argv.includes('--quit') ? app.quit() : showWindow()));
   // Dev aid: RGB_SHOT=<folder> writes fans.txt and a screenshot of each page, starting at 10 s.
   if (DEV && process.env.RGB_SHOT) setTimeout(async () => {
     for (const p of ['home', 'lighting', 'devices', 'fans', 'system', 'settings']) {
