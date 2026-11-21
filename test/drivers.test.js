@@ -68,3 +68,27 @@ test('installPinned deletes the file when the installer fails', async () => {
   await assert.rejects(D.installPinned(pin(buf), async () => { throw new Error('exit 1603'); }, d), /1603/);
   assert.deepStrictEqual(log.map((x) => x[0]), ['write', 'before', 'remove', 'after']);
 });
+
+test('tone: green current, orange behind, red missing or a major behind, grey unknown', () => {
+  assert.strictEqual(D.tone({ installed: '1.1.0', latest: 'release_1.1' }), 'ok');
+  assert.strictEqual(D.tone({ installed: '1.0.0', latest: '1.1.0' }), 'warn');
+  assert.strictEqual(D.tone({ installed: '0.9.0', latest: '1.1.0' }), 'bad');
+  assert.strictEqual(D.tone({ installed: '', latest: '1.1.0' }), 'bad');
+  assert.strictEqual(D.tone({ installed: '2.2.0', latest: '' }), 'dim');
+  const w = (o) => D.tone({ windows: true, state: 'ok', inboxOk: false, ...o });
+  assert.strictEqual(w({ wu: '' }), 'ok');
+  assert.strictEqual(w({ wu: 'AMD - Display - 32.0.1' }), 'warn');
+  assert.strictEqual(w({ wu: null }), 'dim');
+  assert.strictEqual(w({ state: 'none', wu: '' }), 'bad');
+  assert.strictEqual(w({ state: 'inbox', wu: '' }), 'bad');
+  assert.strictEqual(w({ state: 'inbox', inboxOk: true, wu: '' }), 'ok');
+});
+
+test('windowsRows marks a Windows Update offer for that maker', () => {
+  const raw = { devices: [{ id: 'PCI\\VEN_8086&DEV_2526', name: 'Intel Wi-Fi', cls: 'NET', prov: 'Intel', ver: '24.40.0.4', err: 0 }], packages: [] };
+  assert.strictEqual(D.windowsRows(raw, [{ provider: 'Intel', model: 'x', title: 'Intel - Net - 24.60.0.1' }])[0].tone, 'warn');
+  assert.strictEqual(D.windowsRows(raw, [{ provider: 'Intel', model: 'x', title: 'Intel - Bluetooth - 24.90.0.1' }])[0].tone, 'ok'); // another Intel device
+  assert.strictEqual(D.windowsRows(raw, [{ provider: 'Contoso', model: 'Intel Wi-Fi', title: 'x' }])[0].tone, 'warn'); // matched by model
+  assert.strictEqual(D.windowsRows(raw, [])[0].tone, 'ok');
+  assert.strictEqual(D.windowsRows(raw, null)[0].tone, 'dim');
+});

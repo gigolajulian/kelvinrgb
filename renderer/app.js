@@ -443,7 +443,7 @@ const pages = {
       const btn = (attr, label, primary) => `<button class="btn${primary ? ' p' : ''}" ${attr} ${g ? 'disabled' : ''}>${label}</button>`;
       const row = (n, what, inst, latest, dot, status, act, busy) => `<div class="r"><div><span class="nm">${esc(n)}</span><span class="what">${esc(what)}</span></div>
         <div class="v${inst ? '' : ' dim'}">${esc(inst || 'none')}</div><div class="v${!latest || latest === inst ? ' dim' : ''}">${esc(latest || 'not checked')}</div>
-        <div><div class="st"><span class="dot ${busy ? 'acc' : dot}"></span>${esc(busy ? 'Installing' : status)}</div></div>
+        <div><div class="st t-${busy ? 'acc' : dot}"><span class="dot ${busy ? 'acc' : dot}"></span>${esc(busy ? 'Installing' : status)}</div></div>
         <div class="act">${busy ? '' : act}</div></div>`;
       const head = (a1, b1, c1) => `<div class="hrow"><span class="lbl">${a1}</span><span class="lbl">${b1}</span><span class="lbl">${c1}</span><span class="lbl">status</span><span class="lbl act"></span></div>`;
       const sec = (lbl, right, body, note) => `<div class="row"><span class="lbl grow">${lbl}</span>${right}</div><div class="drv">${body}</div>${note ? `<p class="helptext">${note}</p>` : ''}`;
@@ -457,37 +457,39 @@ const pages = {
       }).join('');
       $('#v-hw').innerHTML = sec('hardware', `<button class="btn" data-rescan="1">Rescan</button>`,
         `<div class="hrow"><span class="lbl">device</span><span class="lbl span2">firmware</span><span class="lbl">status</span><span class="lbl act"></span></div>${hw}`,
-        gs.length ? "Firmware is what each device reports to OpenRGB. Updates come from the maker's own tool." : `${esc(ST.openrgb.msg)}. Devices show once OpenRGB runs.`);
+        gs.length ? "Firmware is what each device reports to OpenRGB. No maker publishes firmware versions KelvinRGB can check, so firmware gets no update colour. Updates come from the maker's own tool." : `${esc(ST.openrgb.msg)}. Devices show once OpenRGB runs.`);
 
       // windows drivers, PawnIO first since KelvinRGB can install it
       const P = V.pawnio || {}, pBusy = ST.setup && ST.setup.busy === 'pawnio';
       const pAct = { install: btn('data-drv="pawnio"', 'Install', 1), update: btn('data-drv="pawnio"', 'Update', 1), page: btn('data-drv="pawnio-page"', 'Get', !P.installed) }[P.act] || '';
-      const pawn = row('PawnIO', 'Kernel driver the sensor service uses for fan headers.', tag(P.installed), tag(P.latest), P.installed ? (P.act ? 'warn' : 'ok') : 'warn',
-        ST.setup && ST.setup.pawnio ? (P.act === 'update' || P.act === 'page' ? 'Update available' : 'Running') : 'Not installed', pAct, pBusy);
+      const pawn = row('PawnIO', 'Kernel driver the sensor service uses for fan headers.', tag(P.installed), tag(P.latest), P.tone || 'dim',
+        !P.installed ? 'Not installed' : P.tone === 'ok' ? (ST.setup && ST.setup.pawnio ? 'Running' : 'Installed, not running') : P.tone === 'dim' ? 'Installed' : 'Update available', pAct, pBusy);
       const win = (V.windows || []).map((w) => {
-        const st = { ok: ['ok', 'Installed'], inbox: w.inboxOk ? ['ok', 'Windows driver, works'] : ['warn', "On Windows' basic driver"], none: ['warn', 'No driver'] }[w.state];
+        const status = w.state === 'none' ? 'No driver' : w.state === 'inbox' && !w.inboxOk ? "On Windows' basic driver" : w.wu ? 'Update on Windows Update' : w.state === 'inbox' ? 'Windows driver, works' : 'Installed';
         const inst = w.installed || (w.state === 'inbox' ? 'Windows' : '');
-        return row(w.name, `${w.what} ${w.device}`, inst, '', st[0], st[1], btn(`data-drv="${esc(w.id)}"`, w.state === 'ok' || w.inboxOk ? 'Open site' : 'Get driver', w.state !== 'ok' && !w.inboxOk));
+        const latest = w.wu == null || w.state === 'none' ? '' : w.wu ? 'newer out' : 'nothing newer';
+        return row(w.name, `${w.what} ${w.device}`, inst, latest, w.tone || 'dim', status, btn(`data-drv="${esc(w.id)}"`, w.state === 'ok' || w.inboxOk ? 'Open site' : 'Get driver', w.state !== 'ok' && !w.inboxOk));
       }).join('');
-      const missing = (V.windows || []).filter((w) => w.state !== 'ok' && !w.inboxOk).length + (ST.setup && !ST.setup.pawnio ? 1 : 0);
+      const missing = (V.windows || []).filter((w) => w.tone === 'bad').length + (P.tone === 'bad' ? 1 : 0);
       $('#v-win').innerHTML = sec('windows drivers', '', head('driver', 'installed', 'latest') + pawn + win,
-        V.at ? "Everything this PC's hardware needs after a Windows reset. Get driver and Open site go to the maker's download page, which has the latest version." : 'Reading drivers from Windows.');
+        V.at ? "Everything this PC's hardware needs after a Windows reset. Latest is what Windows Update offers; the maker's site can be newer. Green: up to date. Orange: an update is out. Red: missing, or on Windows' basic driver." : 'Reading drivers from Windows.');
 
       // KelvinRGB and what it runs
       const up = u.kind === 'available', uBusy = u.kind === 'downloading' || u.kind === 'installing';
       const kLatest = up ? u.v : u.kind === 'current' ? ST.version : '';
-      const kelvin = row('KelvinRGB', 'This app. Updates from GitHub releases.', ST.version, kLatest, up ? 'warn' : u.kind === 'failed' ? 'bad' : 'ok',
+      const major = (v) => parseInt(String(v || '0'), 10) || 0;
+      const kelvin = row('KelvinRGB', 'This app. Updates from GitHub releases.', ST.version, kLatest, up ? (major(u.v) > major(ST.version) ? 'bad' : 'warn') : u.kind === 'failed' ? 'bad' : kLatest ? 'ok' : 'dim',
         up ? 'Update available' : uBusy ? u.text : u.kind === 'failed' ? u.text : u.kind === 'checking' ? 'Checking' : 'Up to date', up ? btn('data-upd="1"', 'Update', 1) : '', false);
       const O = V.openrgb || {}, oBusy = V.busy === 'openrgb';
       const oAct = { install: btn('data-drv="openrgb"', 'Install', 1), update: btn('data-drv="openrgb"', 'Update', 1), page: btn('data-drv="openrgb-page"', 'Get', !O.installed) }[O.act] || '';
-      const orgb = row('OpenRGB', 'Talks to the lights. Server on 127.0.0.1:6742.', tag(O.installed), tag(O.latest), !O.installed || O.act ? 'warn' : ST.openrgb.ok ? 'ok' : 'warn',
-        !O.installed ? 'Not installed' : O.act ? 'Update available' : ST.openrgb.ok ? 'Running' : ST.openrgb.msg, oAct, oBusy);
+      const orgb = row('OpenRGB', 'Talks to the lights. Server on 127.0.0.1:6742.', tag(O.installed), tag(O.latest), O.tone || 'dim',
+        !O.installed ? 'Not installed' : O.tone === 'warn' || O.tone === 'bad' ? 'Update available' : ST.openrgb.ok ? 'Running' : ST.openrgb.msg, oAct, oBusy);
       const lhm = V.lhm ? V.lhm.replace(/\.0$/, '') : '';
       const sens = row('Sensor service', 'KelvinRGB sidecar on LibreHardwareMonitorLib. Updates with KelvinRGB.', lhm, lhm, ST.sensors.ok ? 'ok' : 'warn', ST.sensors.ok ? 'Live' : ST.sensors.msg, '', false);
       $('#v-app').innerHTML = sec('kelvinrgb', '', head('part', 'installed', 'latest') + kelvin + orgb + sens,
         (V.msg ? `<span style="color:var(--bad)">${esc(V.msg)}.</span> ` : '') + 'Each download is checked against its pinned hash, runs once, then gets deleted.');
 
-      const ups = [up, O.act === 'update', P.act === 'update'].filter(Boolean).length;
+      const ups = [up, O.tone === 'warn', P.tone === 'warn', ...(V.windows || []).map((w) => w.tone === 'warn')].filter(Boolean).length;
       $('#v-sub').textContent = `${gs.length} devices · ${(V.windows || []).length + 1} drivers · ${[missing && `${missing} missing`, ups && `${ups} update${ups > 1 ? 's' : ''}`].filter(Boolean).join(' · ') || 'all set'}`
         + (V.checking ? ' · checking' : V.at ? ` · checked ${new Date(V.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '');
       $('#v-check').disabled = !!V.checking;
