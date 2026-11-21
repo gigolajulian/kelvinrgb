@@ -38,7 +38,7 @@ if (!isAdmin() && !(DEV && process.env.RGB_NO_ELEVATE)) {
 const settingsFile = path.join(app.getPath('userData'), 'settings.json');
 const DEFAULTS = {
   lighting: { effect: 'static', color: '#c8323c', speed: 40, brightness: 80, on: true },
-  devices: {}, // key -> { brightness, gain: [r,g,b], gamma }
+  devices: {}, // key -> { off, brightness, gain: [r,g,b], gamma, fanWhite, zones }
   fans: {},    // control id -> { mode: bios|curve|fixed, sensor, points, shape, fixed }
   closeConflicts: true, // show the conflict list when RGB apps that fight us run (lib/conflicts.js)
   glass: true, // Windows 11 acrylic behind the window
@@ -139,7 +139,7 @@ function render() {
   for (const d of state.devices) {
     if (!d.leds) continue;
     const dev = settings.devices[d.key] || {};
-    const bright = (L.on ? L.brightness / 100 : 0) * ((dev.brightness ?? 100) / 100);
+    const bright = (L.on && !dev.off ? L.brightness / 100 : 0) * ((dev.brightness ?? 100) / 100);
     const flashing = (identify.get(d.key) || 0) > now;
     const colors = [];
     for (let i = 0; i < d.leds; i++) {
@@ -158,7 +158,7 @@ function render() {
     }
     // Wraith Prism fan blade: only its blue input works (red + green stay on as warm yellow), so blue sets yellow..white.
     // Measured 2026-11-20: visible from ~192, midpoint ~224, white from ~240. See HANDOFF.
-    if (d.name === 'AMD Wraith Prism' && !flashing && colors[1]) colors[1] = { red: 255, green: 255, blue: L.on ? (dev.fanWhite ?? 240) : 0 };
+    if (d.name === 'AMD Wraith Prism' && !flashing && colors[1]) colors[1] = { red: 255, green: 255, blue: L.on && !dev.off ? (dev.fanWhite ?? 240) : 0 };
     try { client.updateLeds(d.id, colors); } catch (e) { log(`updateLeds ${d.name}: ${e.message}`); }
   }
   for (const [k, until] of identify) if (until <= now) { identify.delete(k); startRender(); }

@@ -27,3 +27,8 @@ test('settings from disk fall back to defaults', () => {
   assert.deepStrictEqual(Object.keys(s.fans), ['b']);
   assert.strictEqual(s.closeConflicts, true);
 });
+
+test('device off switch', () => {
+  assert.deepStrictEqual(V.device({ off: true }), { off: true });
+  assert.deepStrictEqual(V.device({ off: 'yes' }), {}); // only a real boolean
+});
