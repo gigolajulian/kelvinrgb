@@ -173,6 +173,7 @@ const SIDECAR = path.join(app.isPackaged ? process.resourcesPath : __dirname, 's
 function startSidecar() {
   if (sidecar || state.guard || !started) return;
   if (!fs.existsSync(SIDECAR)) { state.sensors = { ...state.sensors, ok: false, msg: 'run npm run build:sidecar' }; push(); return; }
+  if (!fs.existsSync(path.join(path.dirname(SIDECAR), 'lib', 'LibreHardwareMonitorLib.dll'))) { state.sensors = { ...state.sensors, ok: false, msg: 'sensor files missing, reinstall KelvinRGB' }; push(); return; }
   sidecarStopping = false;
   const p = spawn(SIDECAR, ['--floor', String(FLOOR)], { cwd: path.dirname(SIDECAR), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   sidecar = p;

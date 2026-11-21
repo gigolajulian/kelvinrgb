@@ -36,6 +36,15 @@ const memUsed = () => pick(/^Memory$/, 'Data', /Memory Used|Used Memory/);
 const cpuLoad = () => pick(/^Cpu$/, 'Load', /CPU Total/);
 const gpuLoad = () => pick(/^Gpu/, 'Load', /GPU Core/);
 const gpuClock = () => pick(/^Gpu/, 'Clock', /GPU Core/);
+// Why the Cooling page has no fans, and the one step that fixes it.
+function fanHelp() {
+  const m = ST ? ST.sensors : { ok: false, msg: 'starting' };
+  if (ST && ST.guard) return 'Fans are back on BIOS while Apex runs. They return when the game closes.';
+  if (/missing/.test(m.msg)) return 'The sensor service files are missing. Reinstall KelvinRGB from the latest release.';
+  if (!m.ok) return `The sensor service is not running (${m.msg}).`;
+  if (m.admin === false) return 'KelvinRGB is not running as admin. Close it and start it again, then click Yes on the Windows prompt.';
+  return 'No fan controller answered. Install the PawnIO driver (pawnio.eu), then restart KelvinRGB. Fans on a hub or the GPU are not controlled here.';
+}
 const sensorById = (id) => sensors().find((s) => s.id === id) || null;
 function fanRpm(c) {
   const h = ST.hw.find((x) => x.name === c.hw);
@@ -339,7 +348,7 @@ const pages = {
             <label class="row"><span class="lbl">preset</span><select class="btn" id="c-preset"><option value="">Choose</option>${Object.keys(PRESETS).map((p) => `<option>${p}</option>`).join('')}</select></label>
             <span class="grow"></span><span class="lbl" id="c-dirty"></span><button class="btn p" id="c-apply">Apply</button>
           </div>
-        </div></div>` : '<div class="g"><p class="helptext">No controllable fan headers found. The sensor service needs admin and the PawnIO driver.</p></div>'}`;
+        </div></div>` : `<div class="g"><p class="helptext">${esc(fanHelp())}</p></div>`}`;
       if (!c) return;
       $$('[data-seg]').forEach((g) => (g.onclick = (e) => {
         const b = e.target.closest('button'); if (!b) return;
@@ -507,6 +516,7 @@ function footer() {
   $('#ft-bright').value = L.brightness;
   $('#ft-bright-v').textContent = L.brightness;
 }
+$('#ft-ver').onclick = () => rgb.update('install');
 $('#ft-power').onclick = () => setLighting({ on: !S.lighting.on });
 $('#ft-bright').oninput = (e) => setLighting({ brightness: +e.target.value }, false);
 $$('nav [data-page]').forEach((b) => (b.onclick = () => go(b.dataset.page)));
@@ -595,6 +605,9 @@ function onState(s) {
   health('st-openrgb', s.openrgb.ok, !s.guard, `OpenRGB ${s.openrgb.ok ? 'connected' : s.openrgb.msg}`);
   const sensorsFull = s.sensors.ok && s.sensors.admin !== false;
   health('st-sensors', sensorsFull, true, `Sensors ${sensorsFull ? 'live' : s.sensors.msg}`);
+  const u = s.update || {}, fv = $('#ft-ver'), up = u.action === 'install';
+  fv.textContent = `v${s.version || ''}` + (up || /^(Downloading|Installing)/.test(u.text || '') ? ` · ${u.text.toLowerCase()}` : '');
+  fv.classList.toggle('up', up); fv.disabled = !up;
   health('st-guard', !s.guard, s.guard, s.guard ? 'Apex guard active' : 'Apex guard idle');
   if ((page === 'devices' && devicesChanged) || (page === 'fans' && fansChanged)) pages[page].build();
   pages[page].live();
