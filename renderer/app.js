@@ -301,11 +301,10 @@ const pages = {
     paint() {
       const L = S.lighting, c = L.color, anim = ['breathing', 'spectrum', 'wave'].includes(L.effect);
       const FX = { static: c, breathing: `linear-gradient(90deg,#111,${c},#111)`, spectrum: 'linear-gradient(90deg,#c8323c,#ff6a1a,#13a3a3,#2f5bff,#8a5cff)', wave: `repeating-linear-gradient(90deg,${c} 0 5px,#111 5px 10px)`, off: '#111' };
-      const a = document.activeElement, keep = a && (a.id ? '#' + a.id : a.dataset.fx ? `[data-fx="${a.dataset.fx}"]` : a.dataset.c ? `#l-all [data-c="${a.dataset.c}"]` : null);
+      const a = document.activeElement, keep = a && (a.id ? '#' + a.id : a.dataset.fx ? `[data-fx="${a.dataset.fx}"]` : null);
       $('#l-all').innerHTML = `<span class="lbl">every device</span>
         <div class="fx">${EFFECTS.map(([k, l]) => `<button data-fx="${k}" aria-pressed="${k === L.effect}"><span class="pv" style="background:${FX[k]}"></span>${l}</button>`).join('')}</div>
-        <div class="lg-col"><input type="color" id="l-color" class="cdot" value="${c}" aria-label="Colour"><input type="text" id="l-hex" class="num" value="${c}" aria-label="Hex colour">
-          <div class="pre">${SWATCHES.map(([n, h]) => `<button data-c="${h}" aria-label="${n}" title="${n}" aria-pressed="${h === c}" style="background:${h}"></button>`).join('')}</div></div>
+        <div class="lg-col"><input type="color" id="l-color" class="cdot" value="${c}" aria-label="Colour"><input type="text" id="l-hex" class="num" value="${c}" aria-label="Hex colour"></div>
         <div class="lg-sl">${anim ? `<label class="ctl"><span class="lbl">speed</span><input type="range" id="l-speed" min="0" max="100" value="${L.speed}"><span class="v num" id="l-speed-v">${L.speed}</span></label>` : ''}
           <label class="ctl"><span class="lbl">brightness</span><input type="range" class="br" id="l-bright" min="0" max="100" value="${L.brightness}" style="--p:${L.brightness}%"><span class="v num" id="l-bright-v">${L.brightness}%</span></label></div>`;
       if (keep && $(keep)) $(keep).focus();
