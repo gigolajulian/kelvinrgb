@@ -297,13 +297,13 @@ const pages = {
       const live = f.mode === 'curve';
       $('#c-svg').innerHTML = `<g stroke="rgba(255,255,255,.06)">${grid}</g>
         <rect x="0" y="${Y(FLOOR)}" width="400" height="${FLOOR * 2}" fill="rgba(240,163,94,.08)"/>
-        <text x="396" y="${Y(FLOOR) + 14}" text-anchor="end" font-family="Cascadia Mono, Consolas, monospace" font-size="9" fill="#f0a35e">FLOOR ${FLOOR}%</text>
+        <text x="396" y="${Y(FLOOR) + 14}" text-anchor="end" style="font-family:var(--mono)" font-size="9" fill="#f0a35e">FLOOR ${FLOOR}%</text>
         <polyline points="${path.join(' ')}" fill="none" stroke="${live ? '#8fd3e0' : '#6c7177'}" stroke-width="2"/>
         ${pts.map((p) => `<circle class="pt" data-i="${f.points.indexOf(p)}" cx="${X(p[0])}" cy="${Y(p[1])}" r="6" fill="#0b0c0d" stroke="${live ? '#8fd3e0' : '#6c7177'}" stroke-width="2"/>`).join('')}
         ${temp ? `<line x1="${X(temp.value)}" y1="0" x2="${X(temp.value)}" y2="200" stroke="#e6e7e8" stroke-dasharray="3 4" opacity=".5"/>
         <circle cx="${X(temp.value)}" cy="${Y(now)}" r="4" fill="#e6e7e8"/>
-        <text x="${Math.min(X(temp.value) + 6, 320)}" y="${Y(now) - 8}" font-family="Cascadia Mono, Consolas, monospace" font-size="10" fill="#e6e7e8">now ${Math.round(temp.value)}° · ${Math.round(now)}%</text>` : ''}
-        <g font-family="Cascadia Mono, Consolas, monospace" font-size="9" fill="#6c7177">${[20, 40, 60, 80, 100].map((t) => `<text x="${X(t)}" y="216" text-anchor="middle">${t}°</text>`).join('')}
+        <text x="${Math.min(X(temp.value) + 6, 320)}" y="${Y(now) - 8}" style="font-family:var(--mono)" font-size="10" fill="#e6e7e8">now ${Math.round(temp.value)}° · ${Math.round(now)}%</text>` : ''}
+        <g style="font-family:var(--mono)" font-size="9" fill="#6c7177">${[20, 40, 60, 80, 100].map((t) => `<text x="${X(t)}" y="216" text-anchor="middle">${t}°</text>`).join('')}
         <text x="-8" y="3" text-anchor="end">100%</text><text x="-8" y="103" text-anchor="end">50%</text><text x="-8" y="203" text-anchor="end">0%</text></g>`;
       const c = ST.controls.find((x) => x.id === this.sel);
       if (c) $('#c-sub').textContent = temp ? `follows ${temp.name} · now ${Math.round(temp.value)}°C` : 'pick a sensor to follow';
