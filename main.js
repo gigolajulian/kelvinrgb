@@ -416,7 +416,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler(() => false);
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 900, minHeight: 600, autoHideMenuBar: true, title: 'KelvinRGB',
-    icon: ICON, show: !process.argv.includes('--hidden'),
+    icon: ICO, show: !process.argv.includes('--hidden'),
     backgroundColor: '#00000000', backgroundMaterial: settings.glass ? 'acrylic' : 'none', // transparent so acrylic shows through
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, spellcheck: false,
@@ -434,7 +434,7 @@ app.whenReady().then(() => {
   // Close and minimize hide to the tray. Quit from the tray menu or Settings.
   win.on('close', (e) => { if (!quitting) { e.preventDefault(); hideWindow(); } });
   win.on('minimize', (e) => { e.preventDefault(); hideWindow(); });
-  tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16, quality: 'best' }));
+  tray = new Tray(ICO);
   tray.on('click', showWindow);
   readAutostart();
   updateTray(true);
