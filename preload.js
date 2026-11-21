@@ -16,5 +16,7 @@ contextBridge.exposeInMainWorld('rgb', {
   openLog: () => ipcRenderer.send('openLog'),
   quit: () => ipcRenderer.send('quit'),
   autostart: (on) => ipcRenderer.send('autostart', on),
+  update: (action) => ipcRenderer.send('update', String(action)), // check | install | releases, anything else is ignored
+
   onSettings: (fn) => ipcRenderer.on('settings', (_e, s) => fn(s)),
 });

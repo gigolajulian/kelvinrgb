@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "build:sidecar": "powershell -ExecutionPolicy Bypass -File sidecar/build.ps1",
-    "test": "node --test test/math.test.js test/conflicts.test.js test/validate.test.js test/guard.test.js",
+    "test": "node --test test/math.test.js test/conflicts.test.js test/validate.test.js test/guard.test.js test/update.test.js",
     "postinstall": "node scripts/patch-sdk.js",
     "dist": "npm run build:sidecar && electron-builder --win nsis"
   },

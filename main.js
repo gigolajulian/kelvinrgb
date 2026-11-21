@@ -9,6 +9,7 @@ const M = require('./lib/math');
 const C = require('./lib/conflicts');
 const V = require('./lib/validate');
 const G = require('./lib/guard');
+const U = require('./lib/update');
 
 const FLOOR = 25;
 const GUARD_PROCS = ['r5apex.exe', 'r5apex_dx12.exe', 'easyanticheat.exe', 'easyanticheat_eos.exe'];
@@ -357,6 +358,18 @@ on('glass', (v) => { settings.glass = v === true; save(); applyGlass(); });
 on('openLog', () => shell.openPath(logFile)); // fixed path, nothing taken from the renderer
 on('quit', () => app.quit());
 on('autostart', (v) => setAutostart(v === true));
+on('update', (a) => { if (a === 'check') updater.check(true); else if (a === 'install') updater.install(); else if (a === 'releases') shell.openExternal(U.RELEASES); });
+
+// ---------- updates ----------
+const updater = U.create({
+  version: app.getVersion(), log, packaged: app.isPackaged,
+  onChange: () => { state.update = { ...updater.view(), kind: updater.state.kind }; push(); updateTray(true); },
+  beforeInstall: async () => { quitting = true; clearInterval(renderTimer); await stopSidecar(); if (client) client.disconnect(); },
+  spawn: (file, args) => spawn(file, args, { detached: true, stdio: 'ignore' }).unref(),
+  quit: () => app.quit(),
+});
+state.update = { ...updater.view(), kind: 'idle' };
+function updateItem() { const v = updater.view(); return { label: v.text, enabled: !!v.action, click: () => (v.action === 'install' ? updater.install() : updater.check(true)) }; }
 
 // ---------- start with Windows ----------
 // A scheduled task at logon with highest privileges, so there is no admin prompt every login.
@@ -415,6 +428,9 @@ function updateTray(force) {
     { label: 'Glass background', type: 'checkbox', checked: settings.glass !== false, click: (m) => trayChange(() => { settings.glass = m.checked; applyGlass(); }) },
     { label: 'Conflict check', type: 'checkbox', checked: settings.closeConflicts !== false, click: (m) => trayChange(() => { settings.closeConflicts = m.checked; declined.clear(); }) },
     { type: 'separator' },
+    updateItem(),
+    { label: 'Releases on GitHub', click: () => shell.openExternal(U.RELEASES) },
+    { type: 'separator' },
     { label: 'Quit KelvinRGB', click: () => app.quit() },
   ]));
 }
@@ -466,6 +482,9 @@ app.whenReady().then(() => {
   setInterval(checkGuard, 4000);
   // Give the guard its first look before touching any device.
   setTimeout(() => firstCheck.then(() => { started = true; startSidecar(); connectOpenRgb(); setInterval(connectOpenRgb, 3000); }), 1500);
+  // Quiet update check a little after start, then every 6 hours. Nothing shows unless one is available.
+  setTimeout(() => updater.check(false), 20000);
+  setInterval(() => updater.check(false), 6 * 3600e3);
 });
 
 let quitting = false;
