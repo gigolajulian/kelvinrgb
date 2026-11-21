@@ -1,21 +1,26 @@
-// Renderer: four pages built from strings, live values patched in place on every state push.
+// Renderer: six screens built from strings, live values patched on every state push.
+// Every hardware-derived string goes through esc(); main validates everything sent back.
 let S;            // settings (local copy, sent back to main on change)
 let ST;           // latest state from main
 let FLOOR = 25;
-let page = 'monitoring';
-const history = new Map(); // sensor id -> last 60 values
+let page = 'home';
+const history = new Map(); // sensor id -> last 60 values (1 min)
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const main = $('#page');
 
-const EFFECTS = [['static', 'Static'], ['breathing', 'Breathing'], ['spectrum', 'Spectrum cycle'], ['wave', 'Wave'], ['off', 'Off']];
-const SWATCHES = ['#c8323c', '#2fb8cf', '#e08a2c', '#f2efe8', '#6a4cc8'];
+const EFFECTS = [['static', 'Static'], ['breathing', 'Breathing'], ['spectrum', 'Spectrum'], ['wave', 'Wave'], ['off', 'Off']];
+const SWATCHES = [['White', '#ffffff'], ['Red', '#c8323c'], ['Orange', '#ff6a1a'], ['Cobalt', '#2f5bff'], ['Teal', '#13a3a3'], ['Violet', '#8a5cff']];
 const PRESETS = {
   Quiet: [[30, 25], [55, 30], [70, 50], [85, 80], [95, 100]],
   Balanced: [[30, 25], [50, 35], [65, 55], [80, 85], [90, 100]],
   Performance: [[30, 35], [45, 50], [60, 70], [75, 90], [85, 100]],
 };
+const TYPES = ['Board', 'RAM', 'Graphics', 'Cooler', 'Strip', 'Keyboard', 'Mouse', 'Mousemat', 'Headset', 'Stand', 'Pad', 'Light', 'Speaker', 'Virtual', 'Storage', 'Case', 'Mic', 'Accessory', 'Keypad', 'Laptop', 'Monitor'];
+const typeLabel = (t) => TYPES[t] || 'Device';
+const isWraith = (d) => d.name === 'AMD Wraith Prism';
+const isWraithFan = (d, z) => isWraith(d) && /fan/i.test(z.name);
 
 // ---------- sensor lookups ----------
 function sensors() { return ST ? ST.hw.flatMap((h) => h.sensors.map((s) => ({ ...s, hwName: h.name, hwType: h.type }))) : []; }
@@ -26,21 +31,31 @@ function pick(hwType, type, nameRe) {
 const cpuTemp = () => pick(/^Cpu$/, 'Temperature', /Tctl|Package|Tdie/);
 const gpuTemp = () => pick(/^Gpu/, 'Temperature', /GPU Core|Edge/);
 const memLoad = () => pick(/^Memory$/, 'Load', /^Memory$/);
+const memUsed = () => pick(/^Memory$/, 'Data', /Memory Used|Used Memory/);
 const cpuLoad = () => pick(/^Cpu$/, 'Load', /CPU Total/);
+const gpuLoad = () => pick(/^Gpu/, 'Load', /GPU Core/);
 const gpuClock = () => pick(/^Gpu/, 'Clock', /GPU Core/);
+const sensorById = (id) => sensors().find((s) => s.id === id) || null;
 function fanRpm(c) {
   const h = ST.hw.find((x) => x.name === c.hw);
   const s = h && h.sensors.find((x) => x.type === 'Fan' && x.index === c.index);
   return s ? Math.round(s.value) : null;
 }
-function fanName(c) { return (S.fans[c.id] && S.fans[c.id].label) || c.name.replace('Fan Control', 'Fan'); }
+const fanName = (c) => (S.fans[c.id] && S.fans[c.id].label) || c.name.replace('Fan Control', 'Fan');
+const lightsOn = () => S.lighting.on && S.lighting.effect !== 'off';
 
 // ---------- shared bits ----------
 const slider = (id, label, min, max, value, shown) =>
-  `<label class="slider"><span><span class="lbl">${label}</span><span class="lbl num soft" id="${id}-v">${shown ?? value}</span></span><input type="range" id="${id}" min="${min}" max="${max}" value="${value}"></label>`;
-const helpBtn = (id) => `<button class="help" aria-label="Help" aria-expanded="false" data-help="${id}">?</button>`;
+  `<label class="slider"><span><span class="lbl">${label}</span><span class="num sub" id="${id}-v">${shown ?? value}</span></span><input type="range" id="${id}" min="${min}" max="${max}" value="${value}"></label>`;
 const seg = (name, opts, cur) => `<div class="seg" role="group" data-seg="${name}">${opts.map(([v, l]) => `<button data-v="${v}" aria-pressed="${v === cur}">${l}</button>`).join('')}</div>`;
-const typeLabel = (t) => ['mb', 'ram', 'gpu', 'cooler', 'strip', 'keyboard', 'mouse', 'mousemat', 'headset', 'stand', 'pad', 'light', 'speaker', 'virtual', 'storage', 'case', 'mic', 'accessory', 'keypad', 'laptop', 'monitor'][t] || 'device';
+const val = (s, d = 0) => (s ? s.value.toFixed(d) : '-');
+const pct = (s, max = 100) => (s ? Math.min(100, Math.max(0, (s.value / max) * 100)) : 0);
+function sparkPts(id, top) {
+  const h = history.get(id) || [];
+  const max = top || Math.max(1, ...h) * 1.1;
+  return h.map((v, i) => `${(i + 60 - h.length) * 10},${38 - (v / max) * 34}`).join(' ');
+}
+const spark = (id, top) => `<svg class="spark" viewBox="0 0 600 40" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="#8fd3e0" stroke-width="1.5" vector-effect="non-scaling-stroke" points="${id ? sparkPts(id, top) : ''}"/></svg>`;
 
 function tune(hex, dev = {}) {
   const n = parseInt(hex.slice(1), 16);
@@ -49,158 +64,181 @@ function tune(hex, dev = {}) {
   return '#' + [n >> 16 & 255, n >> 8 & 255, n & 255]
     .map((v, i) => Math.round(255 * Math.min(1, Math.pow(v / 255, gm / 2.2) * g[i])).toString(16).padStart(2, '0')).join('');
 }
-
-function gauge(id, label, sub, unit) {
-  return `<section class="panel"><div style="display:flex;flex-direction:column;gap:2px"><span>${label}</span><span class="lbl" id="${id}-sub">${sub}</span></div>
-  <svg class="gauge" viewBox="0 0 140 140" width="150" height="150" role="img" aria-labelledby="${id}-n">
-    <circle cx="70" cy="70" r="56" fill="none" stroke="#1e2124" stroke-width="6"/>
-    <circle id="${id}-arc" cx="70" cy="70" r="56" fill="none" stroke="#8fd3e0" stroke-width="6" stroke-dasharray="0 352" transform="rotate(-90 70 70)"/>
-    <text id="${id}-n" x="70" y="74" text-anchor="middle" font-family="Consolas, monospace" font-size="30" fill="#e4e4e1">-</text>
-    <text x="70" y="94" text-anchor="middle" font-family="Consolas, monospace" font-size="10" fill="#8b9096">${unit}</text>
-  </svg></section>`;
+function fanHex(v) { // yellow to white, measured on the Wraith blade
+  const t = Math.max(0, Math.min(1, ((v ?? 240) - 184) / 56));
+  return '#' + [[255, 255], [199, 255], [90, 255]].map(([a, b]) => Math.round(a + (b - a) * t).toString(16).padStart(2, '0')).join('');
 }
-function setGauge(id, s, max) {
-  const n = $(`#${id}-n`); if (!n) return;
-  n.textContent = s ? Math.round(s.value) : '-';
-  $(`#${id}-arc`).setAttribute('stroke-dasharray', `${s ? Math.min(1, s.value / max) * 352 : 0} 352`);
-  if (s) $(`#${id}-sub`).textContent = `${s.hwName} · ${s.name}`;
-}
-function spark(id, label) {
-  return `<section class="panel full"><div class="row"><div style="display:flex;flex-direction:column;gap:2px"><span>${label}</span><span class="lbl" id="${id}-sub">1 min</span></div><span class="grow"></span><span class="num" style="font-size:20px" id="${id}-n">-</span></div>
-  <svg viewBox="0 0 600 120" width="100%" height="120" preserveAspectRatio="none" aria-hidden="true"><g stroke="#1e2124"><line x1="0" y1="5" x2="600" y2="5"/><line x1="0" y1="60" x2="600" y2="60"/><line x1="0" y1="115" x2="600" y2="115"/></g>
-  <polyline id="${id}-line" fill="none" stroke="#8fd3e0" stroke-width="1.5" vector-effect="non-scaling-stroke" points=""/></svg>
-  <div class="row" style="justify-content:space-between"><span class="lbl">-1m</span><span class="lbl">-30s</span><span class="lbl">now</span></div></section>`;
-}
-function setSpark(id, s, unit, max) {
-  const n = $(`#${id}-n`); if (!n || !s) return;
-  n.textContent = `${Math.round(s.value)} ${unit}`;
-  $(`#${id}-sub`).textContent = `${s.hwName} · 1 min`;
-  const h = history.get(s.id) || [];
-  const top = max || Math.max(1, ...h) * 1.1;
-  $(`#${id}-line`).setAttribute('points', h.map((v, i) => `${(i + 60 - h.length) * 10},${115 - (v / top) * 110}`).join(' '));
+function zoneColor(d, zi) {
+  const z = d.zones[zi], dev = S.devices[d.key] || {};
+  if (isWraithFan(d, z)) return S.lighting.on ? fanHex(dev.fanWhite) : '#1b1c1e';
+  if (!lightsOn()) return '#1b1c1e';
+  return (dev.zones && dev.zones[zi]) || tune(S.lighting.color, dev);
 }
 
 // ---------- pages ----------
 const pages = {
-  monitoring: {
+  home: {
     build() {
-      main.innerHTML = `<header class="top"><span class="lbl">monitoring</span><span class="grow"></span>${helpBtn('h-mon')}</header>
-      <p class="helptext" id="h-mon" hidden>Live readings from LibreHardwareMonitor, once a second. Needs admin and the PawnIO driver. All sensors are listed at the bottom.</p>
-      <div class="grid">
-        ${gauge('g-cpu', 'CPU temperature', 'cpu', '°C')}
-        ${gauge('g-gpu', 'GPU temperature', 'gpu', '°C')}
-        ${gauge('g-mem', 'Memory load', 'memory', '%')}
-        <section class="panel"><div style="display:flex;flex-direction:column;gap:2px"><span>Fans</span><span class="lbl">rpm · duty</span></div><div id="m-fans" class="list" style="gap:8px"></div></section>
-        ${spark('s-cpu', 'CPU load')}
-        ${spark('s-gpu', 'GPU core clock')}
-        <details class="panel full"><summary class="lbl" style="cursor:pointer">all sensors</summary><table class="sensors" id="m-all"></table></details>
+      main.innerHTML = `<div class="hd"><h1 id="h-title">KelvinRGB</h1><span class="sub" id="h-sub"></span></div>
+      <div class="grid c4">
+        <div class="g"><span class="lbl">cpu</span><div class="big" style="margin:10px 0 8px"><span id="h-cpu">-</span><small>°C</small></div><div class="meter"><i id="h-cpu-m"></i></div><div class="sub" style="margin-top:8px" id="h-cpu-s"></div></div>
+        <div class="g"><span class="lbl">gpu</span><div class="big" style="margin:10px 0 8px"><span id="h-gpu">-</span><small>°C</small></div><div class="meter"><i id="h-gpu-m"></i></div><div class="sub" style="margin-top:8px" id="h-gpu-s"></div></div>
+        <div class="g"><span class="lbl">memory</span><div class="big" style="margin:10px 0 8px"><span id="h-mem">-</span><small>%</small></div><div class="meter"><i id="h-mem-m"></i></div><div class="sub" style="margin-top:8px" id="h-mem-s"></div></div>
+        <div class="g"><span class="lbl">fans</span><div class="big" style="margin:10px 0 8px"><span id="h-fans">-</span><small id="h-fans-of"></small></div><div class="meter"><i id="h-fans-m" style="background:var(--ok)"></i></div><div class="sub" style="margin-top:8px" id="h-fans-s"></div></div>
+      </div>
+      <div class="grid c2">
+        <div class="g row" style="gap:16px"><span class="sw" id="h-sw" style="width:54px;height:54px"></span><div style="flex:1"><span class="lbl">lighting</span><div style="font-size:17px;font-weight:500;margin-top:4px" id="h-fx"></div><div class="sub" id="h-fx-s"></div></div><button class="btn" data-go="lighting">Change</button></div>
+        <div class="g"><div class="row" style="margin-bottom:4px"><span class="lbl">cpu load · last minute</span><span class="grow"></span><span class="num sub" id="h-load"></span></div><div id="h-spark">${spark()}</div></div>
       </div>`;
     },
     live() {
-      setGauge('g-cpu', cpuTemp(), 100);
-      setGauge('g-gpu', gpuTemp(), 100);
-      setGauge('g-mem', memLoad(), 100);
-      setSpark('s-cpu', cpuLoad(), '%', 100);
-      setSpark('s-gpu', gpuClock(), 'MHz');
-      $('#m-fans').innerHTML = ST.controls.length ? ST.controls.map((c) =>
-        `<div class="row" style="justify-content:space-between"><span>${esc(fanName(c))}</span><span class="num" style="font-size:13px">${fanRpm(c) ?? '-'} · ${Math.round(c.value)}%</span></div>`).join('')
-        : '<span class="helptext">No fan headers found yet.</span>';
-      const tbl = $('#m-all');
-      if (tbl && tbl.closest('details').open) {
-        tbl.innerHTML = sensors().map((s) => `<tr><td class="lbl">${esc(s.hwName)}</td><td>${esc(s.name)}</td><td class="lbl">${s.type}</td><td>${s.value}</td></tr>`).join('');
-      }
+      const ct = cpuTemp(), gt = gpuTemp(), ml = memLoad(), mu = memUsed(), cl = cpuLoad(), gl = gpuLoad();
+      const hot = (ct && ct.value >= 85) || (gt && gt.value >= 85);
+      const fans = ST.controls, spinning = fans.filter((c) => (fanRpm(c) || 0) > 0).length;
+      $('#h-title').textContent = !ST.sensors.ok ? 'Starting up' : hot ? 'Running hot' : 'All good';
+      $('#h-sub').textContent = ST.guard ? 'Apex is running, so lights and fans are handed back.'
+        : !ST.sensors.ok ? `Waiting for sensors (${ST.sensors.msg}) and OpenRGB (${ST.openrgb.msg}).`
+        : hot ? 'A temperature is over 85 °C.' : `${lightsOn() ? 'Lights on' : 'Lights off'}, fans on your settings, nothing over limit.`;
+      $('#h-cpu').textContent = val(ct); $('#h-cpu-m').style.width = pct(ct) + '%'; $('#h-cpu-s').textContent = cl ? `${val(cl)}% load` : '';
+      $('#h-gpu').textContent = val(gt); $('#h-gpu-m').style.width = pct(gt) + '%'; $('#h-gpu-s').textContent = gl ? `${val(gl)}% load` : '';
+      $('#h-mem').textContent = val(ml); $('#h-mem-m').style.width = pct(ml) + '%'; $('#h-mem-s').textContent = mu ? `${val(mu, 1)} GB used` : '';
+      $('#h-fans').textContent = fans.length ? spinning : '-'; $('#h-fans-of').textContent = fans.length ? `of ${fans.length}` : '';
+      $('#h-fans-m').style.width = fans.length ? (spinning / fans.length) * 100 + '%' : '0';
+      $('#h-fans-s').textContent = `spinning · ${FLOOR}% floor`;
+      $('#h-sw').style.background = lightsOn() ? S.lighting.color : '#1b1c1e';
+      $('#h-fx').textContent = S.lighting.on ? EFFECTS.find((e) => e[0] === S.lighting.effect)[1] : 'Lights off';
+      const own = ST.devices.reduce((a, d) => a + Object.keys((S.devices[d.key] || {}).zones || {}).length, 0);
+      $('#h-fx-s').textContent = `${ST.devices.length} devices${own ? ` · ${own} zones with their own colour` : ''}`;
+      $('#h-load').textContent = cl ? `${val(cl)}%` : '';
+      $('#h-spark').innerHTML = spark(cl && cl.id, 100);
     },
   },
 
   lighting: {
     build() {
       const L = S.lighting;
-      main.innerHTML = `<header class="top"><span class="lbl">lighting</span><span class="grow"></span>${helpBtn('h-light')}</header>
-      <p class="helptext" id="h-light" hidden>One effect drives every device OpenRGB found. Per-device brightness and color tuning live on the Devices page. Close SignalRGB first: both apps fight over the same devices.</p>
-      <section class="panel"><div class="row"><span class="lbl">devices</span><span class="grow"></span><span class="lbl" id="l-count"></span></div><div class="wrap" id="l-devs" style="gap:8px"></div></section>
-      <div class="wrap">
-        <section class="panel" style="flex:1 1 220px;padding:12px;gap:2px"><span class="lbl" style="padding:4px 8px 10px">effects</span>
-          <div class="list" id="l-effects">${EFFECTS.map(([v, l]) => `<button data-v="${v}" aria-pressed="${v === L.effect}">${l}</button>`).join('')}</div></section>
-        <section class="panel" style="flex:999 1 420px;min-width:0">
-          <span class="lbl">color</span>
-          <div class="row" style="flex-wrap:wrap;gap:14px">
-            <input type="color" id="l-color" value="${L.color}" aria-label="Color" style="width:96px;height:96px;border:0;padding:0;background:none">
-            <div style="display:flex;flex-direction:column;gap:12px">
-              <div class="row" style="gap:6px">${SWATCHES.map((c) => `<button class="swatch" data-c="${c}" aria-label="${c}" aria-pressed="${c === L.color}" style="background:${c}"></button>`).join('')}</div>
-              <label class="row"><span class="lbl">hex</span><input type="text" id="l-hex" class="num" value="${L.color}" style="width:110px"></label>
-            </div>
-          </div>
+      main.innerHTML = `<div class="hd"><h1>Lighting</h1><span class="sub">One look for every light. Single zones are set in Devices.</span></div>
+      <div class="g"><span class="lbl">effect</span><div class="fx" id="l-fx" style="margin-top:10px"></div></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+        <div class="g" style="display:flex;flex-direction:column;gap:14px">
+          <div class="row"><span class="lbl">colour</span><span class="grow"></span><input type="text" id="l-hex" class="num" value="${L.color}" aria-label="Hex colour" style="width:100px"></div>
+          <input type="color" id="l-color" value="${L.color}" aria-label="Colour">
+          <div class="pre" id="l-pre"></div>
+        </div>
+        <div class="g" style="display:flex;flex-direction:column;gap:16px">
           ${slider('l-speed', 'speed', 0, 100, L.speed)}
-        </section>
+          ${slider('l-bright', 'brightness', 0, 100, L.brightness)}
+          <div><span class="lbl">what's lit</span><div class="list" style="margin-top:6px" id="l-lit"></div></div>
+        </div>
       </div>`;
-      $('#l-effects').onclick = (e) => { const b = e.target.closest('button'); if (b) setLighting({ effect: b.dataset.v }); };
+      $('#l-fx').onclick = (e) => { const b = e.target.closest('[data-fx]'); if (b) setLighting({ effect: b.dataset.fx }); };
       $('#l-color').oninput = (e) => setLighting({ color: e.target.value }, false);
-      $('#l-hex').onchange = (e) => /^#[0-9a-f]{6}$/i.test(e.target.value) && setLighting({ color: e.target.value.toLowerCase() });
-      $$('.swatch').forEach((b) => (b.onclick = () => setLighting({ color: b.dataset.c })));
+      $('#l-hex').onchange = (e) => { const v = e.target.value.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) setLighting({ color: v.toLowerCase() }); else e.target.value = S.lighting.color; };
+      $('#l-pre').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) setLighting({ color: b.dataset.c }); };
       $('#l-speed').oninput = (e) => { $('#l-speed-v').textContent = e.target.value; setLighting({ speed: +e.target.value }, false); };
+      $('#l-bright').oninput = (e) => { $('#l-bright-v').textContent = e.target.value; setLighting({ brightness: +e.target.value }, false); };
+      this.paint();
+    },
+    paint() {
+      const c = S.lighting.color;
+      const FX = { static: c, breathing: `linear-gradient(90deg,#111,${c},#111)`, spectrum: 'linear-gradient(90deg,#c8323c,#ff6a1a,#13a3a3,#2f5bff,#8a5cff)', wave: `repeating-linear-gradient(90deg,${c} 0 14px,#111 14px 28px)`, off: '#111' };
+      $('#l-fx').innerHTML = EFFECTS.map(([k, l]) => `<button data-fx="${k}" aria-pressed="${k === S.lighting.effect}"><span class="pv" style="background:${FX[k]}"></span>${l}</button>`).join('');
+      $('#l-pre').innerHTML = SWATCHES.map(([n, h]) => `<button data-c="${h}" aria-label="${n}" title="${n}" aria-pressed="${h === c}" style="background:${h}"></button>`).join('');
+      if (document.activeElement !== $('#l-hex')) $('#l-hex').value = c;
     },
     live() {
-      $('#l-count').textContent = `${ST.devices.length} devices · ${ST.devices.reduce((a, d) => a + d.leds, 0)} leds`;
-      $('#l-devs').innerHTML = ST.devices.map((d) =>
-        `<span class="row" style="padding:8px 10px;border:1px solid var(--line2);border-radius:6px"><span class="dot" style="background:${S.lighting.on && S.lighting.effect !== 'off' ? tune(S.lighting.color, S.devices[d.key]) : '#3a3d41'}"></span>${esc(d.name)}</span>`).join('')
-        || '<span class="helptext">Waiting for OpenRGB.</span>';
+      $('#l-lit').innerHTML = ST.devices.length ? ST.devices.map((d) => `<div><span class="tag">${typeLabel(d.type)}</span><span class="grow">${esc(d.name)}</span>${d.zones.map((_z, zi) => `<span class="sw" style="width:14px;height:14px;background:${zoneColor(d, zi)}"></span>`).join('')}</div>`).join('')
+        : `<span class="helptext">${esc(ST.openrgb.msg)}. Waiting for OpenRGB.</span>`;
     },
   },
 
   devices: {
-    sel: null,
+    sel: null, // { key, zone } zone = index or null for the whole device
     build() {
-      const d = ST.devices.find((x) => x.key === this.sel) || ST.devices[0];
-      this.sel = d && d.key;
-      const cfg = (d && S.devices[d.key]) || {};
-      const g = cfg.gain || [1, 1, 1];
-      main.innerHTML = `<div class="wrap" style="align-items:flex-start">
-      <section style="flex:1 1 240px;max-width:320px;display:flex;flex-direction:column;gap:2px">
-        <div class="row" style="padding:0 4px 10px"><span class="lbl">devices · ${ST.devices.length}</span><span class="grow"></span><button class="btn" id="d-rescan">Rescan</button></div>
-        <div class="list" id="d-list">${ST.devices.map((x) => `<button data-k="${esc(x.key)}" aria-pressed="${x.key === this.sel}"><span class="dot" style="background:${x.leds ? tune(S.lighting.color, S.devices[x.key]) : '#3a3d41'}"></span><span class="grow">${esc(x.name)}</span><span class="lbl">${x.leds || 'no leds'}</span></button>`).join('')}</div>
-        ${ST.devices.length ? '' : '<p class="helptext">No devices yet. Is OpenRGB running with the SDK server on?</p>'}
-      </section>
-      ${d ? `<div style="flex:999 1 420px;min-width:0;display:flex;flex-direction:column;gap:16px">
-        <header class="top"><h1 style="margin:0;font-size:20px;font-weight:500">${esc(d.name)}</h1><span class="lbl">${typeLabel(d.type)} · ${d.leds} leds · ${d.zones.length} zones</span><span class="grow"></span><button class="btn" id="d-identify">Identify</button>${helpBtn('h-dev')}</header>
-        <p class="helptext" id="h-dev" hidden>Brightness balances this device against the others. Tuning scales red, green and blue before colors are sent, so whites match across devices. Gamma 2.2 means unchanged.</p>
-        <section class="panel">${slider('d-bright', 'device brightness', 0, 100, cfg.brightness ?? 100)}</section>
-        ${d.name === 'AMD Wraith Prism' ? `<section class="panel">${slider('d-fanw', 'fan blade · yellow to white', 160, 255, cfg.fanWhite ?? 240)}
-          <span class="lbl">The fan blade can only show yellow to white. It ignores the effect color. White from about 240.</span></section>` : ''}
-        <section class="panel"><div class="row"><span class="lbl">color tuning</span><span class="grow"></span><span class="lbl">saved per device</span></div>
-          <div class="row"><div style="flex:1;display:flex;flex-direction:column;gap:6px"><div style="height:44px;border-radius:6px;background:#ffffff"></div><span class="lbl">sent white</span></div>
-          <div style="flex:1;display:flex;flex-direction:column;gap:6px"><div id="d-after" style="height:44px;border-radius:6px"></div><span class="lbl">after tuning</span></div></div>
-          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px">
-            ${slider('d-r', 'red', 0, 100, Math.round(g[0] * 100), g[0].toFixed(2))}
-            ${slider('d-g', 'green', 0, 100, Math.round(g[1] * 100), g[1].toFixed(2))}
-            ${slider('d-b', 'blue', 0, 100, Math.round(g[2] * 100), g[2].toFixed(2))}
-            ${slider('d-gamma', 'gamma', 10, 30, Math.round((cfg.gamma || 2.2) * 10), (cfg.gamma || 2.2).toFixed(1))}
-          </div>
-          <div class="row"><button class="btn" id="d-reset">Reset</button><button class="btn" id="d-copy">Copy to all</button></div></section>
-        <section class="panel" style="gap:4px"><span class="lbl" style="padding-bottom:8px">zones</span>
-          ${d.zones.map((z) => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--grid)"><span class="grow">${esc(z.name)}</span><span class="num" style="font-size:12px;color:var(--mute)">${z.leds} leds</span></div>`).join('')}</section>
-      </div>` : ''}</div>`;
+      const devs = ST.devices;
+      if (!this.sel || !devs.find((d) => d.key === this.sel.key)) this.sel = devs[0] ? { key: devs[0].key, zone: null } : null;
+      main.innerHTML = `<div class="hd"><h1>Devices</h1><span class="sub">Every light OpenRGB found. Click a zone to give it its own colour.</span><span class="grow"></span><button class="btn" id="d-reset-all">Reset all to global</button><button class="btn" id="d-rescan">Rescan</button></div>
+      ${devs.length ? `<div class="grid" style="grid-template-columns:minmax(0,1fr) 300px;align-items:start">
+        <div class="g" style="padding:6px 16px"><div class="list" id="d-rows"></div><p class="helptext" style="margin:10px 0 6px">Dashed ring = follows global. Solid = its own colour.</p></div>
+        <div class="g" style="display:flex;flex-direction:column;gap:14px" id="d-ed"></div></div>`
+        : `<div class="g"><p class="helptext">${esc(ST.openrgb.msg)}. No devices yet. Is OpenRGB installed, with its SDK server on?</p></div>`}`;
       $('#d-rescan').onclick = () => rgb.rescan();
-      $('#d-list').onclick = (e) => { const b = e.target.closest('button'); if (b) { this.sel = b.dataset.k; this.build(); } };
-      if (!d) return;
-      const k = d.key;
-      const cur = () => S.devices[k] || (S.devices[k] = {});
+      $('#d-reset-all').onclick = () => { for (const d of devs) if ((S.devices[d.key] || {}).zones) { const zones = Object.fromEntries(Object.keys(S.devices[d.key].zones).map((k) => [k, null])); S.devices[d.key].zones = {}; rgb.device(d.key, { zones }); } this.build(); };
+      if (!devs.length) return;
+      $('#d-rows').onclick = (e) => {
+        const b = e.target.closest('[data-k]'); if (!b) return;
+        this.sel = { key: b.dataset.k, zone: b.dataset.z === '' ? null : +b.dataset.z };
+        this.rows(); this.editor();
+      };
+      this.rows(); this.editor();
+    },
+    rows() {
+      $('#d-rows').innerHTML = ST.devices.map((d) => {
+        const dev = S.devices[d.key] || {};
+        const on = (zi) => this.sel.key === d.key && this.sel.zone === zi;
+        return `<div><span class="tag">${typeLabel(d.type)}</span><button class="devname" data-k="${esc(d.key)}" data-z="" aria-pressed="${on(null)}">${esc(d.name)}</button><div class="chips">${d.zones.map((z, zi) => {
+          const own = isWraithFan(d, z) || (dev.zones && dev.zones[zi]);
+          return `<button class="chip" data-k="${esc(d.key)}" data-z="${zi}" aria-pressed="${on(zi)}"><span class="sw${own ? '' : ' follow'}" style="background:${zoneColor(d, zi)}"></span>${esc(z.name)}</button>`;
+        }).join('') || `<span class="sub">${d.leds} leds</span>`}</div></div>`;
+      }).join('');
+    },
+    editor() {
+      const d = ST.devices.find((x) => x.key === this.sel.key); if (!d) return;
+      const k = d.key, cur = () => S.devices[k] || (S.devices[k] = {});
+      const ed = $('#d-ed'), zi = this.sel.zone;
+      if (zi !== null) { // one zone
+        const z = d.zones[zi], own = cur().zones && cur().zones[zi];
+        if (isWraithFan(d, z)) {
+          ed.innerHTML = `<div class="row"><span class="sw" style="width:38px;height:38px;background:${zoneColor(d, zi)}"></span><div><div style="font-weight:600">${esc(d.name)} · ${esc(z.name)}</div><div class="sub">Yellow to white only</div></div></div>
+            <input class="warm" type="range" id="d-fanw" min="160" max="255" value="${cur().fanWhite ?? 240}" aria-label="Yellow to white">
+            <div class="row sub" style="font-size:11px"><span>Yellow</span><span class="grow"></span><span>White</span></div>
+            <p class="helptext">This LED only has a working blue input, so it can only go from yellow to white. White from about 240.</p>`;
+          $('#d-fanw').oninput = (e) => { cur().fanWhite = +e.target.value; rgb.device(k, { fanWhite: +e.target.value }); this.rows(); ed.querySelector('.sw').style.background = zoneColor(d, zi); };
+          return;
+        }
+        ed.innerHTML = `<div class="row"><span class="sw" style="width:38px;height:38px;background:${zoneColor(d, zi)}"></span><div><div style="font-weight:600">${esc(d.name)} · ${esc(z.name)}</div><div class="sub">${own ? 'Own colour ' + own : 'Follows global'} · ${z.leds} leds</div></div></div>
+          ${seg('src', [['g', 'Global'], ['o', 'Own colour']], own ? 'o' : 'g')}
+          <input type="color" id="d-zc" value="${own || S.lighting.color}" aria-label="Zone colour" ${own ? '' : 'disabled style="opacity:.45"'}>
+          <div class="pre" id="d-pre">${SWATCHES.map(([n, h]) => `<button data-c="${h}" aria-label="${n}" title="${n}" aria-pressed="${h === own}" style="background:${h}"></button>`).join('')}</div>
+          <button class="btn" id="d-whole">Use for whole ${esc(typeLabel(d.type).toLowerCase())}</button>`;
+        const setZone = (hex) => { cur().zones = { ...cur().zones }; if (hex) cur().zones[zi] = hex; else delete cur().zones[zi]; rgb.device(k, { zones: { [zi]: hex } }); this.rows(); this.editor(); };
+        ed.querySelector('[data-seg]').onclick = (e) => { const b = e.target.closest('button'); if (b) setZone(b.dataset.v === 'o' ? (own || S.lighting.color) : null); };
+        $('#d-zc').onchange = (e) => setZone(e.target.value);
+        $('#d-pre').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) setZone(b.dataset.c); };
+        $('#d-whole').onclick = () => {
+          const zones = {}; d.zones.forEach((zz, j) => { if (!isWraithFan(d, zz)) zones[j] = own || null; });
+          cur().zones = Object.fromEntries(Object.entries(zones).filter(([, v]) => v));
+          rgb.device(k, { zones }); this.rows(); this.editor();
+        };
+        return;
+      }
+      // whole device: brightness and colour tuning
+      const cfg = cur(), g = cfg.gain || [1, 1, 1];
+      ed.innerHTML = `<div class="row"><div style="flex:1"><div style="font-weight:600">${esc(d.name)}</div><div class="sub">${typeLabel(d.type)} · ${d.leds} leds · ${d.zones.length} zones</div></div><button class="btn" id="d-identify">Identify</button></div>
+        ${slider('d-bright', 'device brightness', 0, 100, cfg.brightness ?? 100)}
+        <div><span class="lbl">colour tuning</span><p class="helptext" style="margin-top:4px">Scales red, green and blue so whites match across devices.</p></div>
+        <div class="row"><div style="flex:1;display:flex;flex-direction:column;gap:6px"><div style="height:36px;border-radius:6px;background:#fff"></div><span class="lbl">sent</span></div><div style="flex:1;display:flex;flex-direction:column;gap:6px"><div id="d-after" style="height:36px;border-radius:6px"></div><span class="lbl">shown</span></div></div>
+        ${slider('d-r', 'red', 0, 100, Math.round(g[0] * 100), g[0].toFixed(2))}
+        ${slider('d-g', 'green', 0, 100, Math.round(g[1] * 100), g[1].toFixed(2))}
+        ${slider('d-b', 'blue', 0, 100, Math.round(g[2] * 100), g[2].toFixed(2))}
+        ${slider('d-gamma', 'gamma', 10, 30, Math.round((cfg.gamma || 2.2) * 10), (cfg.gamma || 2.2).toFixed(1))}
+        <div class="row"><button class="btn" id="d-reset">Reset tuning</button><button class="btn" id="d-copy">Copy to all</button></div>`;
       const paintAfter = () => ($('#d-after').style.background = tune('#ffffff', cur()));
       paintAfter();
       $('#d-identify').onclick = () => rgb.identify(k);
       $('#d-bright').oninput = (e) => { $('#d-bright-v').textContent = e.target.value; cur().brightness = +e.target.value; rgb.device(k, { brightness: +e.target.value }); };
-      if ($('#d-fanw')) $('#d-fanw').oninput = (e) => { $('#d-fanw-v').textContent = e.target.value; cur().fanWhite = +e.target.value; rgb.device(k, { fanWhite: +e.target.value }); };
       ['r', 'g', 'b'].forEach((ch, i) => ($(`#d-${ch}`).oninput = (e) => {
         const gain = [...(cur().gain || [1, 1, 1])]; gain[i] = e.target.value / 100;
-        $(`#d-${ch}-v`).textContent = gain[i].toFixed(2); cur().gain = gain; rgb.device(k, { gain }); paintAfter();
+        $(`#d-${ch}-v`).textContent = gain[i].toFixed(2); cur().gain = gain; rgb.device(k, { gain }); paintAfter(); this.rows();
       }));
-      $('#d-gamma').oninput = (e) => { const gamma = e.target.value / 10; $('#d-gamma-v').textContent = gamma.toFixed(1); cur().gamma = gamma; rgb.device(k, { gamma }); paintAfter(); };
-      $('#d-reset').onclick = () => { S.devices[k] = { brightness: cur().brightness }; rgb.device(k, { gain: [1, 1, 1], gamma: 2.2 }); this.build(); };
-      $('#d-copy').onclick = () => { for (const x of ST.devices) { S.devices[x.key] = { ...S.devices[x.key], gain: cur().gain, gamma: cur().gamma }; rgb.device(x.key, { gain: cur().gain || [1, 1, 1], gamma: cur().gamma || 2.2 }); } };
+      $('#d-gamma').oninput = (e) => { const gamma = e.target.value / 10; $('#d-gamma-v').textContent = gamma.toFixed(1); cur().gamma = gamma; rgb.device(k, { gamma }); paintAfter(); this.rows(); };
+      $('#d-reset').onclick = () => { cur().gain = [1, 1, 1]; cur().gamma = 2.2; rgb.device(k, { gain: [1, 1, 1], gamma: 2.2 }); this.editor(); this.rows(); };
+      $('#d-copy').onclick = () => { for (const x of ST.devices) { const t = S.devices[x.key] || (S.devices[x.key] = {}); t.gain = cur().gain || [1, 1, 1]; t.gamma = cur().gamma || 2.2; rgb.device(x.key, { gain: t.gain, gamma: t.gamma }); } this.rows(); };
     },
     live() {},
   },
 
-  cooling: {
+  fans: {
     sel: null,
     edit: null, // working copy of the selected fan's config
     build() {
@@ -211,27 +249,22 @@ const pages = {
         this.edit = { id: c.id, ...structuredClone(S.fans[c.id] || { mode: 'bios', shape: 'smooth', points: PRESETS.Balanced, fixed: 50, sensor: cpuTemp() && cpuTemp().id }) };
       }
       const f = this.edit;
-      main.innerHTML = `<header class="top"><span class="lbl">cooling</span><span class="grow"></span><span class="lbl">floor ${FLOOR}% · bios takes over if the app stops</span>${helpBtn('h-cool')}</header>
-      <p class="helptext" id="h-cool" hidden>Pick a fan, choose Curve or Fixed, then Apply. BIOS hands the header back to the motherboard. Duty never goes below ${FLOOR}%. If the sensor service dies, the motherboard takes the fans back. If it is force-killed, fans are held at 100% until reboot. Fans are released whenever Apex runs.</p>
+      main.innerHTML = `<div class="hd"><h1>Fans</h1><span class="sub">Never below ${FLOOR}%. If KelvinRGB stops, the BIOS takes over.</span></div>
       <p class="helptext" id="c-unclean" hidden>The sensor service was force-killed earlier this boot, so fans left on BIOS are held at 100% until you reboot.</p>
-      <div class="grid" id="c-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))"></div>
-      ${c ? `<section class="panel" style="flex-direction:row;flex-wrap:wrap;gap:24px">
-        <div style="flex:999 1 460px;min-width:0;display:flex;flex-direction:column;gap:12px">
-          <div class="row" style="flex-wrap:wrap"><span style="font-size:16px">${esc(fanName(c))}</span><span class="grow"></span>${seg('shape', [['smooth', 'Smooth'], ['linear', 'Linear'], ['stepped', 'Stepped']], f.shape)}</div>
-          <svg class="curve" id="c-svg" viewBox="-36 -10 476 236" role="img" aria-label="Fan curve editor"></svg>
+      ${c ? `<div class="grid" style="grid-template-columns:270px minmax(0,1fr);align-items:start">
+        <div class="g" style="padding:8px" id="c-list"></div>
+        <div class="g" style="display:flex;flex-direction:column;gap:14px">
+          <div class="row" style="flex-wrap:wrap"><div style="flex:1"><div style="font-size:16px;font-weight:500">${esc(fanName(c))}</div><div class="sub" id="c-sub"></div></div>${seg('mode', [['curve', 'Curve'], ['fixed', 'Fixed'], ['bios', 'BIOS']], f.mode)}</div>
+          <svg class="curve" id="c-svg" viewBox="-36 -10 476 236" role="img" aria-label="Fan curve: temperature to fan speed"></svg>
           <span class="lbl">drag points · double click to add · right click to remove</span>
-        </div>
-        <div style="flex:1 1 240px;display:flex;flex-direction:column;gap:16px">
-          ${seg('mode', [['curve', 'Curve'], ['fixed', 'Fixed'], ['bios', 'BIOS']], f.mode)}
-          <div id="c-fixed" ${f.mode === 'fixed' ? '' : 'hidden'}>${slider('c-fixed-r', 'fixed duty', FLOOR, 100, f.fixed ?? 50, `${f.fixed ?? 50}%`)}</div>
-          <label style="display:flex;flex-direction:column;gap:6px"><span class="lbl">follows sensor</span>
-            <select id="c-sensor">${temps.map((s) => `<option value="${esc(s.id)}" ${s.id === f.sensor ? 'selected' : ''}>${esc(s.hwName)} · ${esc(s.name)}</option>`).join('')}</select></label>
-          <label style="display:flex;flex-direction:column;gap:6px"><span class="lbl">preset</span>
-            <select id="c-preset"><option value="">Choose...</option>${Object.keys(PRESETS).map((p) => `<option>${p}</option>`).join('')}</select></label>
-          <span class="grow"></span>
-          <span class="lbl" id="c-dirty"></span>
-          <button class="btn primary" id="c-apply" style="padding:10px 0">Apply</button>
-        </div></section>` : '<p class="helptext">No controllable fan headers found. The sensor service needs admin and PawnIO.</p>'}`;
+          <div id="c-fixed" ${f.mode === 'fixed' ? '' : 'hidden'}>${slider('c-fixed-r', 'fixed speed', FLOOR, 100, f.fixed ?? 50, `${f.fixed ?? 50}%`)}</div>
+          <div class="row" style="flex-wrap:wrap;gap:14px">
+            <label class="row"><span class="lbl">follows</span><select class="btn" id="c-sensor">${temps.map((s) => `<option value="${esc(s.id)}" ${s.id === f.sensor ? 'selected' : ''}>${esc(s.hwName)} · ${esc(s.name)}</option>`).join('')}</select></label>
+            ${seg('shape', [['smooth', 'Smooth'], ['linear', 'Linear'], ['stepped', 'Steps']], f.shape)}
+            <label class="row"><span class="lbl">preset</span><select class="btn" id="c-preset"><option value="">Choose</option>${Object.keys(PRESETS).map((p) => `<option>${p}</option>`).join('')}</select></label>
+            <span class="grow"></span><span class="lbl" id="c-dirty"></span><button class="btn p" id="c-apply">Apply</button>
+          </div>
+        </div></div>` : '<div class="g"><p class="helptext">No controllable fan headers found. The sensor service needs admin and the PawnIO driver.</p></div>'}`;
       if (!c) return;
       $$('[data-seg]').forEach((g) => (g.onclick = (e) => {
         const b = e.target.closest('button'); if (!b) return;
@@ -244,9 +277,8 @@ const pages = {
       $('#c-sensor').onchange = (e) => { f.sensor = e.target.value; this.drawCurve(); this.dirty(); };
       $('#c-preset').onchange = (e) => { if (e.target.value) { f.points = structuredClone(PRESETS[e.target.value]); this.drawCurve(); this.dirty(); } };
       $('#c-apply').onclick = () => { const { id, ...cfg } = f; S.fans[id] = structuredClone(cfg); rgb.fan(id, cfg); this.dirty(); };
-      this.bindCurve();
-      this.drawCurve();
-      this.dirty();
+      $('#c-list').onclick = (e) => { const b = e.target.closest('[data-id]'); if (b && b.dataset.id !== this.sel) { this.sel = b.dataset.id; this.edit = null; this.build(); this.live(); } };
+      this.bindCurve(); this.drawCurve(); this.dirty();
     },
     dirty() {
       const { id, ...cfg } = this.edit;
@@ -254,30 +286,29 @@ const pages = {
     },
     drawCurve() {
       const f = this.edit;
-      const X = (t) => ((t - 20) / 80) * 400;
-      const Y = (d) => 200 - d * 2;
+      const X = (t) => ((t - 20) / 80) * 400, Y = (d) => 200 - d * 2;
       const pts = [...f.points].sort((a, b) => a[0] - b[0]);
-      // sample the real shape so smooth/stepped look like what the fan will do
       const path = [];
       for (let t = 20; t <= 100; t += 0.5) path.push(`${X(t).toFixed(1)},${Y(curve(pts, t, f.shape)).toFixed(1)}`);
       const temp = sensorById(f.sensor);
       const now = temp ? Math.max(FLOOR, curve(pts, temp.value, f.shape)) : null;
       const grid = [0, 50, 100, 150, 200].map((y) => `<line x1="0" y1="${y}" x2="400" y2="${y}"/>`).join('') + [0, 100, 200, 300, 400].map((x) => `<line x1="${x}" y1="0" x2="${x}" y2="200"/>`).join('');
-      $('#c-svg').innerHTML = `<g stroke="#1e2124">${grid}</g>
-        <rect x="0" y="${Y(FLOOR)}" width="400" height="${FLOOR * 2}" fill="#16181a"/>
-        <line x1="0" y1="${Y(FLOOR)}" x2="400" y2="${Y(FLOOR)}" stroke="#5c6166" stroke-dasharray="3 4"/>
-        <text x="396" y="${Y(FLOOR) + 16}" text-anchor="end" font-family="Consolas, monospace" font-size="9" fill="#8b9096">FLOOR ${FLOOR}%</text>
-        <polyline points="${path.join(' ')}" fill="none" stroke="${f.mode === 'curve' ? '#8fd3e0' : '#5c6166'}" stroke-width="2"/>
-        ${pts.map((p, i) => `<circle class="pt" data-i="${f.points.indexOf(p)}" cx="${X(p[0])}" cy="${Y(p[1])}" r="6" fill="#0d0e0f" stroke="#8fd3e0" stroke-width="2"/>`).join('')}
-        ${temp ? `<line x1="${X(temp.value)}" y1="0" x2="${X(temp.value)}" y2="200" stroke="#e4e4e1" opacity=".35"/>
-        <circle cx="${X(temp.value)}" cy="${Y(now)}" r="4" fill="#e4e4e1"/>
-        <text x="${Math.min(X(temp.value) + 6, 330)}" y="${Y(now) - 6}" font-family="Consolas, monospace" font-size="10" fill="#e4e4e1">${Math.round(temp.value)} °C · ${Math.round(now)}%</text>` : ''}
-        <g font-family="Consolas, monospace" font-size="9" fill="#8b9096">${[20, 40, 60, 80, 100].map((t) => `<text x="${X(t)}" y="216" text-anchor="middle">${t}${t === 100 ? ' °C' : ''}</text>`).join('')}
-        <text x="-8" y="3" text-anchor="end">100</text><text x="-8" y="103" text-anchor="end">50</text><text x="-8" y="203" text-anchor="end">0%</text></g>`;
+      const live = f.mode === 'curve';
+      $('#c-svg').innerHTML = `<g stroke="rgba(255,255,255,.06)">${grid}</g>
+        <rect x="0" y="${Y(FLOOR)}" width="400" height="${FLOOR * 2}" fill="rgba(240,163,94,.08)"/>
+        <text x="396" y="${Y(FLOOR) + 14}" text-anchor="end" font-family="Cascadia Mono, Consolas, monospace" font-size="9" fill="#f0a35e">FLOOR ${FLOOR}%</text>
+        <polyline points="${path.join(' ')}" fill="none" stroke="${live ? '#8fd3e0' : '#6c7177'}" stroke-width="2"/>
+        ${pts.map((p) => `<circle class="pt" data-i="${f.points.indexOf(p)}" cx="${X(p[0])}" cy="${Y(p[1])}" r="6" fill="#0b0c0d" stroke="${live ? '#8fd3e0' : '#6c7177'}" stroke-width="2"/>`).join('')}
+        ${temp ? `<line x1="${X(temp.value)}" y1="0" x2="${X(temp.value)}" y2="200" stroke="#e6e7e8" stroke-dasharray="3 4" opacity=".5"/>
+        <circle cx="${X(temp.value)}" cy="${Y(now)}" r="4" fill="#e6e7e8"/>
+        <text x="${Math.min(X(temp.value) + 6, 320)}" y="${Y(now) - 8}" font-family="Cascadia Mono, Consolas, monospace" font-size="10" fill="#e6e7e8">now ${Math.round(temp.value)}° · ${Math.round(now)}%</text>` : ''}
+        <g font-family="Cascadia Mono, Consolas, monospace" font-size="9" fill="#6c7177">${[20, 40, 60, 80, 100].map((t) => `<text x="${X(t)}" y="216" text-anchor="middle">${t}°</text>`).join('')}
+        <text x="-8" y="3" text-anchor="end">100%</text><text x="-8" y="103" text-anchor="end">50%</text><text x="-8" y="203" text-anchor="end">0%</text></g>`;
+      const c = ST.controls.find((x) => x.id === this.sel);
+      if (c) $('#c-sub').textContent = temp ? `follows ${temp.name} · now ${Math.round(temp.value)}°C` : 'pick a sensor to follow';
     },
     bindCurve() {
-      const svg = $('#c-svg');
-      const f = this.edit;
+      const svg = $('#c-svg'), f = this.edit;
       const toData = (e) => {
         const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
         const q = p.matrixTransform(svg.getScreenCTM().inverse());
@@ -287,24 +318,58 @@ const pages = {
       svg.onpointerdown = (e) => { if (e.target.classList.contains('pt') && e.button === 0) { drag = +e.target.dataset.i; svg.setPointerCapture(e.pointerId); } };
       svg.onpointermove = (e) => { if (drag == null) return; f.points[drag] = toData(e); this.drawCurve(); };
       svg.onpointerup = () => { if (drag != null) { drag = null; f.points.sort((a, b) => a[0] - b[0]); this.drawCurve(); this.dirty(); } };
-      svg.ondblclick = (e) => { f.points.push(toData(e)); f.points.sort((a, b) => a[0] - b[0]); this.drawCurve(); this.dirty(); };
-      svg.oncontextmenu = (e) => {
-        e.preventDefault();
-        if (e.target.classList.contains('pt') && f.points.length > 2) { f.points.splice(+e.target.dataset.i, 1); this.drawCurve(); this.dirty(); }
-      };
+      svg.ondblclick = (e) => { if (f.points.length < 16) { f.points.push(toData(e)); f.points.sort((a, b) => a[0] - b[0]); this.drawCurve(); this.dirty(); } };
+      svg.oncontextmenu = (e) => { e.preventDefault(); if (e.target.classList.contains('pt') && f.points.length > 2) { f.points.splice(+e.target.dataset.i, 1); this.drawCurve(); this.dirty(); } };
     },
     live() {
-      const box = $('#c-cards'); if (!box) return;
+      const box = $('#c-list'); if (!box) return;
       $('#c-unclean').hidden = !ST.sensors.unclean;
       box.innerHTML = ST.controls.map((c) => {
         const f = S.fans[c.id];
-        const mode = !f || f.mode === 'bios' ? (c.ours ? 'held 100% until reboot' : 'bios') : f.mode === 'fixed' ? `fixed ${f.fixed}%` : 'curve';
-        return `<button class="fancard" data-id="${esc(c.id)}" aria-pressed="${c.id === this.sel}"><span class="row" style="width:100%"><span class="grow">${esc(fanName(c))}</span><span class="lbl">${esc(c.hw)}</span></span>
-          <span class="big">${fanRpm(c) ?? '-'}<span style="font-size:12px;color:var(--mute)"> rpm</span></span><span class="lbl">${Math.round(c.value)}% · ${mode}</span></button>`;
+        const mode = !f || f.mode === 'bios' ? (c.ours ? 'held 100% until reboot' : 'BIOS') : f.mode === 'fixed' ? `Fixed ${f.fixed}%` : 'Curve';
+        return `<button class="fan" data-id="${esc(c.id)}" aria-pressed="${c.id === this.sel}"><span>${esc(fanName(c))}</span><span class="mono">${fanRpm(c) ?? '-'} rpm</span><span class="m">${mode} · ${Math.round(c.value)}%</span></button>`;
       }).join('');
-      box.onclick = (e) => { const b = e.target.closest('.fancard'); if (b && b.dataset.id !== this.sel) { this.sel = b.dataset.id; this.edit = null; this.build(); this.live(); } };
       if ($('#c-svg') && !document.querySelector('#c-svg:active')) this.drawCurve();
     },
+  },
+
+  system: {
+    build() {
+      main.innerHTML = `<div class="hd"><h1>System</h1><span class="sub">Live readings from LibreHardwareMonitor. The line is the last minute.</span></div>
+      <div class="grid c4" id="y-tiles"></div>
+      <div class="g"><details id="y-all"><summary class="lbl">all sensors</summary><table class="sensors" id="y-tbl"></table></details></div>`;
+      $('#y-all').ontoggle = () => this.live();
+    },
+    live() {
+      const T = [['CPU temperature', cpuTemp(), '°C', 100], ['CPU load', cpuLoad(), '%', 100], ['GPU temperature', gpuTemp(), '°C', 100], ['GPU load', gpuLoad(), '%', 100], ['GPU clock', gpuClock(), 'MHz', 0], ['Memory', memLoad(), '%', 100]];
+      $('#y-tiles').innerHTML = T.map(([l, s, u, top]) => `<div class="g" style="padding:14px"><span class="lbl">${l}</span><div class="mono" style="font-size:26px;margin:8px 0 6px">${val(s)}<small style="font-size:12px;color:var(--soft);margin-left:3px">${u}</small></div><div class="sub" style="font-size:11.5px;margin-bottom:4px">${s ? esc(s.hwName) : 'no reading'}</div>${spark(s && s.id, top)}</div>`).join('');
+      if ($('#y-all').open) $('#y-tbl').innerHTML = sensors().map((s) => `<tr><td class="lbl">${esc(s.hwName)}</td><td>${esc(s.name)}</td><td class="lbl">${esc(s.type)}</td><td>${Number(s.value).toFixed(1)}</td></tr>`).join('');
+    },
+  },
+
+  settings: {
+    build() {
+      const tg = (id, on, label) => `<button class="tg" id="${id}" aria-pressed="${on}" aria-label="${label}"></button>`;
+      main.innerHTML = `<div class="hd"><h1>Settings</h1></div>
+      <div class="grid c2" style="align-items:start">
+        <div class="g" style="padding:6px 16px"><div class="set">
+          <div><span class="t"><span>Conflict check</span><span>Asks to close NZXT CAM and SteelSeries when they hold the same devices</span></span>${tg('s-conf', S.closeConflicts !== false, 'Conflict check')}</div>
+          <div><span class="t"><span>Glass background</span><span>Windows 11 acrylic behind the window</span></span>${tg('s-glass', S.glass !== false, 'Glass background')}</div>
+          <div><span class="t"><span>Apex guard</span><span>Always on. Hands lights and fans back while Apex or Easy Anti-Cheat runs.</span></span><button class="tg" aria-pressed="true" disabled aria-label="Apex guard, always on" style="opacity:.45;cursor:default"></button></div>
+        </div></div>
+        <div class="g" style="padding:6px 16px"><div class="set">
+          <div><span class="t"><span>OpenRGB server</span><span>127.0.0.1 : 6742</span></span><span class="mono sub" id="s-orgb"></span></div>
+          <div><span class="t"><span>Sensors</span><span>LibreHardwareMonitor sidecar</span></span><span class="mono sub" id="s-sens"></span></div>
+          <div><span class="t"><span>Fan floor</span><span>No fan goes below this</span></span><span class="mono">${FLOOR}%</span></div>
+          <div><span class="t"><span>Log file</span><span>%APPDATA%\\KelvinRGB\\log.txt, reset each launch</span></span><button class="btn" id="s-log">Open</button></div>
+        </div></div>
+      </div>`;
+      const flip = (b) => { const v = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', v); return v; };
+      $('#s-conf').onclick = (e) => { S.closeConflicts = flip(e.currentTarget); rgb.closeConflicts(S.closeConflicts); };
+      $('#s-glass').onclick = (e) => { S.glass = flip(e.currentTarget); rgb.glass(S.glass); applyGlass(); };
+      $('#s-log').onclick = () => rgb.openLog();
+    },
+    live() { $('#s-orgb').textContent = ST.openrgb.msg; $('#s-sens').textContent = ST.sensors.msg; },
   },
 };
 
@@ -321,19 +386,22 @@ function curve(points, temp, shape) {
     return d0 + (d1 - d0) * k;
   }
 }
-function sensorById(id) { return sensors().find((s) => s.id === id) || null; }
 
 // ---------- chrome ----------
+function applyGlass() { document.documentElement.classList.toggle('flat', S.glass === false); }
 function setLighting(patch, rebuild = true) {
   Object.assign(S.lighting, patch);
   rgb.lighting(patch);
   footer();
-  if (rebuild && page === 'lighting') { pages.lighting.build(); pages.lighting.live(); }
+  if (page === 'lighting') { if (rebuild) pages.lighting.paint(); if (ST) pages.lighting.live(); }
 }
 function footer() {
   const L = S.lighting;
-  $('#ft-swatch').style.background = L.effect === 'off' || !L.on ? '#2a2c2f' : L.color;
-  $('#ft-effect').textContent = EFFECTS.find((e) => e[0] === L.effect)[1];
+  const c = lightsOn() ? L.color : '#1b1c1e';
+  $('#ft-swatch').style.background = c;
+  document.documentElement.style.setProperty('--glow', L.effect === 'spectrum' && L.on ? '#8a5cff' : c);
+  document.documentElement.classList.toggle('dark-lights', !lightsOn());
+  $('#ft-effect').textContent = L.on ? EFFECTS.find((e) => e[0] === L.effect)[1] : 'Lights off';
   $('#ft-sub').textContent = `${L.color} · all devices`;
   $('#ft-power').setAttribute('aria-pressed', L.on);
   $('#ft-bright').value = L.brightness;
@@ -341,28 +409,21 @@ function footer() {
 }
 $('#ft-power').onclick = () => setLighting({ on: !S.lighting.on });
 $('#ft-bright').oninput = (e) => setLighting({ brightness: +e.target.value }, false);
-
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-help]');
-  if (!b) return;
-  const p = document.getElementById(b.dataset.help);
-  p.hidden = !p.hidden;
-  b.setAttribute('aria-expanded', !p.hidden);
-});
 $$('nav [data-page]').forEach((b) => (b.onclick = () => go(b.dataset.page)));
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
 
 function go(p) {
+  if (!pages[p]) return;
   page = p;
   $$('nav [data-page]').forEach((b) => (b.dataset.page === p ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   pages[p].build();
   if (ST) pages[p].live();
 }
 
-// In-app conflict list: main sends state.conflicts and flips each row's running flag as apps close.
+// ---------- conflict prompt: main sends state.conflicts and flips each row's running flag as apps close ----------
 let cfLast = '';
 let audio;
-// Soft two-note chime when a row turns green: rising fifth (E6 then B6), bell-like decay.
-function tick() {
+function tick() { // soft two-note chime when a row turns green
   audio ||= new AudioContext();
   const t0 = audio.currentTime;
   [[1318.5, 0], [1975.5, 0.11]].forEach(([f, d]) => {
@@ -372,8 +433,7 @@ function tick() {
     g.gain.exponentialRampToValueAtTime(0.14, t + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
     o.connect(g).connect(audio.destination);
-    o.start(t);
-    o.stop(t + 0.5);
+    o.start(t); o.stop(t + 0.5);
   });
 }
 function conflicts(c) {
@@ -395,7 +455,7 @@ function conflicts(c) {
       : '<span class="lbl state">close it yourself</span>'}</li>`).join('');
   const done = $('#cf-done');
   done.textContent = left ? 'Continue anyway' : 'Continue';
-  done.classList.toggle('primary', !left);
+  done.classList.toggle('p', !left);
   el.hidden = false;
   if (opening || !left) ($('#cf-list [data-close]') || done).focus();
 }
@@ -403,6 +463,10 @@ $('#cf-list').onclick = (e) => { const b = e.target.closest('[data-close]'); if 
 $('#cf-done').onclick = () => rgb.conflictDone();
 document.addEventListener('keydown', (e) => { if (cfLast && e.key === 'Escape') rgb.conflictDone(); });
 
+function health(id, ok, warn, text) {
+  $(`#${id}`).textContent = text;
+  $(`#${id}-d`).className = 'dot ' + (ok ? 'ok' : warn ? 'warn' : 'bad');
+}
 function onState(s) {
   conflicts(s.conflicts);
   const devicesChanged = !ST || ST.devices.map((d) => d.key).join() !== s.devices.map((d) => d.key).join();
@@ -413,17 +477,17 @@ function onState(s) {
     h.push(sn.value); if (h.length > 60) h.shift();
     history.set(sn.id, h);
   }
-  $('#st-openrgb').textContent = s.openrgb.msg;
-  $('#st-sensors').textContent = s.sensors.msg;
-  $('#st-guard').textContent = s.guard ? 'active' : 'idle';
-  if ((page === 'devices' && devicesChanged) || (page === 'cooling' && fansChanged)) pages[page].build();
+  health('st-openrgb', s.openrgb.ok, !s.guard, `OpenRGB ${s.openrgb.ok ? 'connected' : s.openrgb.msg}`);
+  health('st-sensors', s.sensors.ok, true, `Sensors ${s.sensors.ok ? 'live' : s.sensors.msg}`);
+  health('st-guard', !s.guard, s.guard, s.guard ? 'Apex guard active' : 'Apex guard idle');
+  if ((page === 'devices' && devicesChanged) || (page === 'fans' && fansChanged)) pages[page].build();
   pages[page].live();
 }
 
 rgb.get().then((r) => {
+  if (!r) return;
   S = r.settings; FLOOR = r.floor;
-  $('#st-conflicts').checked = S.closeConflicts !== false;
-  $('#st-conflicts').onchange = (e) => { S.closeConflicts = e.target.checked; rgb.closeConflicts(e.target.checked); };
+  applyGlass();
   footer();
   go(page);
   onState(r.state);

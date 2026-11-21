@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 256 256">
+<defs>
+<linearGradient id="kg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#ff8a3d"/><stop offset=".5" stop-color="#fff4e6"/><stop offset="1" stop-color="#8fd3e0"/></linearGradient>
+<linearGradient id="kb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2e33"/><stop offset="1" stop-color="#0a0b0c"/></linearGradient>
+<linearGradient id="ks" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".05"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="kc"><path d="M128 8C30 8 8 30 8 128s22 120 120 120 120-22 120-120S226 8 128 8Z"/></clipPath>
+<filter id="kf" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+</defs>
+<g clip-path="url(#kc)">
+<rect width="256" height="256" fill="url(#kb)"/>
+<circle cx="128" cy="128" r="62" fill="none" stroke="url(#kg)" stroke-width="34" opacity=".22" filter="url(#kf)"/>
+<circle cx="128" cy="128" r="62" fill="none" stroke="url(#kg)" stroke-width="28"/>
+<rect width="256" height="128" fill="url(#ks)"/>
+</g>
+</svg>

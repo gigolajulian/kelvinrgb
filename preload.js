@@ -1,3 +1,4 @@
+// Sandboxed preload: the page only gets these named calls, never ipcRenderer itself.
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('rgb', {
@@ -11,4 +12,6 @@ contextBridge.exposeInMainWorld('rgb', {
   closeConflicts: (on) => ipcRenderer.send('closeConflicts', on),
   conflictClose: (name) => ipcRenderer.send('conflictClose', name),
   conflictDone: () => ipcRenderer.send('conflictDone'),
+  glass: (on) => ipcRenderer.send('glass', on),
+  openLog: () => ipcRenderer.send('openLog'),
 });

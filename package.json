@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "build:sidecar": "powershell -ExecutionPolicy Bypass -File sidecar/build.ps1",
-    "test": "node --test test/math.test.js test/conflicts.test.js",
+    "test": "node --test test/math.test.js test/conflicts.test.js test/validate.test.js",
     "postinstall": "node scripts/patch-sdk.js",
     "dist": "npm run build:sidecar && electron-builder --win nsis"
   },
@@ -42,7 +42,8 @@
     ],
     "win": {
       "target": "nsis",
-      "requestedExecutionLevel": "requireAdministrator"
+      "requestedExecutionLevel": "requireAdministrator",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,

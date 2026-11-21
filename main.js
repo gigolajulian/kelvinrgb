@@ -1,5 +1,5 @@
 // KelvinRGB: one window for lighting (OpenRGB SDK), sensors and fans (LibreHardwareMonitor sidecar).
-const { app, BrowserWindow, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, session, shell } = require('electron');
 const { spawn, execFile, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -7,18 +7,27 @@ const readline = require('node:readline');
 const { Client } = require('openrgb-sdk');
 const M = require('./lib/math');
 const C = require('./lib/conflicts');
+const V = require('./lib/validate');
 
 const FLOOR = 25;
 const GUARD_PROCS = ['r5apex.exe', 'r5apex_dx12.exe', 'easyanticheat.exe', 'easyanticheat_eos.exe'];
-const OPENRGB_EXE = ['C:\\Program Files\\OpenRGB\\OpenRGB.exe', path.join(process.env.LOCALAPPDATA || '', 'Programs', 'OpenRGB', 'OpenRGB.exe')];
+// Only the admin-owned install: an elevated app must never launch an exe from a user-writable folder.
+const OPENRGB_EXE = [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'OpenRGB', 'OpenRGB.exe')];
+// System tools by absolute path, so a planted tasklist.exe can't run elevated.
+const SYS = (exe) => path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', exe);
+const DEV = !app.isPackaged; // dev switches (RGB_*) only work from source
+
+// One copy only: two elevated instances would fight over the fan headers.
+if (!app.requestSingleInstanceLock()) app.exit(0);
 
 // LibreHardwareMonitor and OpenRGB need admin to reach SMBus / Super I/O. Relaunch elevated once.
 function isAdmin() {
-  try { execFileSync('net', ['session'], { stdio: 'ignore' }); return true; } catch { return false; }
+  try { execFileSync(SYS('net.exe'), ['session'], { stdio: 'ignore' }); return true; } catch { return false; }
 }
-if (!isAdmin() && !process.env.RGB_NO_ELEVATE) {
-  const ps = `Start-Process -FilePath '${process.execPath}' -ArgumentList '"${app.getAppPath()}"' -WorkingDirectory '${app.getAppPath()}' -Verb RunAs`;
-  spawn('powershell', ['-NoProfile', '-Command', ps], { detached: true, stdio: 'ignore' }).unref();
+if (!isAdmin() && !(DEV && process.env.RGB_NO_ELEVATE)) {
+  const q = (s) => s.replace(/'/g, "''"); // PowerShell single-quote escape
+  const ps = `Start-Process -FilePath '${q(process.execPath)}' -ArgumentList '"${q(app.getAppPath())}"' -WorkingDirectory '${q(app.getAppPath())}' -Verb RunAs`;
+  spawn(SYS('WindowsPowerShell\\v1.0\\powershell.exe'), ['-NoProfile', '-Command', ps], { detached: true, stdio: 'ignore' }).unref();
   app.exit(0);
 }
 
@@ -29,9 +38,10 @@ const DEFAULTS = {
   devices: {}, // key -> { brightness, gain: [r,g,b], gamma }
   fans: {},    // control id -> { mode: bios|curve|fixed, sensor, points, shape, fixed }
   closeConflicts: true, // show the conflict list when RGB apps that fight us run (lib/conflicts.js)
+  glass: true, // Windows 11 acrylic behind the window
 };
 let settings = structuredClone(DEFAULTS);
-try { settings = { ...settings, ...JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')) }; } catch (e) { console.log(`settings: ${e.message}`); }
+try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
 let saveTimer;
 function save() {
   clearTimeout(saveTimer);
@@ -130,6 +140,18 @@ function render() {
         : M.frame(L.effect, base, t, L.speed, i, d.leds);
       colors.push(M.tune(c, dev, flashing ? 1 : bright));
     }
+    // Per-zone colour overrides paint that zone's LEDs a fixed colour instead of the effect.
+    if (dev.zones && !flashing) {
+      let start = 0;
+      d.zones.forEach((z, zi) => {
+        const hex = dev.zones[zi];
+        if (hex) { const rgb = M.hexToRgb(hex); for (let i = start; i < start + z.leds && i < colors.length; i++) colors[i] = M.tune(rgb, dev, bright); }
+        start += z.leds;
+      });
+    }
+    // Wraith Prism fan blade: only its blue input works (red + green stay on as warm yellow), so blue sets yellow..white.
+    // Measured 2026-11-20: visible from ~192, midpoint ~224, white from ~240. See HANDOFF.
+    if (d.name === 'AMD Wraith Prism' && !flashing && colors[1]) colors[1] = { red: 255, green: 255, blue: L.on ? (dev.fanWhite ?? 240) : 0 };
     // Wraith Prism fan blade: only its blue input works (red + green stay on as warm yellow), so blue sets yellow..white.
     // Measured 2026-11-20: visible from ~192, midpoint ~224, white from ~240. See HANDOFF.
     if (d.name === 'AMD Wraith Prism' && !flashing && colors[1]) colors[1] = { red: 255, green: 255, blue: L.on ? (dev.fanWhite ?? 240) : 0 };
@@ -211,7 +233,7 @@ setInterval(() => send({ cmd: 'ping' }), 1000); // keeps the sidecar watchdog fe
 
 // ---------- Apex / Easy Anti-Cheat guard ----------
 function checkGuard() {
-  execFile('tasklist', ['/FO', 'CSV', '/NH'], { windowsHide: true }, async (err, out) => {
+  execFile(SYS('tasklist.exe'), ['/FO', 'CSV', '/NH'], { windowsHide: true }, async (err, out) => {
     if (err) return;
     const names = out.toLowerCase();
     const active = GUARD_PROCS.some((p) => names.includes(`"${p}"`));
@@ -267,7 +289,7 @@ function handleConflicts(tasklistCsv) {
 }
 function stopConflictService(name) {
   const svc = C.service(name);
-  execFile('sc', ['stop', svc], { windowsHide: true }, (err, stdout) => {
+  execFile(SYS('sc.exe'), ['stop', svc], { windowsHide: true }, (err, stdout) => {
     if (err && !/1062/.test(stdout)) { // 1062 = already stopped
       log(`conflicts: sc stop ${svc} failed: ${stdout.trim() || err.message}`);
       const c = state.conflicts?.find((x) => x.name === name);
@@ -282,7 +304,7 @@ function closeConflict(name) {
   if (!C.closable(name)) return; // only the known list, never SignalRGB / OpenRGB / services
   const pids = lastProcs.filter((p) => p.name.toLowerCase() === name.toLowerCase()).map((p) => String(p.pid));
   if (!pids.length) return checkGuard();
-  execFile('taskkill', ['/F', '/T', ...pids.flatMap((p) => ['/PID', p])], { windowsHide: true }, (err, stdout, stderr) => {
+  execFile(SYS('taskkill.exe'), ['/F', '/T', ...pids.flatMap((p) => ['/PID', p])], { windowsHide: true }, (err, stdout, stderr) => {
     if (err && !/SUCCESS/i.test(stdout)) log(`conflicts: taskkill ${name} failed: ${(stderr || err.message).trim()}`);
     else notify(C.message([name]));
     checkGuard(); // re-read the process list now so the row turns green without waiting for the poll
@@ -299,29 +321,56 @@ function finishConflicts() {
 }
 
 // ---------- IPC ----------
-ipcMain.handle('get', () => ({ settings, state, floor: FLOOR }));
-ipcMain.on('lighting', (_e, patch) => { Object.assign(settings.lighting, patch); save(); startRender(); });
-ipcMain.on('device', (_e, key, patch) => { settings.devices[key] = { ...settings.devices[key], ...patch }; save(); render(); });
-ipcMain.on('identify', (_e, key) => { identify.set(key, Date.now() + 2000); startRender(); });
-ipcMain.on('fan', (_e, id, cfg) => { settings.fans[id] = cfg; save(); driveFans(); });
-ipcMain.on('closeConflicts', (_e, on) => { settings.closeConflicts = on; save(); declined.clear(); log(`conflicts: check ${on ? 'on' : 'off'}`); });
-ipcMain.on('conflictClose', (_e, name) => closeConflict(String(name)));
-ipcMain.on('conflictDone', finishConflicts);
-ipcMain.on('rescan', async () => { if (client) { client.requestRescan(); setTimeout(() => loadDevices().catch((e) => log(e.message)), 3000); } });
+// Main runs elevated, so every message is checked: it must come from our own page, and its data goes through lib/validate.
+const PAGE = new URL('file:///' + path.join(__dirname, 'renderer', 'index.html').replace(/\\/g, '/')).href.toLowerCase();
+const ours = (e) => !!win && e.sender === win.webContents && (e.senderFrame?.url || '').split('#')[0].toLowerCase() === PAGE;
+const on = (ch, fn) => ipcMain.on(ch, (e, ...a) => { if (ours(e)) fn(...a); else log(`ipc: dropped ${ch}`); });
+const hasDevice = (k) => state.devices.some((d) => d.key === k);
+const hasFan = (id) => state.controls.some((c) => c.id === id);
+ipcMain.handle('get', (e) => (ours(e) ? { settings, state, floor: FLOOR } : null));
+on('lighting', (patch) => { const p = V.lighting(patch); if (!p) return; Object.assign(settings.lighting, p); save(); startRender(); });
+on('device', (key, patch) => {
+  const p = V.device(patch); if (!p || !hasDevice(key)) return;
+  const cur = settings.devices[key] || {};
+  if (p.zones) { p.zones = { ...cur.zones, ...p.zones }; for (const z in p.zones) if (!p.zones[z]) delete p.zones[z]; }
+  settings.devices[key] = { ...cur, ...p }; save(); render();
+});
+on('identify', (key) => { if (hasDevice(key)) { identify.set(key, Date.now() + 2000); startRender(); } });
+on('fan', (id, cfg) => { const f = V.fan(cfg, FLOOR); if (f && hasFan(id)) { settings.fans[id] = f; save(); driveFans(); } });
+on('closeConflicts', (v) => { settings.closeConflicts = v === true; save(); declined.clear(); log(`conflicts: check ${settings.closeConflicts ? 'on' : 'off'}`); });
+on('conflictClose', (name) => { if (state.conflicts?.some((c) => c.name === name)) closeConflict(name); });
+on('conflictDone', finishConflicts);
+on('rescan', () => { if (client) { client.requestRescan(); setTimeout(() => loadDevices().catch((e) => log(e.message)), 3000); } });
+on('glass', (v) => { settings.glass = v === true; save(); applyGlass(); });
+on('openLog', () => shell.openPath(logFile)); // fixed path, nothing taken from the renderer
+function applyGlass() { if (win && process.platform === 'win32') win.setBackgroundMaterial(settings.glass ? 'acrylic' : 'none'); }
 
 // ---------- app ----------
 // Windows toasts need an AppUserModelID; in dev it must point at electron.exe.
 app.setAppUserModelId(app.isPackaged ? 'com.juliangigola.kelvinrgb' : process.execPath);
 app.whenReady().then(() => {
+  // Deny anything a page could ask for (camera, mic, clipboard reads, ...).
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
   win = new BrowserWindow({
-    width: 1360, height: 880, minWidth: 900, minHeight: 600, backgroundColor: '#0d0e0f', autoHideMenuBar: true, title: 'KelvinRGB',
-    // Screenshot mode runs behind other windows, where Chromium would otherwise stop painting.
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: !process.env.RGB_SHOT },
+    width: 1360, height: 880, minWidth: 900, minHeight: 600, autoHideMenuBar: true, title: 'KelvinRGB',
+    icon: path.join(__dirname, 'renderer', 'icon.png'),
+    backgroundColor: '#00000000', backgroundMaterial: settings.glass ? 'acrylic' : 'none', // transparent so acrylic shows through
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, spellcheck: false,
+      // Screenshot mode runs behind other windows, where Chromium would otherwise stop painting.
+      backgroundThrottling: !(DEV && process.env.RGB_SHOT),
+    },
   });
+  // The window only ever shows our own file: no navigation, no popups.
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.on('will-redirect', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  app.on('second-instance', () => { if (win.isMinimized()) win.restore(); win.focus(); });
   // Dev aid: RGB_SHOT=<folder> writes fans.txt and a screenshot of each page, starting at 10 s.
-  if (process.env.RGB_SHOT) setTimeout(async () => {
-    for (const p of ['monitoring', 'lighting', 'devices', 'cooling']) {
+  if (DEV && process.env.RGB_SHOT) setTimeout(async () => {
+    for (const p of ['home', 'lighting', 'devices', 'fans', 'system', 'settings']) {
       await win.webContents.executeJavaScript(`go(${JSON.stringify(p)})`);
       await new Promise((r) => setTimeout(r, 1500));
       fs.writeFileSync(path.join(process.env.RGB_SHOT, `${p}.png`), (await win.webContents.capturePage()).toPNG());
