@@ -498,6 +498,7 @@ const updater = U.create({
   quit: () => app.quit(),
 });
 state.update = { ...updater.view(), kind: 'idle' };
+if (app.isPackaged) U.sweep(path.join(process.env.SystemRoot || 'C:\\Windows', 'Temp')); // installers left from the last update
 function updateItem() { const v = updater.view(); return { label: v.text, enabled: !!v.action, click: () => (v.action === 'install' ? updater.install() : updater.check(true)) }; }
 
 // ---------- start with Windows ----------
