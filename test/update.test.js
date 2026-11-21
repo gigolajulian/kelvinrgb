@@ -61,3 +61,18 @@ test('sweep removes only our leftover installers', () => {
   assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['KelvinRGB-notes.exe', 'other.exe']);
   fs.rmSync(dir, { recursive: true });
 });
+
+test('up to date still offers a check, then finds a later release', async () => {
+  const real = global.fetch;
+  const rel = (v) => ({ status: 200, ok: true, json: async () => ({ tag_name: `v${v}`, assets: [{ name: `KelvinRGB.Setup.${v}.exe`, size: 1, browser_download_url: 'https://github.com/x', digest: `sha256:${'a'.repeat(64)}` }] }) });
+  try {
+    const u = U.create({ version: '1.1.1', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
+    global.fetch = async () => rel('1.1.1');
+    await u.check(true);
+    assert.strictEqual(u.state.kind, 'current');
+    assert.strictEqual(u.view().action, 'check');
+    global.fetch = async () => rel('1.1.3');
+    await u.check(true);
+    assert.strictEqual(u.view().action, 'install');
+  } finally { global.fetch = real; }
+});
