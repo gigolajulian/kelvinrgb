@@ -355,7 +355,53 @@ function go(p) {
   if (ST) pages[p].live();
 }
 
+// In-app conflict list: main sends state.conflicts and flips each row's running flag as apps close.
+let cfLast = '';
+let audio;
+// Soft two-note chime when a row turns green: rising fifth (E6 then B6), bell-like decay.
+function tick() {
+  audio ||= new AudioContext();
+  const t0 = audio.currentTime;
+  [[1318.5, 0], [1975.5, 0.11]].forEach(([f, d]) => {
+    const t = t0 + d, o = audio.createOscillator(), g = audio.createGain();
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.14, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    o.connect(g).connect(audio.destination);
+    o.start(t);
+    o.stop(t + 0.5);
+  });
+}
+function conflicts(c) {
+  const el = $('#conflicts');
+  if (!c) { el.hidden = true; cfLast = ''; return; }
+  const key = JSON.stringify(c);
+  if (key === cfLast) return;
+  const opening = !cfLast;
+  const was = opening ? [] : JSON.parse(cfLast);
+  if (c.some((x) => !x.running && was.find((w) => w.name === x.name)?.running)) tick();
+  cfLast = key;
+  const left = c.filter((x) => x.running).length;
+  $('#cf-count').textContent = left ? `conflicts · ${left} of ${c.length} running` : `conflicts · all ${c.length} closed`;
+  $('#cf-list').innerHTML = c.map((x) => `<li class="${x.running ? 'on' : 'off'}"><span class="dot"></span>
+    <span class="grow">${esc(x.label)}<small>${esc(x.note)}</small></span>
+    ${!x.running ? '<span class="lbl state">closed</span>'
+      : x.closable ? `<button class="btn" data-close="${esc(x.name)}">Close</button>`
+      : x.service ? `<button class="btn" data-close="${esc(x.name)}">Stop service</button>`
+      : '<span class="lbl state">close it yourself</span>'}</li>`).join('');
+  const done = $('#cf-done');
+  done.textContent = left ? 'Continue anyway' : 'Continue';
+  done.classList.toggle('primary', !left);
+  el.hidden = false;
+  if (opening || !left) ($('#cf-list [data-close]') || done).focus();
+}
+$('#cf-list').onclick = (e) => { const b = e.target.closest('[data-close]'); if (b) { b.disabled = true; b.textContent = 'Closing'; rgb.conflictClose(b.dataset.close); } };
+$('#cf-done').onclick = () => rgb.conflictDone();
+document.addEventListener('keydown', (e) => { if (cfLast && e.key === 'Escape') rgb.conflictDone(); });
+
 function onState(s) {
+  conflicts(s.conflicts);
   const devicesChanged = !ST || ST.devices.map((d) => d.key).join() !== s.devices.map((d) => d.key).join();
   const fansChanged = !ST || ST.controls.map((c) => c.id).join() !== s.controls.map((c) => c.id).join();
   ST = s;
@@ -373,6 +419,8 @@ function onState(s) {
 
 rgb.get().then((r) => {
   S = r.settings; FLOOR = r.floor;
+  $('#st-conflicts').checked = S.closeConflicts !== false;
+  $('#st-conflicts').onchange = (e) => { S.closeConflicts = e.target.checked; rgb.closeConflicts(e.target.checked); };
   footer();
   go(page);
   onState(r.state);

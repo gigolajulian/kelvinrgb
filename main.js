@@ -1,11 +1,12 @@
 // KelvinRGB: one window for lighting (OpenRGB SDK), sensors and fans (LibreHardwareMonitor sidecar).
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const { spawn, execFile, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const readline = require('node:readline');
 const { Client } = require('openrgb-sdk');
 const M = require('./lib/math');
+const C = require('./lib/conflicts');
 
 const FLOOR = 25;
 const GUARD_PROCS = ['r5apex.exe', 'r5apex_dx12.exe', 'easyanticheat.exe', 'easyanticheat_eos.exe'];
@@ -27,6 +28,7 @@ const DEFAULTS = {
   lighting: { effect: 'static', color: '#c8323c', speed: 40, brightness: 80, on: true },
   devices: {}, // key -> { brightness, gain: [r,g,b], gamma }
   fans: {},    // control id -> { mode: bios|curve|fixed, sensor, points, shape, fixed }
+  closeConflicts: true, // show the conflict list when RGB apps that fight us run (lib/conflicts.js)
 };
 let settings = structuredClone(DEFAULTS);
 try { settings = { ...settings, ...JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')) }; } catch (e) { console.log(`settings: ${e.message}`); }
@@ -41,6 +43,7 @@ const state = {
   openrgb: { ok: false, msg: 'connecting' },
   sensors: { ok: false, msg: 'starting', admin: isAdmin(), unclean: false },
   guard: false,
+  conflicts: null, // [{ name, label, note, closable, service, running }] while the in-app prompt is open
   devices: [], // { key, id, name, type, leds, zones: [{name, leds}] }
   hw: [],
   controls: [],
@@ -66,8 +69,9 @@ const identify = new Map(); // device key -> until (ms)
 function findOpenRgb() { return OPENRGB_EXE.find((p) => fs.existsSync(p)); }
 
 let launchedOpenRgb = false;
+let started = false; // set once the startup conflict prompt is answered
 async function connectOpenRgb() {
-  if (client || state.guard) return;
+  if (client || state.guard || !started) return;
   const c = new Client('KelvinRGB', 6742, '127.0.0.1');
   try {
     await c.connect(1500);
@@ -138,7 +142,7 @@ let sidecarStopping = false;
 const SIDECAR = path.join(app.isPackaged ? process.resourcesPath : __dirname, 'sidecar', 'sidecar.exe');
 
 function startSidecar() {
-  if (sidecar || state.guard) return;
+  if (sidecar || state.guard || !started) return;
   if (!fs.existsSync(SIDECAR)) { state.sensors = { ...state.sensors, ok: false, msg: 'run npm run build:sidecar' }; push(); return; }
   sidecarStopping = false;
   const p = spawn(SIDECAR, ['--floor', String(FLOOR)], { cwd: path.dirname(SIDECAR), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
@@ -208,6 +212,7 @@ function checkGuard() {
     if (err) return;
     const names = out.toLowerCase();
     const active = GUARD_PROCS.some((p) => names.includes(`"${p}"`));
+    if (active) firstCheckDone(); else handleConflicts(out); // never prompt or kill while the game runs
     if (active === state.guard) return;
     state.guard = active;
     if (active) {
@@ -226,15 +231,84 @@ function checkGuard() {
   });
 }
 
+// ---------- conflicting RGB apps (like SignalRGB's ConflictMitigator) ----------
+const declined = new Set(); // names left running after "Continue" this session
+let lastProcs = [];
+let firstCheckDone;
+const firstCheck = new Promise((r) => { firstCheckDone = r; });
+function notify(body) {
+  log(`conflicts: ${body}`);
+  if (!Notification.isSupported()) return log('conflicts: notifications not supported');
+  const n = new Notification({ title: 'KelvinRGB', body, silent: true }); // no Windows chime: the row turning green is the feedback
+  n.on('failed', (_e, err) => log(`conflicts: toast failed: ${err}`));
+  n.show();
+}
+// Shows conflicting apps in the window (red = running, green = closed). Hardware waits for "Continue" at startup.
+function handleConflicts(tasklistCsv) {
+  lastProcs = C.parse(tasklistCsv);
+  if (state.conflicts) {
+    const running = new Set(lastProcs.map((p) => p.name.toLowerCase()));
+    let changed = false;
+    for (const c of state.conflicts) {
+      const r = running.has(c.name.toLowerCase());
+      if (r !== c.running) { c.running = r; changed = true; }
+    }
+    if (changed) push();
+    return;
+  }
+  if (settings.closeConflicts === false) return firstCheckDone();
+  const names = [...new Set([...C.toClose(lastProcs).map((p) => p.name), ...C.toWarn(lastProcs)])].filter((n) => !declined.has(n.toLowerCase()));
+  if (!names.length) return firstCheckDone();
+  state.conflicts = names.map((n) => ({ name: n, label: C.label(n), note: C.WARN[n] || n, closable: C.closable(n), service: !!C.service(n), running: true }));
+  push();
+}
+function stopConflictService(name) {
+  const svc = C.service(name);
+  execFile('sc', ['stop', svc], { windowsHide: true }, (err, stdout) => {
+    if (err && !/1062/.test(stdout)) { // 1062 = already stopped
+      log(`conflicts: sc stop ${svc} failed: ${stdout.trim() || err.message}`);
+      const c = state.conflicts?.find((x) => x.name === name);
+      if (c) { c.note = 'Could not stop the service. KelvinRGB needs to run as admin.'; c.service = false; push(); }
+    } else notify(`KelvinRGB stopped ${svc} until the next restart.`);
+    setTimeout(checkGuard, 1500); // the service process takes a moment to exit
+  });
+}
+function closeConflict(name) {
+  if (state.guard) return;
+  if (C.service(name)) return stopConflictService(name);
+  if (!C.closable(name)) return; // only the known list, never SignalRGB / OpenRGB / services
+  const pids = lastProcs.filter((p) => p.name.toLowerCase() === name.toLowerCase()).map((p) => String(p.pid));
+  if (!pids.length) return checkGuard();
+  execFile('taskkill', ['/F', '/T', ...pids.flatMap((p) => ['/PID', p])], { windowsHide: true }, (err, stdout, stderr) => {
+    if (err && !/SUCCESS/i.test(stdout)) log(`conflicts: taskkill ${name} failed: ${(stderr || err.message).trim()}`);
+    else notify(C.message([name]));
+    checkGuard(); // re-read the process list now so the row turns green without waiting for the poll
+  });
+}
+function finishConflicts() {
+  if (!state.conflicts) return;
+  const left = state.conflicts.filter((c) => c.running).map((c) => c.name);
+  left.forEach((n) => declined.add(n.toLowerCase()));
+  if (left.length) log(`conflicts: left running ${left.join(', ')}`);
+  state.conflicts = null;
+  push();
+  firstCheckDone();
+}
+
 // ---------- IPC ----------
 ipcMain.handle('get', () => ({ settings, state, floor: FLOOR }));
 ipcMain.on('lighting', (_e, patch) => { Object.assign(settings.lighting, patch); save(); startRender(); });
 ipcMain.on('device', (_e, key, patch) => { settings.devices[key] = { ...settings.devices[key], ...patch }; save(); render(); });
 ipcMain.on('identify', (_e, key) => { identify.set(key, Date.now() + 2000); startRender(); });
 ipcMain.on('fan', (_e, id, cfg) => { settings.fans[id] = cfg; save(); driveFans(); });
+ipcMain.on('closeConflicts', (_e, on) => { settings.closeConflicts = on; save(); declined.clear(); log(`conflicts: check ${on ? 'on' : 'off'}`); });
+ipcMain.on('conflictClose', (_e, name) => closeConflict(String(name)));
+ipcMain.on('conflictDone', finishConflicts);
 ipcMain.on('rescan', async () => { if (client) { client.requestRescan(); setTimeout(() => loadDevices().catch((e) => log(e.message)), 3000); } });
 
 // ---------- app ----------
+// Windows toasts need an AppUserModelID; in dev it must point at electron.exe.
+app.setAppUserModelId(app.isPackaged ? 'com.juliangigola.kelvinrgb' : process.execPath);
 app.whenReady().then(() => {
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 900, minHeight: 600, backgroundColor: '#0d0e0f', autoHideMenuBar: true, title: 'KelvinRGB',
@@ -256,8 +330,7 @@ app.whenReady().then(() => {
   checkGuard();
   setInterval(checkGuard, 4000);
   // Give the guard its first look before touching any device.
-  setTimeout(() => { startSidecar(); connectOpenRgb(); }, 1500);
-  setInterval(connectOpenRgb, 3000);
+  setTimeout(() => firstCheck.then(() => { started = true; startSidecar(); connectOpenRgb(); setInterval(connectOpenRgb, 3000); }), 1500);
 });
 
 let quitting = false;

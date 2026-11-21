@@ -8,4 +8,7 @@ contextBridge.exposeInMainWorld('rgb', {
   identify: (key) => ipcRenderer.send('identify', key),
   fan: (id, cfg) => ipcRenderer.send('fan', id, cfg),
   rescan: () => ipcRenderer.send('rescan'),
+  closeConflicts: (on) => ipcRenderer.send('closeConflicts', on),
+  conflictClose: (name) => ipcRenderer.send('conflictClose', name),
+  conflictDone: () => ipcRenderer.send('conflictDone'),
 });

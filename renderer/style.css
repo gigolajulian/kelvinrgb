@@ -2,7 +2,7 @@
   --bg: #0d0e0f; --panel: #121315; --raise: #1a1c1f; --pill: #24272a;
   --line: #222528; --line2: #2c3034; --grid: #1e2124;
   --text: #e4e4e1; --soft: #c9ccce; --mute: #8b9096; --dim: #5c6166;
-  --accent: #8fd3e0;
+  --accent: #8fd3e0; --bad: #e0645c; --good: #5fc48a;
   --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
   --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
 }
@@ -67,3 +67,29 @@ table.sensors td:last-child { text-align: right; font-family: var(--mono); }
 footer { border-top: 1px solid var(--line); padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .round { width: 36px; height: 36px; border-radius: 18px; border: 1px solid var(--line2); background: transparent; display: flex; align-items: center; justify-content: center; }
 .round[aria-pressed=false] { color: var(--dim); }
+nav .status label { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; }
+
+/* conflict prompt */
+.scrim { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(6, 7, 8, .72); backdrop-filter: blur(6px); }
+.scrim[hidden] { display: none; }
+.sheet { width: min(460px, calc(100% - 48px)); background: var(--panel); border: 1px solid var(--line2); border-radius: 8px; padding: 22px; display: flex; flex-direction: column; gap: 10px; animation: sheet-in .18s ease-out; }
+.sheet h2 { margin: 0; font-size: 18px; font-weight: 500; }
+.sheet p { margin: 0 0 6px; font-size: 13px; line-height: 1.5; }
+.sheet ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 6px; }
+.sheet li { display: flex; align-items: center; gap: 12px; padding: 11px 12px; font-size: 13px; }
+.sheet li + li { border-top: 1px solid var(--line); }
+.sheet li small { display: block; margin-top: 2px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.sheet li .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; transition: background-color .25s; }
+.sheet li.on .dot { background: var(--bad); }
+.sheet li.off .dot { background: var(--good); }
+.sheet li.off .state { color: var(--good); }
+.sheet li.on .state { color: var(--bad); }
+.sheet li .btn { padding: 5px 12px; }
+.sheet li .btn:hover { border-color: var(--bad); color: var(--bad); }
+.sheet li .btn:disabled { opacity: .5; cursor: default; }
+.cf-actions { margin-top: 8px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 500; }
+.btn.primary:hover { background: #a6dde8; border-color: #a6dde8; }
+.btn:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
