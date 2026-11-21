@@ -17,9 +17,6 @@ const OPENRGB_EXE = [path.join(process.env.ProgramFiles || 'C:\\Program Files', 
 const SYS = (exe) => path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', exe);
 const DEV = !app.isPackaged; // dev switches (RGB_*) only work from source
 
-// One copy only: two elevated instances would fight over the fan headers.
-if (!app.requestSingleInstanceLock()) app.exit(0);
-
 // LibreHardwareMonitor and OpenRGB need admin to reach SMBus / Super I/O. Relaunch elevated once.
 function isAdmin() {
   try { execFileSync(SYS('net.exe'), ['session'], { stdio: 'ignore' }); return true; } catch { return false; }
@@ -28,6 +25,10 @@ if (!isAdmin() && !(DEV && process.env.RGB_NO_ELEVATE)) {
   const q = (s) => s.replace(/'/g, "''"); // PowerShell single-quote escape
   const ps = `Start-Process -FilePath '${q(process.execPath)}' -ArgumentList '"${q(app.getAppPath())}"' -WorkingDirectory '${q(app.getAppPath())}' -Verb RunAs`;
   spawn(SYS('WindowsPowerShell\\v1.0\\powershell.exe'), ['-NoProfile', '-Command', ps], { detached: true, stdio: 'ignore' }).unref();
+  app.exit(0);
+} else if (!app.requestSingleInstanceLock()) {
+  // One copy only: two elevated instances would fight over the fan headers. Taken after the relaunch,
+  // so the short-lived non-admin parent never holds it.
   app.exit(0);
 }
 
