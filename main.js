@@ -580,6 +580,7 @@ function updateTray(force) {
 const SPLASH_W = 340, SPLASH_H = 440;
 let splash = null, splashStep = 0, splashAt = 0, splashEnding = false, splashTicking = false;
 const splashDone = new Map(); // point (1..4) -> when it finished
+const SPLASH_POINTS = ['game check', 'sensors', 'openrgb', 'lighting'];
 function openSplash() {
   const b = win.getBounds();
   splash = new BrowserWindow({
@@ -598,6 +599,7 @@ function openSplash() {
 function stepSplash(i) {
   if (!splash || splashEnding || splashDone.has(i)) return;
   splashDone.set(i, Date.now());
+  log(`splash: ${SPLASH_POINTS[i - 1]} done at ${((Date.now() - splashAt) / 1000).toFixed(1)}s`);
   advanceSplash();
 }
 // Points tick strictly in order, one at a time so each is seen. One that finished early (OpenRGB is often ready
@@ -612,6 +614,7 @@ function advanceSplash() {
 function endSplash() {
   if (!splash || splashEnding) return;
   splashEnding = true;
+  log(`splash: closing at ${((Date.now() - splashAt) / 1000).toFixed(1)}s, ${splashStep} of 4 points ticked`);
   const wait = Math.max(0, 1600 - (Date.now() - splashAt)); // long enough to read the steps, not a flicker
   setTimeout(() => {
     splash.webContents.executeJavaScript(`done(${splashStep})`).catch(() => {}); // points after splashStep show as skipped
