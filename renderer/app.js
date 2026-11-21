@@ -45,7 +45,6 @@ function cpuClock() { // average of the per-core clocks, MHz
 // What the Drivers page flags, shared so Home and Drivers never disagree.
 function driverSummary() {
   const V = ST.drivers, u = ST.update || {};
-  // same colours as the Drivers page: red counts as missing, orange as an update
   const missing = (V.windows || []).filter((w) => w.tone === 'bad').length + (V.pawnio?.tone === 'bad' ? 1 : 0);
   const ups = [u.kind === 'available', V.openrgb?.tone === 'warn', V.pawnio?.tone === 'warn', ...(V.windows || []).map((w) => w.tone === 'warn')].filter(Boolean).length;
   const text = [missing && `${missing} driver${missing > 1 ? 's' : ''} missing`, ups && `${ups} update${ups > 1 ? 's' : ''}`].filter(Boolean).join(' · ');
@@ -239,13 +238,13 @@ const pages = {
 
       const V = ST.drivers, u = ST.update || {}, d = driverSummary();
       const tag = (v) => String(v || '').replace(/^(release_|v)/i, '').replace(/^(\d+\.\d+\.\d+)\.0$/, '$1');
-      const part = (x) => (x?.act === 'update' ? [`${tag(x.installed)} · ${tag(x.latest)} out`, 'warn'] : x?.installed ? [`${tag(x.installed)} · up to date`, 'ok'] : ['not installed', 'warn']);
-      const win = V.windows || [], wbad = win.filter((w) => w.state !== 'ok' && !w.inboxOk).length, up = u.kind === 'available';
+      const part = (x) => (!x?.installed ? ['not installed', 'bad'] : x.tone === 'warn' || x.tone === 'bad' ? [`${tag(x.installed)} · ${tag(x.latest)} out`, x.tone] : [`${tag(x.installed)} · ${x.tone === 'ok' ? 'up to date' : 'installed'}`, x.tone || 'dim']);
+      const win = V.windows || [], wbad = win.filter((w) => w.tone === 'bad').length, wup = win.filter((w) => w.tone === 'warn').length, up = u.kind === 'available';
       $('#h-drv-at').textContent = d.checking ? 'checking' : `checked ${new Date(V.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
       const head = (t) => `<div class="hh"><span class="lbl">${t}</span></div>`;
       put('#h-drv', !V.at ? line('Reading drivers from Windows', '', 'acc') : [
         head('windows'),
-        line('Drivers', wbad ? `${wbad} of ${win.length} missing` : `${win.length} of ${win.length} in place`, wbad ? 'warn' : 'ok'),
+        line('Drivers', [wbad && `${wbad} missing`, wup && `${wup} update${wup > 1 ? 's' : ''} out`].filter(Boolean).join(' · ') || `${win.length} of ${win.length} in place`, wbad ? 'bad' : wup ? 'warn' : 'ok'),
         line('PawnIO', ...part(V.pawnio)),
         head('kelvinrgb'),
         line('KelvinRGB', up ? `${ST.version} · ${u.v} ready` : `${ST.version} · up to date`, up ? 'warn' : 'ok', up && !ST.guard ? '<button class="btn p" data-upd="1">Update</button>' : ''),
