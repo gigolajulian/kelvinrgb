@@ -47,6 +47,13 @@
         "filter": [
           "PawnIO_setup.exe"
         ]
+      },
+      {
+        "from": "third_party",
+        "to": "setup",
+        "filter": [
+          "PawnIO-*.txt"
+        ]
       }
     ],
     "win": {

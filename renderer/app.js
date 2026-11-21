@@ -593,7 +593,7 @@ function drawSetup() {
     el.dataset.s = s; el.querySelector('.t').textContent = t;
     btn.textContent = b; btn.hidden = !b; btn.disabled = !!ST.guard; btn.classList.toggle('p', s === 'need');
   }
-  $('#su-what-pawnio').textContent = 'Kernel driver from pawnio.eu · 3.4 MB · ' + (x.bundled ? 'ships with KelvinRGB' : 'opens the download page') + ' · asks Windows for admin once';
+  $('#su-what-pawnio').textContent = 'Kernel driver from pawnio.eu · 3.4 MB · ' + (x.bundled ? 'ships with KelvinRGB' : 'opens the download page') + ' · GPL-2, source at github.com/namazso/PawnIO · asks Windows for admin once';
   const left = Object.values(rows).filter((r) => r[0] === 'need').length;
   $('#su-sub').textContent = ST.guard ? 'Apex or Easy Anti-Cheat is running. Setup waits until the game closes.'
     : left ? (left === 1 ? 'One needs' : left + ' need') + ' your attention on this PC. Each card says what it is and why KelvinRGB needs it.'
