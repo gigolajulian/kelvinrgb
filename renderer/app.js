@@ -21,9 +21,6 @@ const TYPES = ['Board', 'RAM', 'Graphics', 'Cooler', 'Strip', 'Keyboard', 'Mouse
 const typeLabel = (t) => TYPES[t] || 'Device';
 const isWraith = (d) => d.name === 'AMD Wraith Prism';
 const isWraithFan = (d, z) => isWraith(d) && /fan/i.test(z.name);
-// Devices that sit on the desk, outside the case (the Devices page's right column).
-const HUB = new Set(['Strip', 'Light', 'Fan']); // the first of these takes the case's hub slot
-const DESK = new Set(['Mouse', 'Keyboard', 'Mousemat', 'Headset', 'Stand', 'Pad', 'Speaker', 'Mic', 'Keypad', 'Laptop', 'Monitor', 'Accessory']);
 
 // ---------- sensor lookups ----------
 function sensors() { return ST ? ST.hw.flatMap((h) => h.sensors.map((s) => ({ ...s, hwName: h.name, hwType: h.type }))) : []; }
@@ -101,6 +98,15 @@ function zoneColor(d, zi) {
   if (dev.off) return '#1b1c1e';
   if (!lightsOn()) return '#1b1c1e';
   return (dev.zones && dev.zones[zi]) || tune(S.lighting.color, dev);
+}
+
+// Writes a device patch to the local copy and to main (main validates it again).
+function patchDev(k, p) {
+  const cur = S.devices[k] || (S.devices[k] = {});
+  const { zones, ...rest } = p;
+  Object.assign(cur, rest);
+  if (zones) { cur.zones = { ...cur.zones }; for (const [z, v] of Object.entries(zones)) { if (v) cur.zones[z] = v; else delete cur.zones[z]; } }
+  rgb.device(k, p);
 }
 
 // ---------- pages ----------
@@ -220,13 +226,13 @@ const pages = {
         if (sel && sel[0] !== d.key) continue;
         const zones = {};
         for (const i of this.colourZones(d)) if (!sel || sel[1] === '*' || +sel[1] === i) zones[i] = hex;
-        pages.devices.patch(d.key, { zones });
+        patchDev(d.key, { zones });
       }
       if (page === 'lighting' && ST) this.refresh();
     },
     setBright(g, v) {
       v = Math.max(0, Math.min(100, Math.round(v)));
-      for (const d of g.devs) pages.devices.patch(d.key, { brightness: v });
+      for (const d of g.devs) patchDev(d.key, { brightness: v });
       for (const el of main.querySelectorAll(`[data-bright="${CSS.escape(g.key)}"]`)) {
         el.style.setProperty('--p', v + '%'); el.setAttribute('aria-valuenow', v);
         if (el.value != null) el.value = v;
@@ -235,7 +241,7 @@ const pages = {
       this.refresh();
     },
     changed(g) {
-      return g.devs.some((d) => { const x = this.dev(d); return x.off || (x.brightness ?? 100) !== 100 || Object.keys(x.zones || {}).length || (isWraith(d) && (x.fanWhite ?? 240) !== 240); });
+      return g.devs.some((d) => { const x = this.dev(d); return x.off || (x.brightness ?? 100) !== 100 || Object.keys(x.zones || {}).length || (isWraith(d) && (x.fanWhite ?? 240) !== 240) || (x.gain || []).some((v) => v !== 1) || (x.gamma ?? 2.2) !== 2.2; });
     },
     // ---- drawing ----
     leds(g) {
@@ -282,7 +288,20 @@ const pages = {
           <div class="row" style="margin-top:6px;gap:10px"><span data-leds="${esc(g.key)}">${this.leds(g)}</span><span class="sub" id="l-status">${status}</span>
           <button class="tg" data-on="${esc(g.key)}" aria-pressed="${this.on(g)}" aria-label="${esc(g.name)} on"></button></div></div></div>
         ${chips.length > 1 || fan ? `<div class="chips"><button class="chip" data-zone="" aria-pressed="${!z}">Whole device</button>${chips.map(([k, n, c]) => `<button class="chip" data-zone="${esc(k)}" aria-pressed="${z === k}"><span class="sw" style="background:${c}"></span>${esc(n)}</button>`).join('')}</div>` : ''}
-        <div class="body2${canColour ? '' : ' nocol'}">${canColour || fan ? picker : `<div class="col">${this.brightRow(g, b)}${this.resetRow(g)}</div>`}</div></div>`;
+        <div class="body2${canColour ? '' : ' nocol'}">${canColour || fan ? picker : `<div class="col">${this.brightRow(g, b)}${this.resetRow(g)}</div>`}</div>
+        ${canColour ? this.tuning(g) : ''}</div>`;
+    },
+    // Colour tuning (moved from the old Devices page): scales red, green and blue so whites match across devices.
+    // Applies to the chosen stick or zone's device, else to every device in the tile.
+    tuneDevs(g) { const k = this.zone && zsplit(this.zone)[0]; return g.devs.filter((d) => !k || d.key === k); },
+    tuning(g) {
+      const x = this.dev(this.tuneDevs(g)[0]), gn = x.gain || [1, 1, 1], gm = x.gamma || 2.2;
+      return `<div class="tune"><div class="col"><span class="lbl">colour tuning</span>
+          <div class="row"><div class="tw"><div style="background:#fff"></div><span class="lbl">sent</span></div><div class="tw"><div id="l-after" style="background:${tune('#ffffff', x)}"></div><span class="lbl">shown</span></div></div>
+          <p class="helptext">Scales red, green and blue so whites match across devices.</p>
+          <div class="row" style="flex-wrap:wrap"><button class="btn" data-tune-reset="1">Reset tuning</button><button class="btn" data-copy="1">Copy to every device</button><button class="btn" data-identify="1">Identify</button></div></div>
+        <div class="col">${['red', 'green', 'blue'].map((n, i) => slider(`l-${n[0]}`, n, 0, 100, Math.round(gn[i] * 100), gn[i].toFixed(2))).join('')}
+          ${slider('l-gamma', 'gamma', 10, 30, Math.round(gm * 10), gm.toFixed(1))}</div></div>`;
     },
     brightRow(g, b) { return `<label class="ctl"><span class="lbl">brightness</span><input type="range" class="br" data-bright="${esc(g.key)}" min="0" max="100" value="${b}" style="--p:${b}%"><span class="v num bv">${b}%</span></label>`; },
     resetRow(g) { return `<div class="row" style="margin-top:auto"><button class="btn" data-reset="${esc(g.key)}" ${this.changed(g) ? '' : 'disabled'}>Back to the global look</button></div>`; },
@@ -320,10 +339,13 @@ const pages = {
       const ds = t.dataset, g = this.group(ds.on || ds.reset || ds.open || this.open);
       if (ds.on) {
         const off = this.on(g);
-        for (const d of g.devs) pages.devices.patch(d.key, { off });
+        for (const d of g.devs) patchDev(d.key, { off });
       } else if (ds.reset) {
-        for (const d of g.devs) pages.devices.patch(d.key, { off: false, brightness: 100, fanWhite: 240, zones: Object.fromEntries(Object.keys(this.dev(d).zones || {}).map((i) => [i, null])) });
-      } else if (ds.c) { this.setColour(g, ds.c); }
+        for (const d of g.devs) patchDev(d.key, { off: false, brightness: 100, fanWhite: 240, gain: [1, 1, 1], gamma: 2.2, zones: Object.fromEntries(Object.keys(this.dev(d).zones || {}).map((i) => [i, null])) });
+      } else if (ds.identify) { for (const d of this.tuneDevs(g)) rgb.identify(d.key); return; }
+      else if (ds.tuneReset) { for (const d of this.tuneDevs(g)) patchDev(d.key, { gain: [1, 1, 1], gamma: 2.2 }); }
+      else if (ds.copy) { const x = this.dev(this.tuneDevs(g)[0]); for (const d of ST.devices) patchDev(d.key, { gain: [...(x.gain || [1, 1, 1])], gamma: x.gamma || 2.2 }); }
+      else if (ds.c) { this.setColour(g, ds.c); }
       else if ('zone' in ds) this.zone = ds.zone || null;
       else if (ds.close) { const k = this.open; this.open = this.zone = null; this.draw(); const el = $(`button[data-open="${CSS.escape(k)}"]`); if (el) el.focus(); return; }
       else if (ds.open) { if (e.target.closest('.scrub')) return; this.open = ds.open; this.zone = null; this.hue = null; this.draw(); $('[data-close]').focus(); return; }
@@ -339,9 +361,18 @@ const pages = {
         this.setColour(g, fromHsv(+t.value, s < 0.05 ? 1 : s, v < 0.05 ? 1 : v));
         this.hue = +t.value;
         const sv = $('#l-sv'); if (sv) { sv.dataset.h = t.value; sv.style.setProperty('--base', hueHex(+t.value)); }
+      } else if (/^l-([rgb]|gamma)$/.test(t.id)) {
+        for (const d of this.tuneDevs(g)) {
+          if (t.id === 'l-gamma') { patchDev(d.key, { gamma: t.value / 10 }); continue; }
+          const gain = [...(this.dev(d).gain || [1, 1, 1])]; gain['rgb'.indexOf(t.id[2])] = t.value / 100;
+          patchDev(d.key, { gain });
+        }
+        $(`#${t.id}-v`).textContent = t.id === 'l-gamma' ? (t.value / 10).toFixed(1) : (t.value / 100).toFixed(2);
+        $('#l-after').style.background = tune('#ffffff', this.dev(this.tuneDevs(g)[0]));
+        this.refresh();
       } else if (t.id === 'l-fanw') {
         const d = g.devs.find((x) => x.key === zsplit(this.zone)[0]);
-        $('#l-fanw-v').textContent = t.value; pages.devices.patch(d.key, { fanWhite: +t.value }); this.refresh();
+        $('#l-fanw-v').textContent = t.value; patchDev(d.key, { fanWhite: +t.value }); this.refresh();
       }
     },
     key(e) {
@@ -382,192 +413,87 @@ const pages = {
     },
   },
 
-  // Bento: one tile per device, laid out like the PC. Inside the case the cooler, RAM, board, graphics card and the
-  // first hub or strip get fixed slots; the rest flow after them. Peripherals sit on the desk beside an All tile.
-  // Each tile has its own on/off, colour and brightness; click a tile (or one RAM stick) to edit its zones and
-  // tuning in the panel below. Everything that differs from the global look is listed at the top with an undo.
-  devices: {
-    sel: null, // device key
-    zone: 0,
-    dragging: false,
-    // Same-name devices (the four DRAM sticks) share a tile, as on Lighting.
-    groups() { return pages.lighting.groups(); },
-    area(g, seen) {
-      const a = { Cooler: 'cool', RAM: 'ram', Board: 'board', Graphics: 'gpu' }[g.type] || (DESK.has(g.type) ? 'desk' : HUB.has(g.type) ? 'hub' : 'case');
-      if (a === 'desk' || !seen.has(a)) { seen.add(a); return a; }
-      return 'case';
-    },
+  // Drivers: what this PC runs on, hardware first. Windows drivers come from a vendor catalog in main, so the list
+  // also works after a Windows reset. Only KelvinRGB, OpenRGB and PawnIO install in place; the rest open the maker's page.
+  drivers: {
+    sig: '',
     build() {
-      const devs = ST.devices;
-      if (!devs.find((d) => d.key === this.sel)) { this.sel = devs[0] ? devs[0].key : null; this.zone = 0; }
-      main.innerHTML = `<div class="hd"><h1>Devices</h1><span class="sub" id="d-count"></span><span class="grow"></span><button class="btn" id="d-reset-all">Reset all to the global look</button><button class="btn" id="d-rescan">Rescan</button></div>
-      ${devs.length ? '<div class="changes" id="d-chg"></div><div class="bento" id="d-bento"></div><div class="g drawer" id="d-ed"></div>'
-        : `<div class="g"><p class="helptext">${esc(ST.openrgb.msg)}. No devices yet. Is OpenRGB installed, with its SDK server on?</p></div>`}`;
-      $('#d-rescan').onclick = () => rgb.rescan();
-      $('#d-reset-all').onclick = () => { for (const d of devs) this.resetDevice(d); this.draw(); };
-      if (!devs.length) return;
-      const bento = $('#d-bento'), grp = (k) => this.groups().find((g) => g.key === k);
-      bento.onclick = (e) => {
-        const t = e.target, on = t.closest('[data-on]');
-        if (on) {
-          if (on.dataset.on === '*') setLighting({ on: !S.lighting.on }, false);
-          else { const g = grp(on.dataset.on), off = pages.lighting.on(g); for (const d of g.devs) this.patch(d.key, { off }); }
-          this.draw(); return;
-        }
-        if (t.closest('.scrub, input')) return;
-        const k = t.closest('[data-k]'), tile = t.closest('.bt[data-g]'), g = tile && grp(tile.dataset.g);
-        const key = k ? k.dataset.k : g && (g.devs.some((d) => d.key === this.sel) ? this.sel : g.devs[0].key);
-        if (key && key !== this.sel) { this.sel = key; this.zone = 0; this.draw(); }
+      this.sig = '';
+      main.innerHTML = `<div id="v" style="display:contents"><div class="hd"><h1>Drivers</h1><span class="sub" id="v-sub"></span><span class="grow"></span><button class="btn" id="v-check">Check now</button></div>
+        <div class="g guard" id="v-guard" hidden><span class="dot warn"></span>Apex is running. Installs wait until the game closes.</div>
+        <div class="g" id="v-hw"></div><div class="g" id="v-win"></div><div class="g" id="v-app"></div></div>`;
+      $('#v-check').onclick = () => rgb.drivers('check');
+      $('#v').onclick = (e) => {
+        const b = e.target.closest('button'); if (!b || b.disabled) return;
+        if (b.dataset.drv) rgb.drivers(b.dataset.drv);
+        else if (b.dataset.upd) rgb.update('install');
+        else if (b.dataset.rescan) rgb.rescan();
       };
-      // The colour well sets every colour zone of the tile's devices. While it is focused, top() leaves the tiles alone
-      // so the open picker isn't destroyed; its own tile's swatches and the panel update in place.
-      bento.oninput = (e) => {
-        const t = e.target; if (!t.dataset.cw) return;
-        const g = grp(t.dataset.cw), tile = t.closest('.bt');
-        for (const d of g.devs) this.patch(d.key, { zones: Object.fromEntries(pages.lighting.colourZones(d).map((i) => [i, t.value])) });
-        t.classList.remove('follow', 'mixed'); t.style.background = '';
-        const leds = tile.querySelector('.leds'); if (leds) leds.outerHTML = pages.lighting.leds(g);
-        tile.querySelectorAll('.st i').forEach((el, i) => (el.style.background = zoneColor(g.devs[i], 0)));
-        this.editor();
-      };
-      bento.onchange = (e) => { if (e.target.dataset.cw) { this.top(true); this.editor(); } };
-      bento.addEventListener('focusout', (e) => { if (e.target.dataset.cw) setTimeout(() => this.top()); });
-      // Brightness: drag across, or arrow keys (Shift for 1%), Home and End.
-      const setB = (el, v) => {
-        v = Math.max(0, Math.min(100, Math.round(v)));
-        el.style.setProperty('--p', v + '%'); el.setAttribute('aria-valuenow', v); el.querySelector('.bv').textContent = v + '%';
-        if (el.dataset.bright === '*') setLighting({ brightness: v }, false);
-        else for (const d of grp(el.dataset.bright).devs) this.patch(d.key, { brightness: v });
-      };
-      bento.onpointerdown = (e) => {
-        const el = e.target.closest('.scrub'); if (!el) return;
-        e.preventDefault(); el.setPointerCapture(e.pointerId); el.focus(); this.dragging = true;
-        const r = el.getBoundingClientRect(), at = (ev) => setB(el, ((ev.clientX - r.left) / r.width) * 100);
-        at(e);
-        el.onpointermove = at;
-        el.onpointerup = el.onpointercancel = () => { el.onpointermove = el.onpointerup = el.onpointercancel = null; this.dragging = false; this.top(); };
-      };
-      bento.onkeydown = (e) => {
-        const el = e.target.closest('.scrub'); if (!el) return;
-        const v = +el.getAttribute('aria-valuenow'), step = e.shiftKey ? 1 : 5;
-        const next = { ArrowUp: v + step, ArrowRight: v + step, ArrowDown: v - step, ArrowLeft: v - step, Home: 0, End: 100 }[e.key];
-        if (next == null) return;
-        e.preventDefault(); setB(el, next); clearTimeout(this.kt); this.kt = setTimeout(() => this.top(), 400);
-      };
-      $('#d-chg').onclick = (e) => { const b = e.target.closest('[data-u]'); if (!b) return; const c = this.changes()[+b.dataset.u]; if (c) { this.patch(c.d.key, c.undo); this.draw(); } };
-      this.draw();
+      if (!ST.drivers.at && !ST.drivers.checking) rgb.drivers('check');
+      this.live();
     },
-    // Writes a device patch to the local copy and to main (main validates it again).
-    patch(k, p) {
-      const cur = S.devices[k] || (S.devices[k] = {});
-      const { zones, ...rest } = p;
-      Object.assign(cur, rest);
-      if (zones) { cur.zones = { ...cur.zones }; for (const [z, v] of Object.entries(zones)) { if (v) cur.zones[z] = v; else delete cur.zones[z]; } }
-      rgb.device(k, p);
-    },
-    resetDevice(d) {
-      const dev = S.devices[d.key]; if (!dev) return;
-      this.patch(d.key, { off: false, brightness: 100, gain: [1, 1, 1], gamma: 2.2, fanWhite: 240, zones: Object.fromEntries(Object.keys(dev.zones || {}).map((i) => [i, null])) });
-    },
-    // Every difference from the global look, one entry each, with the patch that undoes it.
-    changes() {
-      const out = [];
-      for (const d of ST.devices) {
-        const dev = S.devices[d.key] || {};
-        if (dev.off) out.push({ d, t: 'off', undo: { off: false } });
-        if (dev.brightness != null && dev.brightness !== 100) out.push({ d, t: `brightness ${dev.brightness}%`, undo: { brightness: 100 } });
-        const own = Object.keys(dev.zones || {});
-        if (own.length) out.push({ d, t: `own colour on ${own.length === d.zones.length ? 'every zone' : own.map((i) => (d.zones[i] ? d.zones[i].name : i)).join(', ')}`, undo: { zones: Object.fromEntries(own.map((i) => [i, null])) } });
-        if ((dev.gain && dev.gain.some((g) => g !== 1)) || (dev.gamma != null && dev.gamma !== 2.2)) out.push({ d, t: 'colour tuned', undo: { gain: [1, 1, 1], gamma: 2.2 } });
-        if (isWraith(d) && dev.fanWhite != null && dev.fanWhite !== 240) out.push({ d, t: `fan white ${dev.fanWhite}`, undo: { fanWhite: 240 } });
-      }
-      return out;
-    },
-    draw() { this.top(); this.editor(); },
-    // Count, the changed list and the tiles. Skipped while a brightness bar is held so the drag isn't cut.
-    top(force) {
-      if (this.dragging || page !== 'devices' || !$('#d-bento')) return;
-      if (!force && document.activeElement && document.activeElement.dataset.cw) return; // a colour picker is open
-      const a = document.activeElement, fk = a && a.dataset && ['bright', 'on', 'u', 'k', 'cw'].find((x) => x in a.dataset), fv = fk && a.dataset[fk];
-      const ch = this.changes(), changed = new Set(ch.map((c) => c.d.key)), L = S.lighting;
-      $('#d-count').textContent = `${ST.devices.length} devices · ${changed.size ? `${changed.size} changed` : 'all on the global look'}`;
-      $('#d-chg').innerHTML = ch.length
-        ? `<span class="lbl">changed</span>${ch.map((c, i) => `<span class="pill"><b>${esc(c.d.name)}</b>${esc(c.t)}<button data-u="${i}" aria-label="Undo ${esc(c.t)} on ${esc(c.d.name)}">×</button></span>`).join('')}`
-        : '<span class="helptext">Every device follows the global look from Lighting.</span>';
-      const scrub = (k, v, label) => `<div class="scrub" data-bright="${esc(k)}" role="slider" tabindex="0" aria-label="${esc(label)} brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}" style="--p:${v}%"><i></i><span class="bv">${v}%</span></div>`;
-      const all = `<div class="g bt all"><div class="top"><div class="grow"><div class="ty">every device</div><div class="nm">All</div></div><button class="tg" data-on="*" aria-pressed="${L.on}" aria-label="All lights on"></button></div>
-        <div class="foot"><span class="cw" style="background:${lightsOn() ? L.color : '#1b1c1e'}" title="Global colour, set on Lighting"></span>${scrub('*', L.brightness, 'All devices')}</div></div>`;
-      const SIZE = { cool: 112, board: 112, gpu: 150, hub: 104, desk: 84 };
-      const tile = (g, area) => {
-        const lt = pages.lighting, b = lt.dev(g.devs[0]).brightness ?? 100, on = lt.on(g), has = g.devs.some((d) => d.key === this.sel);
-        const dim = (0.15 + 0.85 * (L.brightness / 100) * (b / 100)).toFixed(2), c = lt.current(g);
-        const mix = `conic-gradient(${g.devs.flatMap((d) => d.zones.map((_z, i) => zoneColor(d, i))).join(',')})`;
-        const art = g.devs.length > 1
-          ? `<div class="sticks">${g.devs.map((d, i) => `<button class="st" data-k="${esc(d.key)}" aria-pressed="${d.key === this.sel}" aria-label="Edit ${esc(g.name)} stick ${i + 1}">${deviceIcon(g.type, 42, d.key === this.sel)}<i style="background:${d.zones.length ? zoneColor(d, 0) : '#1b1c1e'};opacity:${dim}"></i></button>`).join('')}</div>`
-          : `<button class="art" data-k="${esc(g.devs[0].key)}" aria-pressed="${has}" aria-label="Edit ${esc(g.name)}">${deviceIcon(g.type, SIZE[area] || 96, has)}</button>`;
-        return `<div class="g bt a-${area}${has ? ' sel' : ''}${on ? '' : ' off'}" data-g="${esc(g.key)}" role="group" aria-label="${esc(g.name)}">
-          ${g.devs.some((d) => changed.has(d.key)) ? '<span class="chg" title="Changed from the global look"></span>' : ''}
-          <div class="top"><div class="grow"><div class="ty">${esc(lt.sub(g))}</div><div class="nm" title="${esc(g.name)}">${esc(g.name)}</div></div>
-            <button class="tg" data-on="${esc(g.key)}" aria-pressed="${on}" aria-label="${esc(g.name)} on"></button></div>
-          ${art}${g.devs.length > 1 ? '' : lt.leds(g)}
-          <div class="foot"><input type="color" class="cw${c.mixed ? ' mixed' : c.own ? '' : ' follow'}" data-cw="${esc(g.key)}" value="${c.hex}" style="${c.mixed ? `background:${mix}` : ''}" aria-label="${esc(g.name)} colour" title="${c.mixed ? 'Mixed zone colours' : c.own ? 'Own colour' : 'Follows the global colour'}">${scrub(g.key, b, g.name)}</div></div>`;
-      };
-      const seen = new Set(), tiles = this.groups().map((g) => [g, this.area(g, seen)]);
-      const caseT = tiles.filter(([, ar]) => ar !== 'desk'), deskT = tiles.filter(([, ar]) => ar === 'desk');
-      $('#d-bento').innerHTML = `<div><span class="lbl zl">inside the case</span><div class="case">${caseT.map(([g, ar]) => tile(g, ar)).join('')}</div></div>
-        <div><span class="lbl zl">on the desk</span><div class="desk2">${all}${deskT.map(([g, ar]) => tile(g, ar)).join('')}</div></div>`;
+    live() {
+      if (page !== 'drivers' || !$('#v-hw')) return;
+      const V = ST.drivers, u = ST.update || {}, g = !!ST.guard;
+      const sig = JSON.stringify([V, u, g, ST.version, ST.setup, ST.sensors.ok, ST.openrgb.ok, ST.devices.map((d) => [d.key, d.firmware])]);
+      if (sig === this.sig) return;
+      this.sig = sig;
+      const a = document.activeElement, fk = a && a.dataset && ['drv', 'upd', 'rescan'].find((x) => x in a.dataset), fv = fk && a.dataset[fk];
+      const tag = (v) => String(v || '').replace(/^(release_|v)/i, '').replace(/^(\d+\.\d+\.\d+)\.0$/, '$1');
+      const btn = (attr, label, primary) => `<button class="btn${primary ? ' p' : ''}" ${attr} ${g ? 'disabled' : ''}>${label}</button>`;
+      const row = (n, what, inst, latest, dot, status, act, busy) => `<div class="r"><div><span class="nm">${esc(n)}</span><span class="what">${esc(what)}</span></div>
+        <div class="v${inst ? '' : ' dim'}">${esc(inst || 'none')}</div><div class="v${!latest || latest === inst ? ' dim' : ''}">${esc(latest || 'not checked')}</div>
+        <div><div class="st"><span class="dot ${busy ? 'acc' : dot}"></span>${esc(busy ? 'Installing' : status)}</div></div>
+        <div class="act">${busy ? '' : act}</div></div>`;
+      const head = (a1, b1, c1) => `<div class="hrow"><span class="lbl">${a1}</span><span class="lbl">${b1}</span><span class="lbl">${c1}</span><span class="lbl">status</span><span class="lbl act"></span></div>`;
+      const sec = (lbl, right, body, note) => `<div class="row"><span class="lbl grow">${lbl}</span>${right}</div><div class="drv">${body}</div>${note ? `<p class="helptext">${note}</p>` : ''}`;
+
+      // hardware: OpenRGB's devices, same-name sticks on one row
+      const gs = ST.devices.length ? pages.lighting.groups() : [];
+      const hw = gs.map((x) => {
+        const fw = [...new Set(x.devs.map((d) => d.firmware).filter(Boolean))].join(', ');
+        return `<div class="r"><div><span class="nm">${esc(x.name)}${x.devs.length > 1 ? ` × ${x.devs.length}` : ''}</span><span class="what">${esc(pages.lighting.sub(x))}</span></div>
+          <div class="v span2${fw ? '' : ' dim'}">${esc(fw || 'not reported')}</div><div><div class="st"><span class="dot ok"></span>Seen by OpenRGB</div></div><div class="act"></div></div>`;
+      }).join('');
+      $('#v-hw').innerHTML = sec('hardware', `<button class="btn" data-rescan="1">Rescan</button>`,
+        `<div class="hrow"><span class="lbl">device</span><span class="lbl span2">firmware</span><span class="lbl">status</span><span class="lbl act"></span></div>${hw}`,
+        gs.length ? "Firmware is what each device reports to OpenRGB. Updates come from the maker's own tool." : `${esc(ST.openrgb.msg)}. Devices show once OpenRGB runs.`);
+
+      // windows drivers, PawnIO first since KelvinRGB can install it
+      const P = V.pawnio || {}, pBusy = ST.setup && ST.setup.busy === 'pawnio';
+      const pAct = { install: btn('data-drv="pawnio"', 'Install', 1), update: btn('data-drv="pawnio"', 'Update', 1), page: btn('data-drv="pawnio-page"', 'Get', !P.installed) }[P.act] || '';
+      const pawn = row('PawnIO', 'Kernel driver the sensor service uses for fan headers.', tag(P.installed), tag(P.latest), P.installed ? (P.act ? 'warn' : 'ok') : 'warn',
+        ST.setup && ST.setup.pawnio ? (P.act === 'update' || P.act === 'page' ? 'Update available' : 'Running') : 'Not installed', pAct, pBusy);
+      const win = (V.windows || []).map((w) => {
+        const st = { ok: ['ok', 'Installed'], inbox: w.inboxOk ? ['ok', 'Windows driver, works'] : ['warn', "On Windows' basic driver"], none: ['warn', 'No driver'] }[w.state];
+        const inst = w.installed || (w.state === 'inbox' ? 'Windows' : '');
+        return row(w.name, `${w.what} ${w.device}`, inst, '', st[0], st[1], btn(`data-drv="${esc(w.id)}"`, w.state === 'ok' || w.inboxOk ? 'Open site' : 'Get driver', w.state !== 'ok' && !w.inboxOk));
+      }).join('');
+      const missing = (V.windows || []).filter((w) => w.state !== 'ok' && !w.inboxOk).length + (ST.setup && !ST.setup.pawnio ? 1 : 0);
+      $('#v-win').innerHTML = sec('windows drivers', '', head('driver', 'installed', 'latest') + pawn + win,
+        V.at ? "Everything this PC's hardware needs after a Windows reset. Get driver and Open site go to the maker's download page, which has the latest version." : 'Reading drivers from Windows.');
+
+      // KelvinRGB and what it runs
+      const up = u.kind === 'available', uBusy = u.kind === 'downloading' || u.kind === 'installing';
+      const kLatest = up ? u.v : u.kind === 'current' ? ST.version : '';
+      const kelvin = row('KelvinRGB', 'This app. Updates from GitHub releases.', ST.version, kLatest, up ? 'warn' : u.kind === 'failed' ? 'bad' : 'ok',
+        up ? 'Update available' : uBusy ? u.text : u.kind === 'failed' ? u.text : u.kind === 'checking' ? 'Checking' : 'Up to date', up ? btn('data-upd="1"', 'Update', 1) : '', false);
+      const O = V.openrgb || {}, oBusy = V.busy === 'openrgb';
+      const oAct = { install: btn('data-drv="openrgb"', 'Install', 1), update: btn('data-drv="openrgb"', 'Update', 1), page: btn('data-drv="openrgb-page"', 'Get', !O.installed) }[O.act] || '';
+      const orgb = row('OpenRGB', 'Talks to the lights. Server on 127.0.0.1:6742.', tag(O.installed), tag(O.latest), !O.installed || O.act ? 'warn' : ST.openrgb.ok ? 'ok' : 'warn',
+        !O.installed ? 'Not installed' : O.act ? 'Update available' : ST.openrgb.ok ? 'Running' : ST.openrgb.msg, oAct, oBusy);
+      const lhm = V.lhm ? V.lhm.replace(/\.0$/, '') : '';
+      const sens = row('Sensor service', 'KelvinRGB sidecar on LibreHardwareMonitorLib. Updates with KelvinRGB.', lhm, lhm, ST.sensors.ok ? 'ok' : 'warn', ST.sensors.ok ? 'Live' : ST.sensors.msg, '', false);
+      $('#v-app').innerHTML = sec('kelvinrgb', '', head('part', 'installed', 'latest') + kelvin + orgb + sens,
+        (V.msg ? `<span style="color:var(--bad)">${esc(V.msg)}.</span> ` : '') + 'Each download is checked against its pinned hash, runs once, then gets deleted.');
+
+      const ups = [up, O.act === 'update', P.act === 'update'].filter(Boolean).length;
+      $('#v-sub').textContent = `${gs.length} devices · ${(V.windows || []).length + 1} drivers · ${[missing && `${missing} missing`, ups && `${ups} update${ups > 1 ? 's' : ''}`].filter(Boolean).join(' · ') || 'all set'}`
+        + (V.checking ? ' · checking' : V.at ? ` · checked ${new Date(V.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : '');
+      $('#v-check').disabled = !!V.checking;
+      $('#v-guard').hidden = !g;
       if (fk) { const el = [...main.querySelectorAll(`[data-${fk}]`)].find((x) => x.dataset[fk] === fv); if (el) el.focus(); }
     },
-    // The selected device: zones and their colour on the left, colour tuning on the right.
-    editor() {
-      const d = ST.devices.find((x) => x.key === this.sel); if (!d) return;
-      const k = d.key, cur = () => S.devices[k] || {}, ed = $('#d-ed');
-      if (this.zone >= d.zones.length) this.zone = 0;
-      const zi = this.zone, z = d.zones[zi], own = z && (cur().zones || {})[zi], g = cur().gain || [1, 1, 1], gm = cur().gamma || 2.2;
-      const zoneUi = !z ? `<p class="helptext">${d.leds} LEDs, no zones reported.</p>`
-        : isWraithFan(d, z) ? `<div class="row"><span class="sw" style="width:30px;height:30px;background:${zoneColor(d, zi)}"></span><span class="helptext">This LED only has a working blue input, so it goes from yellow to white. White from about 240.</span></div>
-            ${slider('d-fanw', 'fan white', 160, 255, cur().fanWhite ?? 240)}`
-        : `<div class="row">${seg('src', [['g', 'Global'], ['o', 'Own colour']], own ? 'o' : 'g')}<input type="color" id="d-zc" value="${own || S.lighting.color}" aria-label="${esc(z.name)} colour" ${own ? '' : 'disabled'}></div>
-            <div class="pre" id="d-pre">${SWATCHES.map(([n, h]) => `<button data-c="${h}" aria-label="${n}" title="${n}" aria-pressed="${h === own}" style="background:${h}"></button>`).join('')}</div>
-            ${d.zones.length > 1 ? '<button class="btn" id="d-whole">Use for every zone</button>' : ''}`;
-      ed.innerHTML = `<div class="row dr-hd">${deviceIcon(typeLabel(d.type), 52, true)}<div class="grow"><div class="dr-name">${esc(d.name)}</div><div class="sub">${esc(typeLabel(d.type))} · ${d.leds} LEDs · ${d.zones.length} zone${d.zones.length === 1 ? '' : 's'}</div></div>
-          <button class="btn" id="d-identify">Identify</button><button class="btn" id="d-reset">Reset this device</button></div>
-        <div class="dr-body">
-          <div class="dr-col"><span class="lbl">zones</span>
-            <div class="chips" id="d-zones">${d.zones.map((zz, i) => { const o = isWraithFan(d, zz) || (cur().zones || {})[i];
-              return `<button class="chip" data-z="${i}" aria-pressed="${i === zi}"><span class="sw${o ? '' : ' follow'}" style="background:${zoneColor(d, i)}"></span>${esc(zz.name)}</button>`; }).join('')}</div>
-            ${z ? `<div class="sub">${esc(z.name)} · ${isWraithFan(d, z) ? 'fan white' : own ? `own colour ${own}` : 'follows the global colour'}</div>` : ''}
-            ${zoneUi}</div>
-          <div class="dr-col"><span class="lbl">colour tuning</span><p class="helptext">Scales red, green and blue so whites match across devices.</p>
-            <div class="row"><div class="tw"><div style="background:#fff"></div><span class="lbl">sent</span></div><div class="tw"><div id="d-after"></div><span class="lbl">shown</span></div></div>
-            ${slider('d-r', 'red', 0, 100, Math.round(g[0] * 100), g[0].toFixed(2))}
-            ${slider('d-g', 'green', 0, 100, Math.round(g[1] * 100), g[1].toFixed(2))}
-            ${slider('d-b', 'blue', 0, 100, Math.round(g[2] * 100), g[2].toFixed(2))}
-            ${slider('d-gamma', 'gamma', 10, 30, Math.round(gm * 10), gm.toFixed(1))}
-            <div class="row"><button class="btn" id="d-tune-reset">Reset tuning</button><button class="btn" id="d-copy">Copy tuning to every device</button></div></div>
-        </div>`;
-      const paintAfter = () => ($('#d-after').style.background = tune('#ffffff', cur()));
-      paintAfter();
-      $('#d-identify').onclick = () => rgb.identify(k);
-      $('#d-reset').onclick = () => { this.resetDevice(d); this.draw(); };
-      $('#d-zones').onclick = (e) => { const b = e.target.closest('[data-z]'); if (b) { this.zone = +b.dataset.z; this.editor(); } };
-      const setZone = (hex) => { this.patch(k, { zones: { [zi]: hex } }); this.draw(); };
-      if (z && isWraithFan(d, z)) $('#d-fanw').oninput = (e) => { $('#d-fanw-v').textContent = e.target.value; this.patch(k, { fanWhite: +e.target.value }); this.top(); };
-      else if (z) {
-        ed.querySelector('[data-seg]').onclick = (e) => { const b = e.target.closest('button'); if (b) setZone(b.dataset.v === 'o' ? (own || S.lighting.color) : null); };
-        $('#d-zc').onchange = (e) => setZone(e.target.value);
-        $('#d-pre').onclick = (e) => { const b = e.target.closest('[data-c]'); if (b) setZone(b.dataset.c); };
-        if ($('#d-whole')) $('#d-whole').onclick = () => { const zones = {}; d.zones.forEach((zz, j) => { if (!isWraithFan(d, zz)) zones[j] = own || null; }); this.patch(k, { zones }); this.draw(); };
-      }
-      ['r', 'g', 'b'].forEach((ch, i) => ($(`#d-${ch}`).oninput = (e) => {
-        const gain = [...(cur().gain || [1, 1, 1])]; gain[i] = e.target.value / 100;
-        $(`#d-${ch}-v`).textContent = gain[i].toFixed(2); this.patch(k, { gain }); paintAfter(); this.top();
-      }));
-      $('#d-gamma').oninput = (e) => { const gamma = e.target.value / 10; $('#d-gamma-v').textContent = gamma.toFixed(1); this.patch(k, { gamma }); paintAfter(); this.top(); };
-      $('#d-tune-reset').onclick = () => { this.patch(k, { gain: [1, 1, 1], gamma: 2.2 }); this.draw(); };
-      $('#d-copy').onclick = () => { for (const x of ST.devices) this.patch(x.key, { gain: [...(cur().gain || [1, 1, 1])], gamma: cur().gamma || 2.2 }); this.draw(); };
-    },
-    live() {},
   },
 
   fans: {
@@ -753,7 +679,6 @@ function setLighting(patch, rebuild = true) {
   rgb.lighting(patch);
   footer();
   if (page === 'lighting') { if (rebuild) pages.lighting.paint(); if (ST) pages.lighting.live(); }
-  if (page === 'devices') pages.devices.top(); // the footer and tray change the All tile too
 }
 function footer() {
   const L = S.lighting;
@@ -830,7 +755,7 @@ function drawSetup() {
   if (!suOpen || !ST || !ST.setup) return;
   const x = ST.setup, n = ST.controls.length;
   const rows = {
-    openrgb: x.openrgb ? ['ok', 'Installed', ''] : ['need', 'Not found', 'Get OpenRGB'],
+    openrgb: x.openrgb ? ['ok', 'Installed', ''] : ST.drivers.busy === 'openrgb' ? ['wait', 'Installing', ''] : ['need', 'Not found', 'Install'],
     pawnio: x.busy === 'pawnio' ? ['wait', 'Installing', ''] : x.pawnio ? ['ok', 'Running', ''] : ['need', 'Not installed', x.bundled ? 'Install' : 'Get PawnIO'],
     fans: n ? ['ok', 'Ready · ' + n + ' fan header' + (n === 1 ? '' : 's'), '']
       : ST.sensors.admin === false ? ['need', 'Start KelvinRGB as admin', '']
@@ -898,7 +823,6 @@ function health(id, ok, warn, text) {
 }
 function onState(s) {
   conflicts(s.conflicts);
-  const devicesChanged = !ST || ST.devices.map((d) => d.key).join() !== s.devices.map((d) => d.key).join();
   const fansChanged = !ST || ST.controls.map((c) => c.id).join() !== s.controls.map((c) => c.id).join();
   ST = s;
   for (const sn of sensors()) {
@@ -915,7 +839,7 @@ function onState(s) {
   if (!suAuto && s.setup && !s.conflicts && (!S.setupSeen || setupNeeds(s))) { suAuto = true; openSetup(); }
   drawSetup();
   health('st-guard', !s.guard, s.guard, s.guard ? 'Apex guard active' : 'Apex guard idle');
-  if ((page === 'devices' && devicesChanged) || (page === 'fans' && fansChanged)) pages[page].build();
+  if (page === 'fans' && fansChanged) pages[page].build();
   pages[page].live();
 }
 
@@ -928,5 +852,5 @@ rgb.get().then((r) => {
   onState(r.state);
   rgb.onState(onState);
   // the tray menu changed something: take main's copy and redraw
-  rgb.onSettings((s) => { S = s; applyGlass(); footer(); if (page === 'lighting' || page === 'settings') go(page); if (page === 'devices') pages.devices.top(); });
+  rgb.onSettings((s) => { S = s; applyGlass(); footer(); if (page === 'lighting' || page === 'settings') go(page); });
 });

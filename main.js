@@ -10,6 +10,7 @@ const C = require('./lib/conflicts');
 const V = require('./lib/validate');
 const G = require('./lib/guard');
 const U = require('./lib/update');
+const D = require('./lib/drivers');
 
 const FLOOR = 25;
 const GUARD_PROCS = ['r5apex.exe', 'r5apex_dx12.exe', 'easyanticheat.exe', 'easyanticheat_eos.exe'];
@@ -87,7 +88,7 @@ function findOpenRgb() { return OPENRGB_EXE.find((p) => fs.existsSync(p)); }
 let launchedOpenRgb = false;
 let started = false; // set once the startup conflict prompt is answered
 async function connectOpenRgb() {
-  if (client || state.guard || !started) return;
+  if (client || state.guard || !started || driversBusy === 'openrgb') return; // not while its installer runs
   const c = new Client('KelvinRGB', 6742, '127.0.0.1');
   try {
     await c.connect(1500);
@@ -112,7 +113,7 @@ async function connectOpenRgb() {
 async function loadDevices() {
   const devs = await client.getAllControllerData();
   state.devices = devs.map((d) => ({
-    key: `${d.name}|${d.location}`, id: d.deviceId, name: d.name, type: d.type,
+    key: `${d.name}|${d.location}`, id: d.deviceId, name: d.name, type: d.type, firmware: String(d.version || '').trim(),
     leds: d.colors.length, zones: d.zones.map((z) => ({ name: z.name, leds: z.ledsCount })),
   }));
   for (const d of state.devices) if (d.leds) client.setCustomMode(d.id);
@@ -367,19 +368,33 @@ on('quit', () => app.quit());
 on('autostart', (v) => setAutostart(v === true));
 on('update', (a) => { if (a === 'check') updater.check(true); else if (a === 'install') updater.install(); else if (a === 'releases') shell.openExternal(U.RELEASES); else if (a === 'openrgb') shell.openExternal('https://openrgb.org'); });
 on('setupSeen', () => { settings.setupSeen = true; save(); });
+on('drivers', (a) => {
+  if (a === 'check') return checkDrivers();
+  if (a === 'openrgb-page') return shell.openExternal(D.OPENRGB.page);
+  if (a === 'pawnio-page') return shell.openExternal('https://github.com/namazso/PawnIO.Setup/releases');
+  if (state.guard || driversBusy) return; // nothing installs while Apex or EAC runs
+  if (a === 'openrgb') return installOpenRgb();
+  if (a === 'pawnio') return installPawnio();
+  const row = state.drivers.windows.find((w) => w.id === a);
+  if (row) shell.openExternal(row.url); // catalog URLs only, never one from the renderer
+});
 on('setup', (a) => {
   if (state.guard || setupBusy) return; // nothing installs while Apex or EAC runs
   if (a === 'recheck') return checkSetup();
-  if (a === 'openrgb') return shell.openExternal('https://openrgb.org/releases.html');
-  if (a !== 'pawnio') return;
+  if (a === 'openrgb') return installOpenRgb();
+  if (a === 'pawnio') installPawnio();
+});
+function installPawnio() {
+  if (state.guard || setupBusy || driversBusy) return;
   if (!fs.existsSync(PAWNIO_SETUP)) return shell.openExternal('https://pawnio.eu');
   setupBusy = 'pawnio'; checkSetup();
   execFile(PAWNIO_SETUP, ['-install'], (e) => {
     log(e ? `setup: PawnIO installer: ${e.message.trim()}` : 'setup: PawnIO installer finished');
     setupBusy = '';
     checkSetup(() => { if (pawnio) stopSidecar().then(startSidecar); }); // the sidecar only finds fan headers once the driver runs
+    if (state.drivers.at) checkDrivers();
   });
-});
+}
 state.version = app.getVersion();
 
 // ---------- setup ----------
@@ -396,10 +411,85 @@ function checkSetup(then) {
 }
 checkSetup();
 
+// ---------- drivers page ----------
+// One PowerShell call: every signed driver, devices with no driver (code 28) and the Uninstall entries. Takes a few
+// seconds, so it runs when the Drivers page opens and on Check now, never on the tick. LHM's path comes in by env.
+const DRIVER_QUERY = [
+  "$ErrorActionPreference='SilentlyContinue'",
+  "$d=@(Get-CimInstance Win32_PnPSignedDriver | ?{$_.DeviceID} | %{@{id=$_.DeviceID;name=$_.DeviceName;cls=[string]$_.DeviceClass;prov=[string]$_.DriverProviderName;ver=[string]$_.DriverVersion;err=0}})",
+  "$d+=@(Get-CimInstance Win32_PnPEntity -Filter 'ConfigManagerErrorCode=28' | %{@{id=$_.DeviceID;name=$_.Name;cls=[string]$_.PNPClass;prov='';ver='';err=28}})",
+  "$p=@(Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' | ?{$_.DisplayName} | %{@{name=[string]$_.DisplayName;ver=[string]$_.DisplayVersion}})",
+  "@{devices=$d;packages=$p;lhm=[string](Get-Item -LiteralPath $env:KRGB_LHM).VersionInfo.FileVersion} | ConvertTo-Json -Depth 3 -Compress",
+].join(';');
+const PAWNIO_V = '2.2.0'; // the bundled installer, pinned in scripts/fetch-pawnio.js
+let driversBusy = '';
+state.drivers = { checking: false, at: 0, windows: [], openrgb: {}, pawnio: {}, lhm: '', busy: '', msg: '' };
+async function latestTag(url) {
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': 'KelvinRGB', Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
+    return r.ok ? String((await r.json()).tag_name || '') : '';
+  } catch { return ''; }
+}
+// installed, latest, and what KelvinRGB can do about it: install (missing), update (older), page (newer than our pin).
+function drv(installed, latest, pinned) {
+  const older = !!installed && !!latest && D.cmp(latest, installed) > 0;
+  const beyond = !!latest && (!pinned || D.cmp(latest, pinned) > 0);
+  return { installed, latest, pinned, act: !installed ? (pinned && !beyond ? 'install' : 'page') : older ? (beyond ? 'page' : 'update') : '' };
+}
+function checkDrivers() {
+  if (state.drivers.checking) return;
+  state.drivers = { ...state.drivers, checking: true, msg: driversBusy ? state.drivers.msg : '' }; push();
+  updater.check(true);
+  const env = { ...process.env, KRGB_LHM: path.join(path.dirname(SIDECAR), 'lib', 'LibreHardwareMonitorLib.dll') };
+  execFile(SYS('WindowsPowerShell\\v1.0\\powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', DRIVER_QUERY], { windowsHide: true, env, maxBuffer: 32 * 1024 * 1024, timeout: 60000 }, async (e, out) => {
+    let raw = { devices: [], packages: [] };
+    if (e) log(`drivers: query failed: ${e.message.trim()}`);
+    else try { raw = JSON.parse(out); } catch (x) { log(`drivers: ${x.message}`); }
+    const [orgb, pawn] = await Promise.all([latestTag(D.OPENRGB.api), latestTag('https://api.github.com/repos/namazso/PawnIO.Setup/releases/latest')]);
+    state.drivers = {
+      ...state.drivers, checking: false, at: Date.now(), windows: D.windowsRows(raw), lhm: raw.lhm || '',
+      openrgb: drv(D.pkgVer(raw, /^OpenRGB$/i), orgb, D.OPENRGB.v),
+      pawnio: drv(D.pkgVer(raw, /^PawnIO$/i), pawn, fs.existsSync(PAWNIO_SETUP) ? PAWNIO_V : ''),
+    };
+    push();
+  });
+}
+// OpenRGB from its pinned MSI. The server holds OpenRGB.exe, so it stops first; the connect loop starts the new one.
+async function installOpenRgb() {
+  if (state.guard || driversBusy || setupBusy) return;
+  const o = state.drivers.openrgb;
+  if (o.latest && D.cmp(o.latest, D.OPENRGB.v) > 0) return shell.openExternal(D.OPENRGB.page); // newer than we can verify
+  if (o.installed && D.cmp(o.installed, D.OPENRGB.v) >= 0) return; // never downgrade
+  driversBusy = 'openrgb'; state.drivers = { ...state.drivers, busy: 'openrgb', msg: '' }; push();
+  try {
+    await D.installPinned(D.OPENRGB, (file) => new Promise((res, rej) => {
+      execFile(SYS('msiexec.exe'), ['/i', file, '/qn', '/norestart'], { windowsHide: true }, (e) => (!e || e.code === 3010 || e.code === 1641 ? res() : rej(new Error(`installer exit ${e.code}`))));
+    }), {
+      fetch, guard: () => !!state.guard, log,
+      tempDir: path.join(process.env.SystemRoot || 'C:\\Windows', 'Temp'), // admin-owned
+      write: (f, b) => fs.writeFileSync(f, b, { flag: 'wx' }),
+      remove: (f) => fs.unlinkSync(f),
+      before: () => new Promise((r) => {
+        clearInterval(renderTimer);
+        state.openrgb = { ok: false, msg: 'updating openrgb' }; push();
+        if (client) { client.removeAllListeners('disconnect'); client.disconnect(); client = null; }
+        execFile(SYS('taskkill.exe'), ['/F', '/T', '/IM', 'OpenRGB.exe'], { windowsHide: true }, () => r());
+      }),
+      after: async () => { launchedOpenRgb = false; },
+    });
+    log(`drivers: OpenRGB ${D.OPENRGB.v} installed, installer deleted`);
+  } catch (e) {
+    log(`drivers: OpenRGB install: ${e.message}`);
+    state.drivers = { ...state.drivers, msg: `OpenRGB: ${e.message}` };
+  }
+  driversBusy = ''; state.drivers = { ...state.drivers, busy: '' };
+  checkSetup(); checkDrivers();
+}
+
 // ---------- updates ----------
 const updater = U.create({
   version: app.getVersion(), log, packaged: app.isPackaged,
-  onChange: () => { state.update = { ...updater.view(), kind: updater.state.kind }; push(); updateTray(true); },
+  onChange: () => { state.update = { ...updater.view(), kind: updater.state.kind, v: updater.state.v }; push(); updateTray(true); },
   beforeInstall: async () => { quitting = true; clearInterval(renderTimer); await stopSidecar(); if (client) client.disconnect(); },
   spawn: (file, args) => spawn(file, args, { detached: true, stdio: 'ignore' }).unref(),
   quit: () => app.quit(),
@@ -547,7 +637,7 @@ app.whenReady().then(() => {
   app.on('second-instance', (_e, argv) => (argv.includes('--quit') ? app.quit() : showWindow()));
   // Dev aid: RGB_SHOT=<folder> writes fans.txt and a screenshot of each page, starting at 10 s.
   if (DEV && process.env.RGB_SHOT) setTimeout(async () => {
-    for (const p of ['home', 'lighting', 'devices', 'fans', 'system', 'settings']) {
+    for (const p of ['home', 'lighting', 'drivers', 'fans', 'system', 'settings']) {
       await win.webContents.executeJavaScript(`go(${JSON.stringify(p)})`);
       await new Promise((r) => setTimeout(r, 1500));
       fs.writeFileSync(path.join(process.env.RGB_SHOT, `${p}.png`), (await win.webContents.capturePage()).toPNG());
