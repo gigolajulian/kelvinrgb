@@ -25,7 +25,8 @@ const isWraithFan = (d, z) => isWraith(d) && /fan/i.test(z.name);
 // ---------- sensor lookups ----------
 function sensors() { return ST ? ST.hw.flatMap((h) => h.sensors.map((s) => ({ ...s, hwName: h.name, hwType: h.type }))) : []; }
 function pick(hwType, type, nameRe) {
-  const all = sensors().filter((s) => hwType.test(s.hwType) && s.type === type && !/virtual/i.test(s.hwName));
+  // A 0 °C reading means the sensor isn't readable (no admin), not a cold CPU.
+  const all = sensors().filter((s) => hwType.test(s.hwType) && s.type === type && !/virtual/i.test(s.hwName) && !(type === 'Temperature' && s.value <= 0));
   return all.find((s) => nameRe.test(s.name)) || all[0] || null;
 }
 const cpuTemp = () => pick(/^Cpu$/, 'Temperature', /Tctl|Package|Tdie/);
@@ -497,7 +498,8 @@ function onState(s) {
     history.set(sn.id, h);
   }
   health('st-openrgb', s.openrgb.ok, !s.guard, `OpenRGB ${s.openrgb.ok ? 'connected' : s.openrgb.msg}`);
-  health('st-sensors', s.sensors.ok, true, `Sensors ${s.sensors.ok ? 'live' : s.sensors.msg}`);
+  const sensorsFull = s.sensors.ok && s.sensors.admin !== false;
+  health('st-sensors', sensorsFull, true, `Sensors ${sensorsFull ? 'live' : s.sensors.msg}`);
   health('st-guard', !s.guard, s.guard, s.guard ? 'Apex guard active' : 'Apex guard idle');
   if ((page === 'devices' && devicesChanged) || (page === 'fans' && fansChanged)) pages[page].build();
   pages[page].live();
