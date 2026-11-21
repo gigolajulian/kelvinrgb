@@ -127,11 +127,11 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .pw[aria-pressed=false] { color: var(--dim); }
 
 /* conflict prompt */
-.scrim { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(6,7,8,.72); backdrop-filter: blur(6px); }
-.sheet { width: min(460px, calc(100% - 48px)); background: rgba(22,24,27,.92); border: 1px solid var(--line2); border-radius: 12px; padding: 22px; display: flex; flex-direction: column; gap: 10px; animation: sheet-in .18s ease-out; }
+.scrim { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(6,7,8,.38); backdrop-filter: blur(10px) saturate(120%); }
+.sheet { width: min(460px, calc(100% - 48px)); background: rgba(24,26,30,.55); backdrop-filter: blur(34px) saturate(160%); border: 1px solid rgba(255,255,255,.12); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 24px 60px rgba(0,0,0,.35); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 10px; animation: sheet-in .18s ease-out; }
 .sheet h2 { margin: 0; font-size: 18px; font-weight: 500; }
 .sheet p { margin: 0 0 6px; font-size: 13px; line-height: 1.5; }
-.sheet ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; }
+.sheet ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.035); }
 .sheet li { display: flex; align-items: center; gap: 12px; padding: 11px 12px; font-size: 13px; }
 .sheet li + li { border-top: 1px solid var(--line); }
 .sheet li small { display: block; margin-top: 2px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
