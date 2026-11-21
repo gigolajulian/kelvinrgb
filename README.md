@@ -1,5 +1,7 @@
 # KelvinRGB
 
+Made by Julian Gigola. Powered by [OpenRGB](https://openrgb.org).
+
 One dark window for the PC: lighting on every component, fan curves, live sensors and per-device color tuning. It replaces the SignalRGB interface using free engines:
 
 - **Lighting:** [OpenRGB](https://openrgb.org) as an SDK server on port 6742, driven by the `openrgb-sdk` npm package.
@@ -66,3 +68,11 @@ What the app does: every 4 s it checks for `r5apex.exe`, `r5apex_dx12.exe` and `
 - `sidecar/`: LibreHardwareMonitor bridge (`sidecar.cs`, `build.ps1`, `fetch-deps.mjs`).
 
 Settings live in `%APPDATA%\kelvinrgb\settings.json`.
+
+## Credits
+
+- **[OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB)** (GPL 2.0) by Adam Honse and contributors. KelvinRGB is powered by OpenRGB: every lighting change goes through its SDK server. OpenRGB is installed separately and is not bundled.
+- **[openrgb-sdk](https://www.npmjs.com/package/openrgb-sdk)** for the Node client.
+- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (MPL 2.0) for sensors and fan control.
+- **[PawnIO](https://pawnio.eu)** for the hardware access driver.
+- **[IBM Plex](https://github.com/IBM/plex)** (SIL OFL 1.1) for the fonts.
