@@ -51,3 +51,13 @@ test('quiet check failure stays quiet, manual one reports', async () => {
     assert.match(u.view().text, /no public release/);
   } finally { global.fetch = real; }
 });
+
+test('sweep removes only our leftover installers', () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'krgb-'));
+  const ours = ['KelvinRGB-0b0c6c1e-1111-4222-8333-944455556666.exe', 'KelvinRGB-0b0c6c1e-1111-4222-8333-944455556667.msi'];
+  for (const f of [...ours, 'KelvinRGB-notes.exe', 'other.exe']) fs.writeFileSync(path.join(dir, f), 'x');
+  assert.strictEqual(U.sweep(dir), 2);
+  assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['KelvinRGB-notes.exe', 'other.exe']);
+  fs.rmSync(dir, { recursive: true });
+});
