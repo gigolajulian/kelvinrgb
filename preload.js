@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('rgb', {
   openLog: () => ipcRenderer.send('openLog'),
   quit: () => ipcRenderer.send('quit'),
   autostart: (on) => ipcRenderer.send('autostart', on),
+  setup: (action) => ipcRenderer.send('setup', String(action)), // recheck | openrgb | pawnio
+  setupSeen: () => ipcRenderer.send('setupSeen'),
   update: (action) => ipcRenderer.send('update', String(action)), // check | install | releases | openrgb, anything else is ignored
 
   onSettings: (fn) => ipcRenderer.on('settings', (_e, s) => fn(s)),

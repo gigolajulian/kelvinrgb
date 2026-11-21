@@ -1,6 +1,6 @@
 {
   "name": "kelvinrgb",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "description": "One dark window for PC lighting, fans and sensors, on OpenRGB and LibreHardwareMonitor.",
   "main": "main.js",
@@ -9,7 +9,7 @@
     "build:sidecar": "powershell -ExecutionPolicy Bypass -File sidecar/build.ps1",
     "test": "node --test test/math.test.js test/conflicts.test.js test/validate.test.js test/guard.test.js test/update.test.js",
     "postinstall": "node scripts/patch-sdk.js",
-    "dist": "npm run build:sidecar && electron-builder --win nsis"
+    "dist": "npm run build:sidecar && node scripts/fetch-pawnio.js && electron-builder --win nsis"
   },
   "dependencies": {
     "bufferpack": "0.0.6",
@@ -24,6 +24,7 @@
   "build": {
     "appId": "com.juliangigola.kelvinrgb",
     "productName": "KelvinRGB",
+    "afterPack": "scripts/after-pack.js",
     "files": [
       "main.js",
       "preload.js",
@@ -38,6 +39,20 @@
         "filter": [
           "sidecar.exe",
           "lib/**"
+        ]
+      },
+      {
+        "from": "setup",
+        "to": "setup",
+        "filter": [
+          "PawnIO_setup.exe"
+        ]
+      },
+      {
+        "from": "third_party",
+        "to": "setup",
+        "filter": [
+          "PawnIO-*.txt"
         ]
       }
     ],

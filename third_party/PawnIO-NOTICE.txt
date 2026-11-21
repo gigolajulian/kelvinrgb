@@ -1,0 +1,2 @@
+PawnIO_setup.exe 2.2.0 is redistributed unchanged from https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0
+PawnIO is GPL-2.0 (license below). Source: https://github.com/namazso/PawnIO
