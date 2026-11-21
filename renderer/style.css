@@ -227,33 +227,33 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .changes, .bento, .drawer { flex: none; } /* main is a flex column: keep these at their own height */
 .bento { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 230px; align-items: start; }
 .bento .zl { display: block; padding: 0 2px 8px; }
-.case { display: grid; gap: 12px; grid-template-columns: 1.25fr .85fr 1fr; grid-template-areas: "cool ram board" "gpu gpu hub"; }
+.case { display: grid; gap: 12px; grid-template-columns: minmax(0,1.25fr) minmax(212px,.85fr) minmax(0,1fr); grid-template-areas: "cool ram board" "gpu gpu hub"; }
 .desk2 { display: flex; flex-direction: column; gap: 12px; }
 .bt { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px; min-height: 236px; cursor: pointer; }
 .bt:hover { border-color: var(--line2); }
 .bt.sel { border-color: var(--acc); }
 .bt.off .art, .bt.off .sticks, .bt.off .leds, .bt.off .scrub, .bt.off .nm { opacity: .42; }
 .bt .top { display: flex; align-items: flex-start; gap: 10px; }
-.bt .ty { font: 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.bt .ty { font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
 .bt .nm { font-size: 14px; font-weight: 500; line-height: 1.25; }
 .bt .art { flex: 1; display: grid; place-items: center; min-height: 110px; border: 0; border-radius: 8px; background: none; padding: 0; }
 .bt .chg { position: absolute; left: 6px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); }
 .bt .leds { align-self: center; }
 .bt .foot { display: flex; align-items: center; gap: 10px; }
 .bt .foot .scrub { margin: 0; flex: 1; }
-.bt .cw { width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1px solid rgba(255,255,255,.2); }
+.bt .cw { width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1px solid var(--line2); }
 .bt .cw::-webkit-color-swatch { border: 0; border-radius: 50%; }
-.bt .cw.follow { border: 1px dashed rgba(255,255,255,.5); padding: 2px; }
+.bt .cw.follow::-webkit-color-swatch { -webkit-mask: linear-gradient(135deg, #000 45%, transparent 45% 55%, #000 55%); } /* the mock's slash: follows the global colour */
 .bt .cw.mixed::-webkit-color-swatch { opacity: 0; }
 .sticks { flex: 1; display: flex; gap: 2px; justify-content: center; align-items: center; }
 .sticks .st { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 2px; border: 0; border-radius: 8px; background: none; }
-.sticks .st[aria-pressed=true] { background: rgba(143,211,224,.08); }
+.sticks .st[aria-pressed=true] { background: color-mix(in srgb, var(--acc) 8%, transparent); }
 .sticks .st i { width: 8px; height: 22px; border-radius: 2px; }
-.bt.all { min-height: 0; cursor: default; background: rgba(143,211,224,.06); border-color: rgba(143,211,224,.3); }
+.bt.all { min-height: 0; cursor: default; background: color-mix(in srgb, var(--acc) 6%, transparent); border-color: color-mix(in srgb, var(--acc) 30%, transparent); }
 .a-cool { grid-area: cool; } .a-ram { grid-area: ram; } .a-board { grid-area: board; } .a-hub { grid-area: hub; min-height: 200px; }
 .a-gpu { grid-area: gpu; min-height: 200px; } .a-gpu .art { min-height: 90px; }
 @media (max-width: 1240px) { .bento { grid-template-columns: minmax(0, 1fr); } .desk2 { flex-direction: row; flex-wrap: wrap; } .desk2 > * { flex: 1 1 220px; } }
-@media (max-width: 1000px) { .case { grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-areas: "cool ram" "gpu gpu" "board hub"; } }
+@media (max-width: 1000px) { .case { grid-template-columns: minmax(0,1fr) minmax(212px,1fr); grid-template-areas: "cool ram" "gpu gpu" "board hub"; } }
 /* The selected device, laid out wide under the tiles. */
 .drawer { display: flex; flex-direction: column; gap: 14px; }
 .dr-hd { gap: 14px; }

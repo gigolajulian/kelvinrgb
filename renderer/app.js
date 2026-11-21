@@ -22,6 +22,7 @@ const typeLabel = (t) => TYPES[t] || 'Device';
 const isWraith = (d) => d.name === 'AMD Wraith Prism';
 const isWraithFan = (d, z) => isWraith(d) && /fan/i.test(z.name);
 // Devices that sit on the desk, outside the case (the Devices page's right column).
+const HUB = new Set(['Strip', 'Light', 'Fan']); // the first of these takes the case's hub slot
 const DESK = new Set(['Mouse', 'Keyboard', 'Mousemat', 'Headset', 'Stand', 'Pad', 'Speaker', 'Mic', 'Keypad', 'Laptop', 'Monitor', 'Accessory']);
 
 // ---------- sensor lookups ----------
@@ -392,7 +393,7 @@ const pages = {
     // Same-name devices (the four DRAM sticks) share a tile, as on Lighting.
     groups() { return pages.lighting.groups(); },
     area(g, seen) {
-      const a = { Cooler: 'cool', RAM: 'ram', Board: 'board', Graphics: 'gpu' }[g.type] || (DESK.has(g.type) ? 'desk' : 'hub');
+      const a = { Cooler: 'cool', RAM: 'ram', Board: 'board', Graphics: 'gpu' }[g.type] || (DESK.has(g.type) ? 'desk' : HUB.has(g.type) ? 'hub' : 'case');
       if (a === 'desk' || !seen.has(a)) { seen.add(a); return a; }
       return 'case';
     },
@@ -418,13 +419,19 @@ const pages = {
         const key = k ? k.dataset.k : g && (g.devs.some((d) => d.key === this.sel) ? this.sel : g.devs[0].key);
         if (key && key !== this.sel) { this.sel = key; this.zone = 0; this.draw(); }
       };
-      // The colour well sets every colour zone of the tile's devices. Redraw once the picker closes.
+      // The colour well sets every colour zone of the tile's devices. While it is focused, top() leaves the tiles alone
+      // so the open picker isn't destroyed; its own tile's swatches and the panel update in place.
       bento.oninput = (e) => {
         const t = e.target; if (!t.dataset.cw) return;
-        for (const d of grp(t.dataset.cw).devs) this.patch(d.key, { zones: Object.fromEntries(pages.lighting.colourZones(d).map((i) => [i, t.value])) });
+        const g = grp(t.dataset.cw), tile = t.closest('.bt');
+        for (const d of g.devs) this.patch(d.key, { zones: Object.fromEntries(pages.lighting.colourZones(d).map((i) => [i, t.value])) });
         t.classList.remove('follow', 'mixed'); t.style.background = '';
+        const leds = tile.querySelector('.leds'); if (leds) leds.outerHTML = pages.lighting.leds(g);
+        tile.querySelectorAll('.st i').forEach((el, i) => (el.style.background = zoneColor(g.devs[i], 0)));
+        this.editor();
       };
-      bento.onchange = (e) => { if (e.target.dataset.cw) this.draw(); };
+      bento.onchange = (e) => { if (e.target.dataset.cw) { this.top(true); this.editor(); } };
+      bento.addEventListener('focusout', (e) => { if (e.target.dataset.cw) setTimeout(() => this.top()); });
       // Brightness: drag across, or arrow keys (Shift for 1%), Home and End.
       const setB = (el, v) => {
         v = Math.max(0, Math.min(100, Math.round(v)));
@@ -478,8 +485,9 @@ const pages = {
     },
     draw() { this.top(); this.editor(); },
     // Count, the changed list and the tiles. Skipped while a brightness bar is held so the drag isn't cut.
-    top() {
+    top(force) {
       if (this.dragging || page !== 'devices' || !$('#d-bento')) return;
+      if (!force && document.activeElement && document.activeElement.dataset.cw) return; // a colour picker is open
       const a = document.activeElement, fk = a && a.dataset && ['bright', 'on', 'u', 'k', 'cw'].find((x) => x in a.dataset), fv = fk && a.dataset[fk];
       const ch = this.changes(), changed = new Set(ch.map((c) => c.d.key)), L = S.lighting;
       $('#d-count').textContent = `${ST.devices.length} devices · ${changed.size ? `${changed.size} changed` : 'all on the global look'}`;
@@ -495,7 +503,7 @@ const pages = {
         const dim = (0.15 + 0.85 * (L.brightness / 100) * (b / 100)).toFixed(2), c = lt.current(g);
         const mix = `conic-gradient(${g.devs.flatMap((d) => d.zones.map((_z, i) => zoneColor(d, i))).join(',')})`;
         const art = g.devs.length > 1
-          ? `<div class="sticks">${g.devs.map((d, i) => `<button class="st" data-k="${esc(d.key)}" aria-pressed="${d.key === this.sel}" aria-label="Edit ${esc(g.name)} stick ${i + 1}">${deviceIcon(g.type, 46, d.key === this.sel)}<i style="background:${d.zones.length ? zoneColor(d, 0) : '#1b1c1e'};opacity:${dim}"></i></button>`).join('')}</div>`
+          ? `<div class="sticks">${g.devs.map((d, i) => `<button class="st" data-k="${esc(d.key)}" aria-pressed="${d.key === this.sel}" aria-label="Edit ${esc(g.name)} stick ${i + 1}">${deviceIcon(g.type, 42, d.key === this.sel)}<i style="background:${d.zones.length ? zoneColor(d, 0) : '#1b1c1e'};opacity:${dim}"></i></button>`).join('')}</div>`
           : `<button class="art" data-k="${esc(g.devs[0].key)}" aria-pressed="${has}" aria-label="Edit ${esc(g.name)}">${deviceIcon(g.type, SIZE[area] || 96, has)}</button>`;
         return `<div class="g bt a-${area}${has ? ' sel' : ''}${on ? '' : ' off'}" data-g="${esc(g.key)}" role="group" aria-label="${esc(g.name)}">
           ${g.devs.some((d) => changed.has(d.key)) ? '<span class="chg" title="Changed from the global look"></span>' : ''}
