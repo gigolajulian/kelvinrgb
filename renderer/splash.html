@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<title>KelvinRGB</title>
+<style>@font-face{font-family:'IBM Plex Mono';src:url(fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2');font-weight:400}</style>
+<style>
+/* Splash C, Bloom: no window of its own. The ring floats on the desktop and turns from amber to teal as start-up
+   steps finish, then a glass panel opens out of it to the main window's size and the window takes over.
+   This window is transparent, click-through and exactly the main window's bounds. */
+html,body{margin:0;height:100%;overflow:hidden;background:transparent}
+.c{position:fixed;inset:0;display:grid;place-items:center;--hue:#ff8a3d}
+.halo{position:absolute;width:300px;height:300px;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--hue) 22%,transparent),transparent);transition:background .8s,opacity .3s}
+svg{position:relative;animation:spin 2.6s linear infinite}
+.seg{transition:stroke .8s}
+.cap{position:absolute;top:calc(50% + 120px);left:0;right:0;text-align:center;font:11px 'IBM Plex Mono','Cascadia Mono',Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#9aa0a6;transition:opacity .3s}
+.app{position:absolute;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.12);background:rgba(16,17,19,.86);opacity:0}
+.done svg{animation:shrink .45s cubic-bezier(.5,0,.75,0) forwards}
+.done .halo,.done .cap{opacity:0}
+.done .app{animation:open .6s .3s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shrink{to{transform:scale(.2);opacity:0}}
+@keyframes open{0%{opacity:1}100%{opacity:1;width:100%;height:100%;border-radius:8px}}
+@media (prefers-reduced-motion:reduce){svg{animation:none}.done .app{animation-duration:.01ms;animation-delay:0s}.done svg{animation-duration:.01ms}}
+</style>
+</head>
+<body>
+<div class="c" id="c">
+  <div class="halo"></div>
+  <svg viewBox="0 0 160 160" width="160" height="160" aria-hidden="true"><circle class="seg" id="seg" cx="80" cy="80" r="56" fill="none" stroke="#ff8a3d" stroke-width="16" stroke-linecap="round" stroke-dasharray="250 102"/></svg>
+  <div class="cap">KelvinRGB</div>
+  <div class="app"></div>
+</div>
+<script src="splash.js"></script>
+</body>
+</html>

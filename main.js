@@ -40,6 +40,7 @@ const DEFAULTS = {
   fans: {},    // control id -> { mode: bios|curve|fixed, sensor, points, shape, fixed }
   closeConflicts: true, // show the conflict list when RGB apps that fight us run (lib/conflicts.js)
   glass: true, // Windows 11 acrylic behind the window
+  splash: true, // Bloom splash at launch (renderer/splash.html)
 };
 let settings = structuredClone(DEFAULTS);
 try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
@@ -113,6 +114,7 @@ async function loadDevices() {
   }));
   for (const d of state.devices) if (d.leds) client.setCustomMode(d.id);
   state.openrgb = { ok: true, msg: `${state.devices.length} devices` };
+  stepSplash(3);
   log(`OpenRGB: ${state.devices.map((d) => d.name).join(', ')}`);
   push();
   startRender();
@@ -201,7 +203,8 @@ function onSidecarLine(line) {
   if (m.type === 'log') return log(`sidecar: ${m.msg}`);
   if (m.type === 'ready') {
     state.sensors = { ok: true, msg: m.admin ? 'ok' : 'no admin', admin: m.admin, unclean: m.unclean };
-    log(`sidecar ready: ${m.controls} fan controls, admin ${m.admin}`);
+    stepSplash(2);
+    log(`sidecar ready:${m.controls} fan controls, admin ${m.admin}`);
   }
   if (m.type === 'tick') {
     state.hw = m.hw;
@@ -342,6 +345,7 @@ on('conflictClose', (name) => { if (state.conflicts?.some((c) => c.name === name
 on('conflictDone', finishConflicts);
 on('rescan', () => { if (client) { client.requestRescan(); setTimeout(() => loadDevices().catch((e) => log(e.message)), 3000); } });
 on('glass', (v) => { settings.glass = v === true; save(); applyGlass(); });
+on('splash', (v) => { settings.splash = v === true; save(); });
 on('openLog', () => shell.openPath(logFile)); // fixed path, nothing taken from the renderer
 on('quit', () => app.quit());
 on('autostart', (v) => setAutostart(v === true));
@@ -372,7 +376,7 @@ const ICO = path.join(__dirname, 'renderer', 'icon.ico');
 let tray = null;
 let trayKey = '', trayStatus = '', trayAt = 0;
 const EFFECT_NAMES = { static: 'Static', breathing: 'Breathing', spectrum: 'Spectrum', wave: 'Wave', off: 'Off' };
-function showWindow() { if (!win) return; win.setSkipTaskbar(false); if (win.isMinimized()) win.restore(); win.show(); win.focus(); push(); }
+function showWindow() { if (!win) return; if (splash) return endSplash();win.setSkipTaskbar(false); if (win.isMinimized()) win.restore(); win.show(); win.focus(); push(); }
 function hideWindow() { if (win) { win.hide(); win.setSkipTaskbar(true); } }
 function temp(re, hwRe) {
   for (const h of state.hw) if (hwRe.test(h.type)) { const s = h.sensors.find((x) => x.type === 'Temperature' && re.test(x.name)) || h.sensors.find((x) => x.type === 'Temperature'); if (s) return Math.round(s.value); }
@@ -407,6 +411,41 @@ function updateTray(force) {
   ]));
 }
 
+// ---------- splash (Bloom) ----------
+// A transparent, click-through window over the main window's bounds. The ring turns amber to teal as start-up
+// steps finish (Apex checked, sensors, OpenRGB), then a panel opens out of it and the real window takes over.
+let splash = null, splashStep = 0, splashAt = 0, splashEnding = false;
+function openSplash() {
+  splash = new BrowserWindow({
+    ...win.getBounds(), transparent: true, frame: false, resizable: false, movable: false, skipTaskbar: true, alwaysOnTop: true,
+    focusable: false, hasShadow: false, show: false, backgroundColor: '#00000000',
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
+  });
+  splash.setIgnoreMouseEvents(true);
+  splash.webContents.on('will-navigate', (e) => e.preventDefault());
+  splash.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  splash.loadFile(path.join(__dirname, 'renderer', 'splash.html'));
+  splash.once('ready-to-show', () => splash && splash.showInactive());
+  splashAt = Date.now();
+  setTimeout(endSplash, 5000); // never hold the app back longer than this, OpenRGB can be slow to start
+}
+function stepSplash(i) {
+  if (!splash || i <= splashStep) return;
+  splashStep = i;
+  splash.webContents.executeJavaScript(`step(${i})`).catch(() => {});
+  if (i >= 3) endSplash();
+}
+function endSplash() {
+  if (!splash || splashEnding) return;
+  splashEnding = true;
+  const wait = Math.max(0, 1400 - (Date.now() - splashAt)); // long enough to read as a moment, not a flicker
+  setTimeout(() => {
+    splash.webContents.executeJavaScript('step(4); done()').catch(() => {});
+    // the panel has filled the window by now: show the real one, drop the splash just after
+    setTimeout(() => { const s = splash; splash = null; showWindow(); setTimeout(() => s.destroy(), 150); }, 950);
+  }, wait);
+}
+
 // ---------- app ----------
 // One app id in dev and installed, so Windows shows KelvinRGB's icon in the taskbar, never Electron's.
 app.setAppUserModelId('com.juliangigola.kelvinrgb');
@@ -416,7 +455,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler(() => false);
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 900, minHeight: 600, autoHideMenuBar: true, title: 'KelvinRGB',
-    icon: ICO, show: !process.argv.includes('--hidden'),
+    icon: ICO, show: false,
     backgroundColor: '#00000000', backgroundMaterial: settings.glass ? 'acrylic' : 'none', // transparent so acrylic shows through
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, spellcheck: false,
@@ -434,6 +473,9 @@ app.whenReady().then(() => {
   // Close and minimize hide to the tray. Quit from the tray menu or Settings.
   win.on('close', (e) => { if (!quitting) { e.preventDefault(); hideWindow(); } });
   win.on('minimize', (e) => { e.preventDefault(); hideWindow(); });
+  // Hidden start (logon task) shows nothing; otherwise the splash, or the window straight away.
+  if (!process.argv.includes('--hidden')) { if (settings.splash !== false) openSplash(); else win.once('ready-to-show', showWindow); }
+  firstCheck.then(() => stepSplash(1));
   tray = new Tray(ICO);
   tray.on('click', showWindow);
   readAutostart();
