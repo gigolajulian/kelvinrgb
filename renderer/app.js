@@ -549,12 +549,12 @@ const pages = {
         this.edit = { id: c.id, ...structuredClone(S.fans[c.id] || { mode: 'bios', shape: 'smooth', points: PRESETS.Balanced, fixed: 50, sensor: cpuTemp() && cpuTemp().id }) };
       }
       const f = this.edit;
-      main.innerHTML = `<div class="hd"><h1>Fans</h1><span class="sub">Never below ${FLOOR}%. If KelvinRGB stops, the BIOS takes over.</span></div>
+      main.innerHTML = `<div class="hd"><h1>Fans</h1><span class="sub">Never below ${FLOOR}%. If KelvinRGB stops, board fans go back to the BIOS and hub fans to 100%.</span></div>
       <p class="helptext" id="c-unclean" hidden>The sensor service was force-killed earlier this boot, so fans left on BIOS are held at 100% until you reboot.</p>
       ${c ? `<div class="grid" style="grid-template-columns:270px minmax(0,1fr);align-items:start">
         <div class="g" style="padding:8px" id="c-list"></div>
         <div class="g" style="display:flex;flex-direction:column;gap:14px">
-          <div class="row" style="flex-wrap:wrap"><div style="flex:1"><div style="font-size:16px;font-weight:500">${esc(fanName(c))}</div><div class="sub" id="c-sub"></div></div>${seg('mode', [['curve', 'Curve'], ['fixed', 'Fixed'], ['bios', 'BIOS']], f.mode)}</div>
+          <div class="row" style="flex-wrap:wrap"><div style="flex:1"><div style="font-size:16px;font-weight:500">${esc(fanName(c))}</div><div class="sub" id="c-sub"></div></div>${seg('mode', [['curve', 'Curve'], ['fixed', 'Fixed'], ['bios', c.kind === 'hub' ? 'Hub 100%' : 'BIOS']], f.mode)}</div>
           <svg class="curve" id="c-svg" viewBox="-36 -10 476 236" role="img" aria-label="Fan curve: temperature to fan speed"></svg>
           <span class="lbl">drag points · double click to add · right click to remove</span>
           <div id="c-fixed" ${f.mode === 'fixed' ? '' : 'hidden'}>${slider('c-fixed-r', 'fixed speed', FLOOR, 100, f.fixed ?? 50, `${f.fixed ?? 50}%`)}</div>
@@ -562,7 +562,7 @@ const pages = {
             <label class="row"><span class="lbl">follows</span><select class="btn" id="c-sensor">${temps.map((s) => `<option value="${esc(s.id)}" ${s.id === f.sensor ? 'selected' : ''}>${esc(s.hwName)} · ${esc(s.name)}</option>`).join('')}</select></label>
             ${seg('shape', [['smooth', 'Smooth'], ['linear', 'Linear'], ['stepped', 'Steps']], f.shape)}
             <label class="row"><span class="lbl">preset</span><select class="btn" id="c-preset"><option value="">Choose</option>${Object.keys(PRESETS).map((p) => `<option>${p}</option>`).join('')}</select></label>
-            <span class="grow"></span><span class="lbl" id="c-dirty"></span><button class="btn p" id="c-apply">Apply</button>
+            <span class="grow"></span><span class="lbl" id="c-dirty"></span><button class="btn" id="c-apply-all">Apply to all fans</button><button class="btn p" id="c-apply">Apply</button>
           </div>
         </div></div>` : `<div class="g"><p class="helptext">${esc(fanHelp())}</p></div>`}`;
       if (!c) return;
@@ -577,6 +577,7 @@ const pages = {
       $('#c-sensor').onchange = (e) => { f.sensor = e.target.value; this.drawCurve(); this.dirty(); };
       $('#c-preset').onchange = (e) => { if (e.target.value) { f.points = structuredClone(PRESETS[e.target.value]); this.drawCurve(); this.dirty(); } };
       $('#c-apply').onclick = () => { const { id, ...cfg } = f; S.fans[id] = structuredClone(cfg); rgb.fan(id, cfg); this.dirty(); };
+      $('#c-apply-all').onclick = () => { const { id: _, ...cfg } = f; for (const x of ST.controls) { const keep = S.fans[x.id]?.label; S.fans[x.id] = { ...structuredClone(cfg), ...(keep ? { label: keep } : {}) }; rgb.fan(x.id, S.fans[x.id]); } this.dirty(); this.live(); };
       $('#c-list').onclick = (e) => { const b = e.target.closest('[data-id]'); if (b && b.dataset.id !== this.sel) { this.sel = b.dataset.id; this.edit = null; this.build(); this.live(); } };
       this.bindCurve(); this.drawCurve(); this.dirty();
     },
@@ -626,7 +627,7 @@ const pages = {
       $('#c-unclean').hidden = !ST.sensors.unclean;
       box.innerHTML = ST.controls.map((c) => {
         const f = S.fans[c.id];
-        const mode = !f || f.mode === 'bios' ? (c.ours ? 'held 100% until reboot' : 'BIOS') : f.mode === 'fixed' ? `Fixed ${f.fixed}%` : 'Curve';
+        const mode = !f || f.mode === 'bios' ? (c.kind === 'hub' ? 'Hub default' : c.ours ? 'held 100% until reboot' : 'BIOS') : f.mode === 'fixed' ? `Fixed ${f.fixed}%` : 'Curve';
         return `<button class="fan" data-id="${esc(c.id)}" aria-pressed="${c.id === this.sel}"><span>${esc(fanName(c))}</span><span class="mono">${fanRpm(c) ?? '-'} rpm</span><span class="m">${mode} · ${Math.round(c.value)}%</span></button>`;
       }).join('');
       if ($('#c-svg') && !document.querySelector('#c-svg:active')) this.drawCurve();
