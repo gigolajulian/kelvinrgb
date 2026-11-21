@@ -14,4 +14,6 @@ contextBridge.exposeInMainWorld('rgb', {
   conflictDone: () => ipcRenderer.send('conflictDone'),
   glass: (on) => ipcRenderer.send('glass', on),
   openLog: () => ipcRenderer.send('openLog'),
+  quit: () => ipcRenderer.send('quit'),
+  onSettings: (fn) => ipcRenderer.on('settings', (_e, s) => fn(s)),
 });

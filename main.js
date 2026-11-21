@@ -1,5 +1,5 @@
 // KelvinRGB: one window for lighting (OpenRGB SDK), sensors and fans (LibreHardwareMonitor sidecar).
-const { app, BrowserWindow, ipcMain, Notification, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification, session, shell, Tray, Menu, nativeImage } = require('electron');
 const { spawn, execFile, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -61,7 +61,7 @@ const state = {
   log: [],
 };
 let win;
-function push() { if (win && !win.isDestroyed()) win.webContents.send('state', state); }
+function push() { if (win && !win.isDestroyed()) win.webContents.send('state', state); updateTray(); }
 // The installed app has no console, so the log also goes to %APPDATA%\KelvinRGB\log.txt (reset each launch).
 const logFile = path.join(app.getPath('userData'), 'log.txt');
 try { fs.writeFileSync(logFile, ''); } catch {}
@@ -326,7 +326,7 @@ const on = (ch, fn) => ipcMain.on(ch, (e, ...a) => { if (ours(e)) fn(...a); else
 const hasDevice = (k) => state.devices.some((d) => d.key === k);
 const hasFan = (id) => state.controls.some((c) => c.id === id);
 ipcMain.handle('get', (e) => (ours(e) ? { settings, state, floor: FLOOR } : null));
-on('lighting', (patch) => { const p = V.lighting(patch); if (!p) return; Object.assign(settings.lighting, p); save(); startRender(); });
+on('lighting', (patch) => { const p = V.lighting(patch); if (!p) return; Object.assign(settings.lighting, p); save(); startRender(); updateTray(); });
 on('device', (key, patch) => {
   const p = V.device(patch); if (!p || !hasDevice(key)) return;
   const cur = settings.devices[key] || {};
@@ -341,18 +341,58 @@ on('conflictDone', finishConflicts);
 on('rescan', () => { if (client) { client.requestRescan(); setTimeout(() => loadDevices().catch((e) => log(e.message)), 3000); } });
 on('glass', (v) => { settings.glass = v === true; save(); applyGlass(); });
 on('openLog', () => shell.openPath(logFile)); // fixed path, nothing taken from the renderer
+on('quit', () => app.quit());
 function applyGlass() { if (win && process.platform === 'win32') win.setBackgroundMaterial(settings.glass ? 'acrylic' : 'none'); }
 
+// ---------- tray helper: status at a glance, click opens the app, right click for quick settings ----------
+const ICON = path.join(__dirname, 'renderer', 'icon.png');
+const ICO = path.join(__dirname, 'renderer', 'icon.ico');
+let tray = null;
+let trayKey = '';
+const EFFECT_NAMES = { static: 'Static', breathing: 'Breathing', spectrum: 'Spectrum', wave: 'Wave', off: 'Off' };
+function showWindow() { if (!win) return; win.setSkipTaskbar(false); if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+function hideWindow() { if (win) { win.hide(); win.setSkipTaskbar(true); } }
+function temp(re, hwRe) {
+  for (const h of state.hw) if (hwRe.test(h.type)) { const s = h.sensors.find((x) => x.type === 'Temperature' && re.test(x.name)) || h.sensors.find((x) => x.type === 'Temperature'); if (s) return Math.round(s.value); }
+  return null;
+}
+// Changes the app makes from the tray are sent to the window so its copy of settings stays in step.
+function trayChange(fn) { fn(); save(); if (win && !win.isDestroyed()) win.webContents.send('settings', settings); updateTray(true); }
+function updateTray(force) {
+  if (!tray) return;
+  const L = settings.lighting, cpu = temp(/Tctl|Package|Tdie/, /^Cpu$/), gpu = temp(/GPU Core|Edge/, /^Gpu/);
+  const lights = state.guard ? 'paused for Apex' : L.on ? EFFECT_NAMES[L.effect] : 'off';
+  const temps = [cpu != null && `CPU ${cpu} °C`, gpu != null && `GPU ${gpu} °C`].filter(Boolean).join(' · ') || 'sensors starting';
+  const key = JSON.stringify([lights, temps, state.openrgb.msg, state.sensors.msg, state.guard, settings.glass, settings.closeConflicts, L.effect, L.on]);
+  if (key === trayKey && !force) return;
+  trayKey = key;
+  tray.setToolTip(`KelvinRGB\nLights ${lights}\n${temps}`.slice(0, 127));
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: `Lights ${lights}`, enabled: false },
+    { label: temps, enabled: false },
+    { label: `OpenRGB ${state.openrgb.ok ? 'connected' : state.openrgb.msg} · Sensors ${state.sensors.ok ? 'live' : state.sensors.msg}`, enabled: false },
+    { type: 'separator' },
+    { label: 'Open KelvinRGB', click: showWindow },
+    { type: 'separator' },
+    { label: 'Lights on', type: 'checkbox', checked: L.on, enabled: !state.guard, click: (m) => trayChange(() => { L.on = m.checked; startRender(); }) },
+    { label: 'Effect', enabled: !state.guard, submenu: Object.entries(EFFECT_NAMES).map(([k, n]) => ({ label: n, type: 'radio', checked: L.effect === k, click: () => trayChange(() => { L.effect = k; startRender(); }) })) },
+    { label: 'Glass background', type: 'checkbox', checked: settings.glass !== false, click: (m) => trayChange(() => { settings.glass = m.checked; applyGlass(); }) },
+    { label: 'Conflict check', type: 'checkbox', checked: settings.closeConflicts !== false, click: (m) => trayChange(() => { settings.closeConflicts = m.checked; declined.clear(); }) },
+    { type: 'separator' },
+    { label: 'Quit KelvinRGB', click: () => app.quit() },
+  ]));
+}
+
 // ---------- app ----------
-// Windows toasts need an AppUserModelID; in dev it must point at electron.exe.
-app.setAppUserModelId(app.isPackaged ? 'com.juliangigola.kelvinrgb' : process.execPath);
+// One app id in dev and installed, so Windows shows KelvinRGB's icon in the taskbar, never Electron's.
+app.setAppUserModelId('com.juliangigola.kelvinrgb');
 app.whenReady().then(() => {
   // Deny anything a page could ask for (camera, mic, clipboard reads, ...).
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 900, minHeight: 600, autoHideMenuBar: true, title: 'KelvinRGB',
-    icon: path.join(__dirname, 'renderer', 'icon.png'),
+    icon: ICON, show: !process.argv.includes('--hidden'),
     backgroundColor: '#00000000', backgroundMaterial: settings.glass ? 'acrylic' : 'none', // transparent so acrylic shows through
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, spellcheck: false,
@@ -365,7 +405,15 @@ app.whenReady().then(() => {
   win.webContents.on('will-redirect', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  app.on('second-instance', () => { if (win.isMinimized()) win.restore(); win.focus(); });
+  // Taskbar icon and id for this window (dev runs as electron.exe, which would otherwise lend its own icon).
+  if (process.platform === 'win32') win.setAppDetails({ appId: 'com.juliangigola.kelvinrgb', appIconPath: ICO, appIconIndex: 0 });
+  // Close and minimize hide to the tray. Quit from the tray menu or Settings.
+  win.on('close', (e) => { if (!quitting) { e.preventDefault(); hideWindow(); } });
+  win.on('minimize', (e) => { e.preventDefault(); hideWindow(); });
+  tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16, quality: 'best' }));
+  tray.on('click', showWindow);
+  updateTray(true);
+  app.on('second-instance', showWindow);
   // Dev aid: RGB_SHOT=<folder> writes fans.txt and a screenshot of each page, starting at 10 s.
   if (DEV && process.env.RGB_SHOT) setTimeout(async () => {
     for (const p of ['home', 'lighting', 'devices', 'fans', 'system', 'settings']) {
@@ -393,4 +441,4 @@ app.on('before-quit', async (e) => {
   if (client) client.disconnect();
   app.quit();
 });
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {}); // the tray keeps KelvinRGB running

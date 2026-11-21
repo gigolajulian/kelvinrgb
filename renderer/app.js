@@ -363,7 +363,11 @@ const pages = {
           <div><span class="t"><span>Fan floor</span><span>No fan goes below this</span></span><span class="mono">${FLOOR}%</span></div>
           <div><span class="t"><span>Log file</span><span>%APPDATA%\\KelvinRGB\\log.txt, reset each launch</span></span><button class="btn" id="s-log">Open</button></div>
         </div></div>
+        <div class="g" style="padding:6px 16px"><div class="set">
+          <div><span class="t"><span>Quit KelvinRGB</span><span>Closing or minimizing the window keeps KelvinRGB in the tray. Quit stops it fully and hands the fans back to the BIOS.</span></span><button class="btn" id="s-quit">Quit</button></div>
+        </div></div>
       </div>`;
+      $('#s-quit').onclick = () => rgb.quit();
       const flip = (b) => { const v = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', v); return v; };
       $('#s-conf').onclick = (e) => { S.closeConflicts = flip(e.currentTarget); rgb.closeConflicts(S.closeConflicts); };
       $('#s-glass').onclick = (e) => { S.glass = flip(e.currentTarget); rgb.glass(S.glass); applyGlass(); };
@@ -507,4 +511,6 @@ rgb.get().then((r) => {
   go(page);
   onState(r.state);
   rgb.onState(onState);
+  // the tray menu changed something: take main's copy and redraw
+  rgb.onSettings((s) => { S = s; applyGlass(); footer(); if (page === 'lighting' || page === 'settings') go(page); });
 });
