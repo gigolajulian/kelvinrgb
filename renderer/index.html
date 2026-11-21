@@ -2,37 +2,48 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
 <title>KelvinRGB</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="amb" aria-hidden="true"><i></i><i></i></div>
 <div class="app">
   <div class="body">
     <nav aria-label="Pages">
-      <span class="brand">KELVIN</span>
+      <span class="brand"><img src="icon.png" width="20" height="20" alt="">KELVIN</span>
+      <button data-page="home"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M2 7.5 8 2.5l6 5M3.5 6.5V13.5h9V6.5"/></svg>Home</button>
       <button data-page="lighting"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="6.5" r="4"/><path d="M6 13h4M6.5 15h3"/></svg>Lighting</button>
       <button data-page="devices"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="2" y="3" width="12" height="9" rx="1"/><path d="M5 14h6"/></svg>Devices</button>
-      <button data-page="cooling"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="1.5"/><path d="M8 6.5C8 3 10 2 11.5 3S10 6.5 8 6.5M9.5 8c3.5 0 4.5 2 3.5 3.5S9.5 10 9.5 8M8 9.5c0 3.5-2 4.5-3.5 3.5S6 9.5 8 9.5M6.5 8C3 8 2 6 3 4.5S6.5 6 6.5 8"/></svg>Cooling</button>
-      <button data-page="monitoring"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1 9h3l2-5 3 9 2-6 1 2h3"/></svg>Monitoring</button>
-      <div class="status">
-        <div><span class="lbl">openrgb</span><span class="lbl soft" id="st-openrgb">...</span></div>
-        <div><span class="lbl">sensors</span><span class="lbl soft" id="st-sensors">...</span></div>
-        <div><span class="lbl">apex guard</span><span class="lbl soft" id="st-guard">...</span></div>
+      <button data-page="fans"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="1.5"/><path d="M8 6.5C8 3 10 2 11.5 3S10 6.5 8 6.5M9.5 8c3.5 0 4.5 2 3.5 3.5S9.5 10 9.5 8M8 9.5c0 3.5-2 4.5-3.5 3.5S6 9.5 8 9.5M6.5 8C3 8 2 6 3 4.5S6.5 6 6.5 8"/></svg>Fans</button>
+      <button data-page="system"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1 9h3l2-5 3 9 2-6 1 2h3"/></svg>System</button>
+      <div class="sep"></div>
+      <button data-page="settings"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</button>
+      <div class="health" aria-live="polite">
+        <div><span class="dot" id="st-openrgb-d"></span><span id="st-openrgb">OpenRGB</span></div>
+        <div><span class="dot" id="st-sensors-d"></span><span id="st-sensors">Sensors</span></div>
+        <div><span class="dot" id="st-guard-d"></span><span id="st-guard">Apex guard</span></div>
       </div>
     </nav>
     <main id="page"></main>
   </div>
   <footer>
-    <div class="row" style="min-width: 200px;">
-      <span id="ft-swatch" style="width: 28px; height: 28px; border-radius: 4px;"></span>
-      <div style="display: flex; flex-direction: column;"><span id="ft-effect" style="font-size: 13px;"></span><span class="lbl" id="ft-sub"></span></div>
-    </div>
+    <span id="ft-swatch" class="sw" style="width:30px;height:30px;border-radius:8px"></span>
+    <div style="display:flex;flex-direction:column;width:180px"><span id="ft-effect" style="font-size:13px"></span><span class="lbl" id="ft-sub" style="font-size:10px"></span></div>
     <span class="grow"></span>
-    <button class="round" id="ft-power" aria-label="Lights on or off"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M7 1v5M3.5 3.5a5 5 0 1 0 7 0"/></svg></button>
+    <button class="pw" id="ft-power" aria-label="Lights on or off"><svg width="15" height="15" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M7 1v5M3.5 3.5a5 5 0 1 0 7 0"/></svg></button>
     <span class="grow"></span>
-    <label class="row" style="width: 240px;"><span class="lbl">brightness</span><input type="range" id="ft-bright" min="0" max="100"><span class="lbl num soft" id="ft-bright-v"></span></label>
+    <label class="row" style="width:260px"><span class="lbl">brightness</span><input type="range" id="ft-bright" min="0" max="100"><span class="num" id="ft-bright-v" style="width:28px;text-align:right"></span></label>
   </footer>
+</div>
+<div class="scrim" id="conflicts" hidden>
+  <div class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="cf-title" aria-describedby="cf-sub">
+    <span class="lbl" id="cf-count"></span>
+    <h2 id="cf-title">Other RGB apps are running</h2>
+    <p class="soft" id="cf-sub">They hold the same devices as KelvinRGB, so the lights fight. Close each one, then continue. Lights and fans start when you continue.</p>
+    <ul id="cf-list" aria-live="polite"></ul>
+    <div class="row cf-actions"><span class="grow"></span><button class="btn" id="cf-done">Continue anyway</button></div>
+  </div>
 </div>
 <script src="app.js"></script>
 </body>
