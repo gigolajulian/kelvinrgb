@@ -1,8 +1,11 @@
-// Called by main.js with executeJavaScript: step(0..4) as start-up steps finish, done() to open into the app.
-const HUES = ['#ff8a3d', '#ffc79a', '#fff4e6', '#c4e6ec', '#8fd3e0'];
-window.step = (i) => {
-  const h = HUES[Math.max(0, Math.min(HUES.length - 1, i | 0))];
-  document.getElementById('c').style.setProperty('--hue', h);
-  document.getElementById('seg').setAttribute('stroke', h);
+// Called by main.js with executeJavaScript: step(i, secs) as start-up steps finish (1..4), done() to fade out.
+const N = 4;
+window.step = (i, secs) => {
+  i = Math.max(0, Math.min(N, i | 0));
+  document.getElementById('prog').style.strokeDashoffset = 390 - 390 * (i / N);
+  document.querySelectorAll('#steps li').forEach((li, j) => {
+    li.className = j < i ? 'ok' : j === i ? 'run' : '';
+    if (secs && j === i - 1 && li.lastElementChild.textContent === '') li.lastElementChild.textContent = `${secs}s`;
+  });
 };
-window.done = () => document.getElementById('c').classList.add('done');
+window.done = () => { window.step(N, ''); document.getElementById('d').classList.add('done'); };

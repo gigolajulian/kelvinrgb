@@ -4,33 +4,61 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
 <title>KelvinRGB</title>
-<style>@font-face{font-family:'IBM Plex Mono';src:url(fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2');font-weight:400}</style>
 <style>
-/* Splash C, Bloom: no window of its own. The ring floats on the desktop and turns from amber to teal as start-up
-   steps finish, then a glass panel opens out of it to the main window's size and the window takes over.
-   This window is transparent, click-through and exactly the main window's bounds. */
-html,body{margin:0;height:100%;overflow:hidden;background:transparent}
-.c{position:fixed;inset:0;display:grid;place-items:center;--hue:#ff8a3d}
-.halo{position:absolute;width:300px;height:300px;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--hue) 22%,transparent),transparent);transition:background .8s,opacity .3s}
-svg{position:relative;animation:spin 2.6s linear infinite}
-.seg{transition:stroke .8s}
-.cap{position:absolute;top:calc(50% + 120px);left:0;right:0;text-align:center;font:11px 'IBM Plex Mono','Cascadia Mono',Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;color:#9aa0a6;transition:opacity .3s}
-.app{position:absolute;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.12);background:rgba(16,17,19,.86);opacity:0}
-.done svg{animation:shrink .45s cubic-bezier(.5,0,.75,0) forwards}
-.done .halo,.done .cap{opacity:0}
-.done .app{animation:open .6s .3s cubic-bezier(.2,.8,.2,1) forwards}
-@keyframes spin{to{transform:rotate(360deg)}}
-@keyframes shrink{to{transform:scale(.2);opacity:0}}
-@keyframes open{0%{opacity:1}100%{opacity:1;width:100%;height:100%;border-radius:8px}}
-@media (prefers-reduced-motion:reduce){svg{animation:none}.done .app{animation-duration:.01ms;animation-delay:0s}.done svg{animation-duration:.01ms}}
+/* Splash D: a glass tile. The logo's own ring fills as start-up steps finish, the steps tick off below.
+   The window is transparent and click-through; main.js calls step(i, secs) and done(). */
+@font-face{font-family:'IBM Plex Mono';src:url(fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2');font-weight:400}
+@font-face{font-family:'IBM Plex Sans';src:url(fonts/ibm-plex-sans-latin-500-normal.woff2) format('woff2');font-weight:500 700}
+:root{--ink:#e6e7e8;--soft:#9aa0a6;--dim:#6c7177;--acc:#8fd3e0;--ok:#7fd49b;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.12);
+  --mono:'IBM Plex Mono','Cascadia Mono',Consolas,monospace;--sans:'IBM Plex Sans','Segoe UI',system-ui,sans-serif}
+html,body{margin:0;height:100%;overflow:hidden;background:transparent;color:var(--ink)}
+body{display:grid;place-items:center}
+.d{width:320px;padding:30px 26px 18px;border-radius:22px;background:rgba(17,19,22,.94);border:1px solid var(--line2);box-sizing:border-box;
+  opacity:0;transform:scale(.96);animation:in .5s cubic-bezier(.2,.8,.2,1) forwards}
+.d.done{animation:out .4s ease forwards}
+.logo{display:block;margin:0 auto}
+.track{stroke:rgba(255,255,255,.07)}
+.prog{transition:stroke-dashoffset .6s cubic-bezier(.3,.7,.2,1)}
+h1{margin:16px 0 14px;text-align:center;font:600 17px var(--sans)}
+ul{list-style:none;margin:0;padding:10px 0 0;border-top:1px solid var(--line)}
+li{display:flex;align-items:center;gap:10px;height:26px;font:12px var(--mono);color:var(--dim);transition:color .3s}
+li i{width:7px;height:7px;border-radius:50%;border:1px solid var(--line2);flex:none;transition:all .3s}
+li.run{color:var(--ink)}
+li.run i{border-color:var(--acc);animation:pulse 1s ease-in-out infinite}
+li.ok{color:var(--soft)}
+li.ok i{background:var(--ok);border-color:var(--ok)}
+li span:last-child{margin-left:auto;font-size:11px;color:var(--dim)}
+.credit{margin-top:14px;text-align:center;font:10px var(--mono);letter-spacing:.04em;color:var(--dim)}
+@keyframes in{to{opacity:1;transform:none}}
+@keyframes out{to{opacity:0;transform:scale(.98)}}
+@keyframes pulse{50%{box-shadow:0 0 0 4px rgba(143,211,224,.15)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
-<div class="c" id="c">
-  <div class="halo"></div>
-  <svg viewBox="0 0 160 160" width="160" height="160" aria-hidden="true"><circle class="seg" id="seg" cx="80" cy="80" r="56" fill="none" stroke="#ff8a3d" stroke-width="16" stroke-linecap="round" stroke-dasharray="250 102"/></svg>
-  <div class="cap">KelvinRGB</div>
-  <div class="app"></div>
+<div class="d" id="d">
+  <svg class="logo" viewBox="0 0 256 256" width="112" height="112" aria-hidden="true">
+    <defs>
+      <linearGradient id="kg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#ff8a3d"/><stop offset=".5" stop-color="#fff4e6"/><stop offset="1" stop-color="#8fd3e0"/></linearGradient>
+      <linearGradient id="kb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2e33"/><stop offset="1" stop-color="#0a0b0c"/></linearGradient>
+      <linearGradient id="ks" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".05"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+      <clipPath id="kc"><path d="M128 8C30 8 8 30 8 128s22 120 120 120 120-22 120-120S226 8 128 8Z"/></clipPath>
+    </defs>
+    <g clip-path="url(#kc)">
+      <rect width="256" height="256" fill="url(#kb)"/>
+      <circle class="track" cx="128" cy="128" r="62" fill="none" stroke-width="28"/>
+      <circle class="prog" id="prog" cx="128" cy="128" r="62" fill="none" stroke="url(#kg)" stroke-width="28" stroke-linecap="round" stroke-dasharray="390" stroke-dashoffset="390" transform="rotate(-90 128 128)"/>
+      <rect width="256" height="128" fill="url(#ks)"/>
+    </g>
+  </svg>
+  <h1>KelvinRGB</h1>
+  <ul id="steps">
+    <li class="run"><i></i><span>Apex check</span><span></span></li>
+    <li><i></i><span>Sensors</span><span></span></li>
+    <li><i></i><span>OpenRGB</span><span></span></li>
+    <li><i></i><span>Lighting</span><span></span></li>
+  </ul>
+  <div class="credit">Made by Julian · Powered by OpenRGB</div>
 </div>
 <script src="splash.js"></script>
 </body>
