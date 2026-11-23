@@ -1,0 +1,13 @@
+diff --git a/.github/dependabot.yml b/.github/dependabot.yml
+index b9beb38..8f07351 100644
+--- a/.github/dependabot.yml
++++ b/.github/dependabot.yml
+@@ -5,7 +5,7 @@ updates:
+     schedule:
+       interval: weekly
+     open-pull-requests-limit: 5
+-  - package-ecosystem: github-actions
++  - package-ecosystem: docker
+     directory: /
+     schedule:
+       interval: monthly

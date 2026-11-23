@@ -1,0 +1,13 @@
+diff --git a/lib/update.js b/lib/update.js
+index 2faf58e..0b79976 100644
+--- a/lib/update.js
++++ b/lib/update.js
+@@ -57,7 +57,7 @@ function create({ version, log, onChange, beforeInstall, spawn, quit, packaged }
+     manual = !!isManual;
+     if (manual) set({ kind: 'checking' });
+     try {
+-      const r = await fetch(API, { headers: { 'User-Agent': 'KelvinRGB', Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(TIMEOUT) });
++      const r = await fetch(API, { headers: { 'User-Agent': 'KelvinRGB', Accept: 'application/vnd.github+json' } });
+       if (r.status === 404) throw new Error('no public release yet');
+       if (!r.ok) throw new Error(`GitHub answered ${r.status}`);
+       const p = pick(await r.json());

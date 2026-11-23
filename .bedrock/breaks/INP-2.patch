@@ -1,0 +1,13 @@
+diff --git a/lib/store.js b/lib/store.js
+index 72da87e..a745da9 100644
+--- a/lib/store.js
++++ b/lib/store.js
+@@ -3,7 +3,7 @@ const nodeFs = require('node:fs');
+ 
+ // Write to a temp file, then rename over the real one: a crash mid-write leaves the old file whole.
+ function writeAtomic(file, text, fs = nodeFs) {
+-  const tmp = `${file}.tmp`;
++  const tmp = file;
+   fs.writeFileSync(tmp, text);
+   fs.renameSync(tmp, file);
+ }

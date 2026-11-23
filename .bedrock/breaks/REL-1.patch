@@ -1,0 +1,13 @@
+diff --git a/lib/validate.js b/lib/validate.js
+index b9331e1..a80b132 100644
+--- a/lib/validate.js
++++ b/lib/validate.js
+@@ -40,7 +40,7 @@ function device(p) {
+ function fan(p, floor) {
+   if (!p || typeof p !== 'object' || !MODES.includes(p.mode)) return null;
+   const out = { mode: p.mode, shape: SHAPES.includes(p.shape) ? p.shape : 'smooth' };
+-  out.fixed = num(p.fixed, floor, 100) ?? 50;
++  out.fixed = num(p.fixed, 0, 100) ?? 50;
+   if (str(p.sensor, 300) != null) out.sensor = p.sensor;
+   if (str(p.label, 60) != null) out.label = p.label.trim();
+   const pts = Array.isArray(p.points) ? p.points.filter((q) => Array.isArray(q) && q.length === 2 && num(q[0], 0, 120) != null && num(q[1], 0, 100) != null) : [];

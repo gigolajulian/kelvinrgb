@@ -1,0 +1,13 @@
+diff --git a/lib/update.js b/lib/update.js
+index 2faf58e..572c142 100644
+--- a/lib/update.js
++++ b/lib/update.js
+@@ -92,7 +92,7 @@ function create({ version, log, onChange, beforeInstall, spawn, quit, packaged }
+       const sha = hash.digest('hex');
+       if (sha !== rel.sha) throw new Error('checksum does not match, not installing');
+       const s = await fetch(rel.sigUrl, { headers: { 'User-Agent': 'KelvinRGB' }, signal: AbortSignal.timeout(TIMEOUT) });
+-      if (!s.ok || !signed(v, sha, await s.text())) throw new Error('signature does not match, not installing');
++      if (!s.ok) throw new Error('signature does not match, not installing');
+       // Admin-owned temp, random name, refuse to reuse an existing file.
+       const file = path.join(process.env.SystemRoot || 'C:\\Windows', 'Temp', `KelvinRGB-${crypto.randomUUID()}.exe`);
+       fs.writeFileSync(file, Buffer.concat(chunks), { flag: 'wx' });
