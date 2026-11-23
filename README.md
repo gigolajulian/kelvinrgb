@@ -24,6 +24,14 @@ This builds the sidecar, then writes `dist\KelvinRGB Setup <version>.exe`. The i
 
 The build is unsigned, so Windows SmartScreen may warn the first time: More info, then Run anyway. It uses the default Electron icon for now.
 
+## Release an update
+
+1. Bump `version` in `package.json`, then `npm run dist`.
+2. `gh release create v<version> "dist/KelvinRGB Setup <version>.exe" --title "KelvinRGB <version>"`.
+3. `npm run sign -- --upload` signs the installer and uploads `KelvinRGB.Setup.<version>.exe.sig` to that release. Installed copies refuse an update without a valid `.sig`.
+
+The key is `~/.release-keys/updates-ed25519.pem` on Julian's PC (or the file `RELEASE_SIGNING_KEY` points to). It never goes in a repo. If it is lost, installed copies can't update again, so keep a backup.
+
 ## Setup (run from source)
 
 1. Install the engines (once):

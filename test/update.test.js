@@ -13,8 +13,10 @@ test('version compare', () => {
 
 const sha = 'a'.repeat(64);
 test('release pick', () => {
-  const ok = U.pick({ tag_name: 'v0.3.0', assets: [{ name: 'KelvinRGB Setup 0.3.0.exe.blockmap' }, { name: 'KelvinRGB-Setup-0.3.0.exe', browser_download_url: 'https://github.com/x', size: 5, digest: `sha256:${sha}` }] });
-  assert.deepStrictEqual(ok, { v: '0.3.0', url: 'https://github.com/x', size: 5, sha, name: 'KelvinRGB-Setup-0.3.0.exe' });
+  const ok = U.pick({ tag_name: 'v0.3.0', assets: [{ name: 'KelvinRGB Setup 0.3.0.exe.blockmap' }, { name: 'KelvinRGB-Setup-0.3.0.exe', browser_download_url: 'https://github.com/x', size: 5, digest: `sha256:${sha}` }, { name: 'KelvinRGB-Setup-0.3.0.exe.sig', browser_download_url: 'https://github.com/sig' }] });
+  assert.deepStrictEqual(ok, { v: '0.3.0', url: 'https://github.com/x', size: 5, sha, name: 'KelvinRGB-Setup-0.3.0.exe', sigUrl: 'https://github.com/sig' });
+  assert.match(U.pick({ tag_name: 'v0.3.0', assets: [{ name: 'KelvinRGB-Setup-0.3.0.exe', digest: `sha256:${sha}` }] }).error, /not signed/);
+  assert.match(U.pick({ tag_name: 'v0.4.0', assets: [{ name: 'KelvinRGB-Setup-0.3.0.exe', digest: `sha256:${sha}` }, { name: 'KelvinRGB-Setup-0.3.0.exe.sig' }] }).error, /version/);
   assert.ok(U.pick({ tag_name: 'v0.3.0', assets: [{ name: 'KelvinRGB-Setup-0.3.0.exe' }] }).error); // no digest, no install
   assert.ok(U.pick({ tag_name: 'v0.3.0', assets: [{ name: 'evil.exe', digest: `sha256:${sha}` }] }).error);
   assert.ok(U.pick(null).error);
@@ -22,7 +24,7 @@ test('release pick', () => {
 
 test('a download that does not match the checksum never runs', async () => {
   const real = global.fetch;
-  const rel = { tag_name: 'v9.0.0', assets: [{ name: 'KelvinRGB Setup 9.0.0.exe', browser_download_url: 'https://github.com/dl', size: 3, digest: `sha256:${sha}` }] };
+  const rel = { tag_name: 'v9.0.0', assets: [{ name: 'KelvinRGB Setup 9.0.0.exe', browser_download_url: 'https://github.com/dl', size: 3, digest: `sha256:${sha}` }, { name: 'KelvinRGB Setup 9.0.0.exe.sig', browser_download_url: 'https://github.com/sig' }] };
   global.fetch = async (url) => url.includes('api.github.com')
     ? { status: 200, ok: true, json: async () => rel }
     : { ok: true, url: 'https://objects.githubusercontent.com/x', body: [Buffer.from('bad')] };
@@ -64,7 +66,7 @@ test('sweep removes only our leftover installers', () => {
 
 test('up to date still offers a check, then finds a later release', async () => {
   const real = global.fetch;
-  const rel = (v) => ({ status: 200, ok: true, json: async () => ({ tag_name: `v${v}`, assets: [{ name: `KelvinRGB.Setup.${v}.exe`, size: 1, browser_download_url: 'https://github.com/x', digest: `sha256:${'a'.repeat(64)}` }] }) });
+  const rel = (v) => ({ status: 200, ok: true, json: async () => ({ tag_name: `v${v}`, assets: [{ name: `KelvinRGB.Setup.${v}.exe`, size: 1, browser_download_url: 'https://github.com/x', digest: `sha256:${'a'.repeat(64)}` }, { name: `KelvinRGB.Setup.${v}.exe.sig` }] }) });
   try {
     const u = U.create({ version: '1.1.1', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
     global.fetch = async () => rel('1.1.1');
@@ -74,5 +76,39 @@ test('up to date still offers a check, then finds a later release', async () => 
     global.fetch = async () => rel('1.1.3');
     await u.check(true);
     assert.strictEqual(u.view().action, 'install');
+  } finally { global.fetch = real; }
+});
+
+test('signature: only the release key, only this version and file', () => {
+  const crypto = require('node:crypto');
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+  const pub = publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+  const sig = crypto.sign(null, Buffer.from(`KelvinRGB 1.2.3 ${sha}
+`), privateKey).toString('base64');
+  assert.ok(U.signed('1.2.3', sha, sig, pub));
+  assert.ok(!U.signed('1.2.4', sha, sig, pub)); // an old installer re-posted as a newer version
+  assert.ok(!U.signed('1.2.3', 'b'.repeat(64), sig, pub));
+  assert.ok(!U.signed('1.2.3', sha, sig)); // a key other than the shipped one
+  assert.ok(!U.signed('1.2.3', sha, 'garbage', pub));
+});
+
+test('a download with the right checksum but no valid signature never runs', async () => {
+  const real = global.fetch;
+  const body = Buffer.from('installer');
+  const good = require('node:crypto').createHash('sha256').update(body).digest('hex');
+  const rel = { tag_name: 'v9.0.0', assets: [{ name: 'KelvinRGB.Setup.9.0.0.exe', browser_download_url: 'https://github.com/dl', size: body.length, digest: `sha256:${good}` }, { name: 'KelvinRGB.Setup.9.0.0.exe.sig', browser_download_url: 'https://github.com/sig' }] };
+  const logs = [];
+  global.fetch = async (url) => url.includes('api.github.com') ? { status: 200, ok: true, json: async () => rel }
+    : url.endsWith('/sig') ? { ok: true, text: async () => Buffer.alloc(64).toString('base64') }
+    : { ok: true, url: 'https://objects.githubusercontent.com/x', body: [body] };
+  try {
+    let ran = false;
+    const u = U.create({ version: '0.2.2', log: (m) => logs.push(m), onChange() {}, beforeInstall() {}, spawn: () => { ran = true; }, quit() {}, packaged: true });
+    await u.check(true);
+    await u.install();
+    assert.strictEqual(u.state.kind, 'failed');
+    assert.match(u.state.msg, /signature/);
+    assert.ok(logs.some((m) => /signature does not match/.test(m)));
+    assert.ok(!ran);
   } finally { global.fetch = real; }
 });
