@@ -153,7 +153,7 @@
     "command": "npm test",
     "break": ".bedrock/breaks/REL-1.patch",
     "patch_sha256": "d07a4da7464e2e6300bd6c4900a942567a659b51646ed702b169dad32c507d49",
-    "sha": "180f9701df38da0f92d4105dc4a87f8b53e41e00",
+    "sha": "db33e934439e158071d691a15b19275fd3087414",
     "files": {
       "lib/validate.js": "8be0af5cc95805f1bc2db5420a9faaaf8ea4df077d8abd17bba26d54573e03c9",
       "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
@@ -161,11 +161,11 @@
       "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
       "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
       "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
-      "test/store.test.js": "ada1b0fce0970336ae4bc1fd5984ded017cf12f03adfed3a4de10bb3b571e6c1",
-      "test/update.test.js": "f1c98c3ecb3c2f9e940f252858c1848d231d43d7e6e8e33be73708a197beb708",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
       "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
     },
-    "seconds": 11.8,
+    "seconds": 10.1,
     "date": "2026-11-22",
     "bedrock": "2.9.5"
   },
