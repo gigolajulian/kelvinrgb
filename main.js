@@ -144,9 +144,10 @@ async function loadDevices() {
   stepSplash(4); // lighting painted
 }
 
+const ANIMATED = ['breathing', 'spectrum', 'wave', 'cycle', 'sweep', 'temp']; // temp follows the CPU, so it repaints too
 function startRender() {
   clearInterval(renderTimer);
-  const animated = ['breathing', 'spectrum', 'wave'].includes(settings.lighting.effect) || identify.size || ledsWanted;
+  const animated = ANIMATED.includes(settings.lighting.effect) || identify.size || ledsWanted;
   renderTimer = setInterval(render, animated ? 33 : 1000); // static repaints once a second in case a device drifts
   render();
 }
@@ -166,6 +167,7 @@ function render(effect) {
   const fx = effect || L.effect;
   const base = M.hexToRgb(L.color);
   const pal = (L.palette || []).map(M.hexToRgb);
+  const cpu = fx === 'temp' ? temp(/Tctl|Package|Tdie/, /^Cpu$/) : null;
   const t = Date.now() / 1000;
   const preview = ledsWanted && win && win.isVisible() && frameNo % 3 === 0 ? {} : null; // ~10 fps to the Lighting page
   const now = Date.now();
@@ -177,7 +179,7 @@ function render(effect) {
     const colors = [];
     for (let i = 0; i < d.leds; i++) {
       const c = flashing ? (Math.floor(now / 250) % 2 ? { red: 255, green: 255, blue: 255 } : { red: 0, green: 0, blue: 0 })
-        : M.frame(fx, base, t, L.speed, i, d.leds, pal);
+        : M.frame(fx, base, t, L.speed, i, d.leds, pal, cpu);
       colors.push(M.tune(c, dev, flashing ? 1 : bright));
     }
     // Per-zone colour overrides paint that zone's LEDs a fixed colour instead of the effect.
@@ -368,7 +370,7 @@ function handleConflicts(tasklistCsv) {
   if (!names.length) return firstCheckDone();
   const devs = state.devices.map((d) => d.name);
   state.conflicts = names.map((n) => ({ name: n, label: C.label(n), note: C.WARN[n] || n, holds: C.holdsText(n, devs), closable: C.closable(n), service: !!C.service(n), running: true }));
-  if (win && !win.isVisible()) showWindow(); // the prompt needs a visible window (hidden ones get no state)
+  if (!win || !win.isVisible()) showWindow(); // the prompt needs a visible window (hidden ones get no state)
   push();
 }
 function stopConflictService(name) {
@@ -629,9 +631,26 @@ const ICON = path.join(__dirname, 'renderer', 'icon.png');
 const ICO = path.join(__dirname, 'renderer', 'icon.ico');
 let tray = null;
 let trayKey = '', trayStatus = '', trayAt = 0;
-const EFFECT_NAMES = { static: 'Static', breathing: 'Breathing', spectrum: 'Spectrum', wave: 'Wave', off: 'Off' };
-function showWindow() { if (!win) return; if (splash) return endSplash();win.setSkipTaskbar(false); if (win.isMinimized()) win.restore(); win.show(); win.focus(); push(); }
-function hideWindow() { if (win) { win.hide(); win.setSkipTaskbar(true); } }
+const EFFECT_NAMES = { static: 'Static', breathing: 'Breathing', spectrum: 'Spectrum', wave: 'Wave', cycle: 'Colour cycle', sweep: 'Sweep', temp: 'Temperature', off: 'Off' };
+function showWindow() {
+  clearTimeout(sleepTimer);
+  if (!win) { createWindow(); win.once('ready-to-show', showWindow); return; } // the page was let go in the tray
+  if (splash) return endSplash();
+  win.setSkipTaskbar(false); if (win.isMinimized()) win.restore(); win.show(); win.focus(); push();
+}
+function hideWindow() { if (win) { win.hide(); win.setSkipTaskbar(true); sleepSoon(); } }
+// In the tray the window is closed after a minute, so its page stops using memory (#27). Lights, fans and the
+// tray keep running in this process; opening KelvinRGB builds the page again.
+let sleepTimer;
+function sleepSoon() {
+  clearTimeout(sleepTimer);
+  sleepTimer = setTimeout(() => {
+    if (!win || win.isVisible() || quitting || splash || state.conflicts) return;
+    log('tray: window closed to save memory');
+    const w = win; win = null; ledsWanted = false;
+    w.destroy();
+  }, 60000);
+}
 function temp(re, hwRe) {
   for (const h of state.hw) if (hwRe.test(h.type)) { const s = h.sensors.find((x) => x.type === 'Temperature' && re.test(x.name)) || h.sensors.find((x) => x.type === 'Temperature'); if (s) return Math.round(s.value); }
   return null;
@@ -720,10 +739,8 @@ function endSplash() {
 // ---------- app ----------
 // One app id in dev and installed, so Windows shows KelvinRGB's icon in the taskbar, never Electron's.
 app.setAppUserModelId('com.juliangigola.kelvinrgb');
-app.whenReady().then(() => {
-  // Deny anything a page could ask for (camera, mic, clipboard reads, ...).
-  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
-  session.defaultSession.setPermissionCheckHandler(() => false);
+// The main window. Built at start, and again when the tray opens it after sleepSoon() let it go.
+function createWindow() {
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 900, minHeight: 600, autoHideMenuBar: true, title: 'KelvinRGB',
     icon: ICO, show: false,
@@ -746,8 +763,14 @@ app.whenReady().then(() => {
   // Close and minimize hide to the tray. Quit from the tray menu or Settings.
   win.on('close', (e) => { if (!quitting) { e.preventDefault(); hideWindow(); } });
   win.on('minimize', (e) => { e.preventDefault(); hideWindow(); });
+}
+app.whenReady().then(() => {
+  // Deny anything a page could ask for (camera, mic, clipboard reads, ...).
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  createWindow();
   // Hidden start (logon task) shows nothing; otherwise the splash, or the window straight away.
-  if (!process.argv.includes('--hidden')) { if (settings.splash !== false) openSplash(); else win.once('ready-to-show', showWindow); }
+  if (!process.argv.includes('--hidden')) { if (settings.splash !== false) openSplash(); else win.once('ready-to-show', showWindow); } else sleepSoon();
   firstCheck.then(() => stepSplash(1));
   tray = new Tray(ICO);
   tray.on('click', showWindow);

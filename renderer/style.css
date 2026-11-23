@@ -240,6 +240,10 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .su-status[data-s=ok] .dot { background: var(--ok); }
 .su-status[data-s=need] .dot { background: var(--warn); }
 .su-note { font-size: 12px; color: var(--dim); }
+/* Start with Windows, offered on first run (#27) */
+.su-auto { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.035); }
+.su-auto .grow { display: flex; flex-direction: column; gap: 2px; }
+.su-auto .t { font-size: 14px; font-weight: 500; }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { *, .sheet { transition: none !important; animation: none !important; } }
 
