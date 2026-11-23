@@ -1,6 +1,6 @@
 # bedrock full, 2026-11-22, on main 1.2.5 (2201c42) plus this branch
 
-39 checks for stage 1: 13 pass (each proven by a break patch), 22 open, 4 n/a. The core gate still fails on 3: EXIT-6, DATA-1, REL-1.
+39 checks for stage 1: 14 pass (each proven by a break patch), 21 open, 4 n/a. The core gate still fails on 2: EXIT-6, DATA-1.
 BASELINE.md has every row; this file is the short version.
 
 ## Built in this branch
@@ -15,7 +15,7 @@ BASELINE.md has every row; this file is the short version.
 | SEC-5, INP-1 | Already in place, now break-proven: unsigned update never runs; bad settings fall back | test + break |
 | EXIT-3 | Uninstall deletes the Start with Windows task (not during updates) | script + break |
 | SEC-1, SEC-3, SEC-4 | Secret scan over all history, lockfile check (bufferpack was missing from the lockfile root, fixed), Dependabot | script + break |
-| REL-1 | CI on every PR and push to main | proven locally; passes once CI is green |
+| REL-1 | CI on every PR and push to main | test + break; CI green on PR #38 |
 | DATA-1 | Settings > Settings backup: Export and Import, through the same validation as settings.json | tested; restore drill owed |
 | LIC-1 | LICENSE: all rights reserved (Julian's choice) | manual, open on two credit gaps |
 | SEC-2 | Secrets inventory in README | Julian to confirm |
@@ -49,7 +49,6 @@ BASELINE.md has every row; this file is the short version.
 
 - This branch hasn't run on hardware: stop-OpenRGB-on-quit, the `--server-host` spawn (OpenRGB runs as a service on Julian's PC, so that path never runs there), and Export/Import in a real window. A dev copy started and wrote its log; Julian declined the click-through.
 - The installer with the new uninstall step hasn't been built.
-- REL-1 waits for the first green CI run.
 
 ## Nathan's issues
 
