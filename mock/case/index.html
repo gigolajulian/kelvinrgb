@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KelvinRGB: case layout mock</title>
+<style>
+@font-face { font-family: 'IBM Plex Sans'; src: url(fonts/ibm-plex-sans-latin-400-normal.woff2) format('woff2'); font-weight: 400; }
+@font-face { font-family: 'IBM Plex Sans'; src: url(fonts/ibm-plex-sans-latin-500-normal.woff2) format('woff2'); font-weight: 500 700; }
+@font-face { font-family: 'IBM Plex Mono'; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2'); font-weight: 400; }
+@font-face { font-family: 'IBM Plex Mono'; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format('woff2'); font-weight: 500 700; }
+:root {
+  --acc: #8fd3e0; --ink: #e6e7e8; --soft: #9aa0a6; --dim: #6c7177;
+  --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.12);
+  --glass: rgba(22,24,27,.55); --glass2: rgba(255,255,255,.045);
+  --ok: #7fd49b; --warn: #f0a35e; --glow: #c8323c;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+}
+* { box-sizing: border-box; min-width: 0; }
+html, body { margin: 0; background: #050506; color: var(--ink); font: 14px/1.45 var(--sans); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.lbl { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
+.sub { color: var(--soft); font-size: 13px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* mock tool bar (not part of the app) */
+.bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 16px; align-items: center; padding: 10px 16px; background: #0b0b0c; border-bottom: 1px solid #232326; font: 12px var(--mono); color: #9a968f; }
+.bar b { color: var(--ink); font-weight: 500; letter-spacing: .06em; }
+.bar button { background: none; border: 1px solid #2a2926; padding: 4px 10px; font: 12px var(--mono); color: #9a968f; }
+.bar button[aria-pressed=true] { color: #5fc4c8; border-color: #5fc4c8; }
+.stage { padding: 20px; display: flex; justify-content: center; }
+.fitbox { position: relative; } .scaler { position: absolute; left: 0; top: 0; transform-origin: top left; }
+
+/* the app window */
+.app { width: 1360px; height: 880px; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden; border: 1px solid var(--line2);
+  background: radial-gradient(60% 70% at 10% 10%, color-mix(in srgb, var(--glow) 9%, transparent), transparent), radial-gradient(50% 60% at 90% 90%, color-mix(in srgb, #3b4fd8 7%, transparent), transparent), #16181b; transition: width .3s; }
+.app.narrow { width: 900px; }
+.tbar { height: 34px; flex: none; display: flex; align-items: center; padding: 0 14px; font-size: 12px; color: var(--soft); background: rgba(10,11,12,.4); }
+.body { flex: 1; display: flex; min-height: 0; background: rgba(8,9,10,.62); }
+nav { width: 200px; flex: none; padding: 16px 10px; border-right: 1px solid var(--line); background: rgba(10,11,12,.3); display: flex; flex-direction: column; gap: 2px; }
+nav .brand { font: 500 12px var(--mono); letter-spacing: .24em; padding: 8px 12px 18px; }
+nav a { padding: 8px 12px; border-radius: 8px; color: var(--soft); font-size: 14px; }
+nav a.on { background: rgba(255,255,255,.07); color: var(--ink); }
+main { flex: 1; padding: 20px; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
+.panel { background: var(--glass); backdrop-filter: blur(26px) saturate(150%); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.grow { flex: 1; }
+.btn { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line2); background: rgba(255,255,255,.04); font-size: 13px; white-space: nowrap; }
+.btn.acc { border-color: var(--acc); color: var(--acc); }
+.seg { display: inline-flex; padding: 3px; gap: 3px; border-radius: 9px; background: rgba(0,0,0,.35); border: 1px solid var(--line); }
+.seg button { height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: none; color: var(--soft); font-size: 13px; }
+.seg button[aria-pressed=true] { background: rgba(255,255,255,.1); color: var(--ink); }
+.seg button:disabled { opacity: .4; cursor: default; }
+.fx { display: flex; gap: 8px; flex-wrap: wrap; }
+.fx button { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--glass2); font-size: 13px; }
+.fx button[aria-pressed=true] { border-color: var(--acc); }
+
+.case-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.case-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; }
+.app.narrow .case-wrap { grid-template-columns: minmax(0, 1fr); }
+svg.case { width: 100%; height: auto; display: block; touch-action: none; }
+svg.case text { font-family: var(--mono); font-size: 11px; fill: var(--dim); letter-spacing: .04em; }
+svg.case .dev { cursor: default; }
+svg.case.arrange .dev { cursor: grab; }
+svg.case.arrange .dev .box { stroke: var(--acc); stroke-dasharray: 4 4; }
+svg.case .dev.sel .box { stroke: var(--acc); stroke-dasharray: none; }
+.side { display: flex; flex-direction: column; gap: 10px; }
+.side .item { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--glass2); }
+.side .item .t { font-size: 13px; }
+.side .item.warn .t::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-right: 8px; vertical-align: 1px; }
+.note { font-size: 12px; color: var(--dim); }
+.opt { display: flex; gap: 10px; align-items: center; }
+.tg { width: 40px; height: 22px; border-radius: 11px; border: 1px solid var(--line2); background: rgba(255,255,255,.06); position: relative; flex: none; padding: 0; }
+.tg::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--soft); transition: transform .15s; }
+.tg[aria-pressed=true] { background: color-mix(in srgb, var(--acc) 70%, transparent); border-color: transparent; }
+.tg[aria-pressed=true]::after { transform: translateX(18px); background: #0a0b0c; }
+.help { max-width: 1360px; margin: 0 auto 40px; padding: 0 20px; font: 12px/1.7 var(--mono); color: #9a968f; }
+.help b { color: var(--ink); font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>KELVINRGB · CASE LAYOUT MOCK</b><span>Lighting page, your 9 OpenRGB devices</span><span class="grow" style="flex:1"></span>
+  <span>window</span>
+  <button id="w-wide" aria-pressed="true">1360</button><button id="w-narrow" aria-pressed="false">900</button>
+</div>
+<div class="stage"><div class="fitbox"><div class="scaler" id="scaler">
+<div class="app" id="app">
+  <div class="tbar">KelvinRGB</div>
+  <div class="body">
+    <nav><div class="brand">KELVIN</div><a>Home</a><a class="on">Lighting</a><a>Drivers</a><a>Fans</a><a>System</a></nav>
+    <main>
+      <div class="panel">
+        <div class="row">
+          <span class="lbl" style="width:110px">Every device</span>
+          <div class="fx" id="fx">
+            <button data-fx="sweep" aria-pressed="true">Sweep</button>
+            <button data-fx="wave" aria-pressed="false">Wave</button>
+            <button data-fx="spectrum" aria-pressed="false">Spectrum</button>
+            <button data-fx="cycle" aria-pressed="false">Colour cycle</button>
+          </div>
+          <span class="grow"></span>
+          <span class="sub">Effect colours</span>
+          <span style="display:inline-flex;gap:6px"><i style="width:22px;height:22px;border-radius:50%;background:#c8323c;display:inline-block"></i><i style="width:22px;height:22px;border-radius:50%;background:#3b4fd8;display:inline-block"></i></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="case-head">
+          <span class="lbl">Case</span>
+          <div class="seg" role="group" aria-label="Where the effect runs">
+            <button id="m-across" aria-pressed="true">Across the case</button>
+            <button id="m-each" aria-pressed="false">Each device</button>
+          </div>
+          <div class="seg" role="group" aria-label="Direction" id="dir">
+            <button data-dir="x" aria-pressed="true">Left to right</button>
+            <button data-dir="y" aria-pressed="false">Bottom to top</button>
+            <button data-dir="r" aria-pressed="false">From the CPU out</button>
+          </div>
+          <span class="grow"></span>
+          <button class="btn" id="arrange">Arrange</button>
+        </div>
+        <div class="case-wrap">
+          <svg class="case" id="case" viewBox="0 0 760 520" role="img" aria-label="Side view of the case with every device and its LEDs"></svg>
+          <div class="side" id="side">
+            <div class="item"><span class="t" id="sel-name">Nothing selected</span><span class="sub" id="sel-sub">Click a device to see it here. Arrange lets you drag it to where it sits in your case.</span></div>
+            <div class="item"><div class="opt"><span class="grow"><span class="t">Mouse and other desk devices</span><br><span class="sub">Join the effect from beside the case</span></span><button class="tg" id="desk" aria-pressed="true" aria-label="Include desk devices"></button></div></div>
+            <div class="item warn"><span class="t">Not placed: 2 zones</span><span class="sub">Addressable RGB Header 1 and Hue 2 Channel 2 report 0 LEDs. Set their size in OpenRGB and they appear here. Your Strimer is likely on one of them.</span></div>
+            <span class="note">Colour cycle and Breathing look the same in both modes: every LED shares one colour.</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</div></div></div>
+
+<div class="help">
+  <b>What this shows.</b> The Live strips panel becomes a side view of your case. Every LED is a dot at its place, lit by the same frame the PC gets.<br>
+  <b>Across the case</b> runs one effect over the whole layout, so a Sweep enters the RAM, crosses the cooler and leaves through the front fans. <b>Each device</b> is today's behaviour.<br>
+  <b>Direction</b> picks the axis. <b>Arrange</b> lets you drag each device to where it really sits; KelvinRGB starts from a guess by device type. The mouse sits on the desk at the right.<br>
+  Try: switch effects and modes, change the direction, press Arrange and drag the GPU or the RAM, then press Done.
+</div>
+
+<script>
+const PAL = [[0xc8, 0x32, 0x3c], [0x3b, 0x4f, 0xd8]];
+// Your devices, from OpenRGB on 2026-11-23. Positions in case units (0..760 x 0..520), a first guess by type.
+const DEVS = [
+  { id: 'ram', name: 'ENE DRAM x4', sub: '4 sticks, 5 LEDs each', x: 395, y: 70, w: 64, h: 120, leds: () => { const o = []; for (let s = 0; s < 4; s++) for (let i = 0; i < 5; i++) o.push([8 + s * 16, 14 + i * 23]); return o; }, draw: (g) => { for (let s = 0; s < 4; s++) g.insertAdjacentHTML('beforeend', `<rect x="${2 + s * 16}" y="4" width="12" height="112" rx="2" fill="rgba(255,255,255,.04)" stroke="rgba(255,255,255,.1)"/>`); } },
+  { id: 'cpu', name: 'AMD Wraith Prism', sub: 'Ring 15, logo 1, fan 1', x: 230, y: 85, w: 120, h: 120, leds: () => { const o = []; for (let i = 0; i < 15; i++) { const a = i / 15 * Math.PI * 2 - Math.PI / 2; o.push([60 + Math.cos(a) * 50, 60 + Math.sin(a) * 50]); } o.push([60, 60]); o.push([60, 60, 'fan']); return o; }, draw: (g) => g.insertAdjacentHTML('beforeend', '<circle cx="60" cy="60" r="56" fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.1)"/><circle cx="60" cy="60" r="34" fill="rgba(0,0,0,.35)" stroke="rgba(255,255,255,.08)"/>') },
+  { id: 'gpu', name: 'Sapphire RX 6700 XT Nitro+', sub: '1 LED, the logo bar', x: 150, y: 285, w: 330, h: 54, leds: () => [[165, 27, 'bar']], draw: (g) => g.insertAdjacentHTML('beforeend', '<rect x="0" y="0" width="330" height="54" rx="6" fill="rgba(255,255,255,.04)" stroke="rgba(255,255,255,.1)"/>') },
+  { id: 'mb', name: 'ASUS TUF X570-PLUS', sub: 'Aura Mainboard, 5 LEDs', x: 300, y: 370, w: 150, h: 30, leds: () => [0, 1, 2, 3, 4].map((i) => [15 + i * 30, 15]), draw: (g) => g.insertAdjacentHTML('beforeend', '<rect x="0" y="0" width="150" height="30" rx="4" fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.08)"/>') },
+  { id: 'hue', name: 'NZXT Smart Device V2', sub: 'Hue 2 Channel 1, 28 LEDs', x: 540, y: 50, w: 34, h: 420, leds: () => { const o = []; for (let i = 0; i < 28; i++) o.push([17, 12 + i * 14.6]); return o; }, draw: (g) => g.insertAdjacentHTML('beforeend', '<rect x="0" y="0" width="34" height="420" rx="6" fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.1)"/>') },
+  { id: 'mouse', name: 'SteelSeries Aerox 3', sub: '3 LEDs, on the desk', desk: true, x: 650, y: 400, w: 60, h: 90, leds: () => [[30, 22], [30, 45], [30, 70]], draw: (g) => g.insertAdjacentHTML('beforeend', '<rect x="4" y="0" width="52" height="90" rx="26" fill="rgba(255,255,255,.04)" stroke="rgba(255,255,255,.1)"/>') },
+];
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('case');
+let fx = 'sweep', mode = 'across', dir = 'x', arrange = false, desk = true, sel = null;
+
+svg.innerHTML = `<rect x="20" y="20" width="580" height="480" rx="14" fill="rgba(0,0,0,.25)" stroke="rgba(255,255,255,.12)"/>
+  <rect x="130" y="40" width="360" height="380" rx="6" fill="rgba(255,255,255,.015)" stroke="rgba(255,255,255,.05)"/>
+  <text x="36" y="490">CASE · SIDE VIEW</text><text x="626" y="390">DESK</text>
+  <line x1="616" y1="20" x2="616" y2="500" stroke="rgba(255,255,255,.05)"/>`;
+for (const d of DEVS) {
+  const g = document.createElementNS(NS, 'g'); g.classList.add('dev'); g.dataset.id = d.id; g.setAttribute('tabindex', '0');
+  g.innerHTML = `<rect class="box" x="-6" y="-6" width="${d.w + 12}" height="${d.h + 12}" rx="8" fill="none" stroke="transparent"/>`;
+  d.draw(g);
+  d.pts = d.leds().map(([lx, ly, kind]) => {
+    let el;
+    if (kind === 'bar') { el = document.createElementNS(NS, 'rect'); el.setAttribute('x', 20); el.setAttribute('y', 22); el.setAttribute('width', 290); el.setAttribute('height', 10); el.setAttribute('rx', 5); }
+    else if (kind === 'fan') { el = document.createElementNS(NS, 'circle'); el.setAttribute('cx', lx); el.setAttribute('cy', ly); el.setAttribute('r', 26); el.setAttribute('fill-opacity', '.18'); }
+    else { el = document.createElementNS(NS, 'circle'); el.setAttribute('cx', lx); el.setAttribute('cy', ly); el.setAttribute('r', 5); }
+    g.appendChild(el); return { lx, ly, el };
+  });
+  g.setAttribute('transform', `translate(${d.x} ${d.y})`);
+  svg.appendChild(g); d.g = g;
+}
+
+// drag in Arrange mode
+let drag = null;
+const pt = (e) => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+svg.addEventListener('pointerdown', (e) => {
+  const g = e.target.closest('.dev'); if (!g) return;
+  const d = DEVS.find((x) => x.id === g.dataset.id); select(d);
+  if (!arrange) return;
+  const p = pt(e); drag = { d, dx: p.x - d.x, dy: p.y - d.y }; svg.setPointerCapture(e.pointerId); g.style.cursor = 'grabbing';
+});
+svg.addEventListener('pointermove', (e) => { if (!drag) return; const p = pt(e); drag.d.x = Math.max(0, Math.min(760 - drag.d.w, p.x - drag.dx)); drag.d.y = Math.max(0, Math.min(520 - drag.d.h, p.y - drag.dy)); drag.d.g.setAttribute('transform', `translate(${drag.d.x} ${drag.d.y})`); });
+svg.addEventListener('pointerup', () => { if (drag) drag.d.g.style.cursor = ''; drag = null; });
+function select(d) { sel = d; DEVS.forEach((x) => x.g.classList.toggle('sel', x === d)); document.getElementById('sel-name').textContent = d.name; document.getElementById('sel-sub').textContent = d.sub + (arrange ? '. Drag to move it.' : ''); }
+
+const press = (sel2, on) => document.querySelectorAll(sel2).forEach((b) => b.setAttribute('aria-pressed', on(b)));
+document.getElementById('fx').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; fx = b.dataset.fx; press('#fx button', (x) => x === b); syncDir(); };
+document.getElementById('m-across').onclick = () => { mode = 'across'; press('#m-across,#m-each', (x) => x.id === 'm-across'); syncDir(); };
+document.getElementById('m-each').onclick = () => { mode = 'each'; press('#m-across,#m-each', (x) => x.id === 'm-each'); syncDir(); };
+document.getElementById('dir').onclick = (e) => { const b = e.target.closest('button'); if (!b || b.disabled) return; dir = b.dataset.dir; press('#dir button', (x) => x === b); };
+function syncDir() { const off = mode === 'each' || fx === 'cycle'; document.querySelectorAll('#dir button').forEach((b) => (b.disabled = off)); }
+document.getElementById('arrange').onclick = (e) => { arrange = !arrange; svg.classList.toggle('arrange', arrange); e.currentTarget.textContent = arrange ? 'Done' : 'Arrange'; e.currentTarget.classList.toggle('acc', arrange); if (sel) select(sel); };
+document.getElementById('desk').onclick = (e) => { desk = !desk; e.currentTarget.setAttribute('aria-pressed', desk); };
+
+// the same maths the app would run: one position u in 0..1 per LED
+const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * k));
+const along = (u) => { u = ((u % 1) + 1) % 1; const n = PAL.length, f = u * n, i = Math.floor(f) % n; return mix(PAL[i], PAL[(i + 1) % n], (1 - Math.cos((f - Math.floor(f)) * Math.PI)) / 2); };
+const hsv = (h) => { const f = (n) => { const k = (n + h * 6) % 6; return Math.round(255 * (1 - Math.max(0, Math.min(k, 4 - k, 1)))); }; return [f(5), f(3), f(1)]; };
+function color(u, t) {
+  if (fx === 'spectrum') return hsv(((u - t * .12) % 1 + 1) % 1);
+  if (fx === 'wave') return along(u * 1.5 - t * .25);
+  if (fx === 'cycle') { const s = t * .35, i = Math.floor(s), f = s - i; const k = f < .6 ? 0 : (1 - Math.cos((f - .6) / .4 * Math.PI)) / 2; return mix(PAL[i % 2], PAL[(i + 1) % 2], k); }
+  const pass = t * .4, n = Math.floor(pass), p = (pass - n) * 1.44 - .22; const k = Math.max(.08, 1 - Math.abs(u - p) / .22);
+  return PAL[n % 2].map((v) => Math.round(v * k));
+}
+const CX = () => { const c = DEVS[1]; return [c.x + 60, c.y + 60]; };
+function frame(now) {
+  const t = now / 1000, [cx, cy] = CX();
+  for (const d of DEVS) {
+    const off = d.desk && !desk;
+    d.pts.forEach((p, i) => {
+      let u;
+      if (mode === 'each') u = d.pts.length > 1 ? i / (d.pts.length - 1) : .5;
+      else { const X = d.x + p.lx, Y = d.y + p.ly; u = dir === 'x' ? X / 760 : dir === 'y' ? 1 - Y / 520 : Math.hypot(X - cx, Y - cy) / 520; }
+      const c = off ? [24, 24, 26] : color(u, t);
+      p.el.setAttribute('fill', `rgb(${c})`);
+    });
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// window width switch and fit to the pane
+const app = document.getElementById('app'), sc = document.getElementById('scaler');
+function fit() { const w = app.classList.contains('narrow') ? 900 : 1360; const k = Math.min(1, (innerWidth - 40) / w); sc.style.transform = `scale(${k})`; sc.style.width = `${w}px`; sc.parentNode.style.width = `${w * k}px`; sc.parentNode.style.height = `${880 * k}px`; }
+document.getElementById('w-wide').onclick = () => { app.classList.remove('narrow'); press('.bar button', (b) => b.id === 'w-wide'); fit(); };
+document.getElementById('w-narrow').onclick = () => { app.classList.add('narrow'); press('.bar button', (b) => b.id === 'w-narrow'); fit(); };
+addEventListener('resize', fit); fit();
+</script>
+</body>
+</html>

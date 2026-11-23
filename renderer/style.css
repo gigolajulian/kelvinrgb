@@ -52,14 +52,36 @@ html.dark-lights .amb { opacity: 0; }
 .theme button.x:hover { color: var(--ink); }
 .theme i { display: block; height: 6px; border-radius: 3px; width: 100%; min-width: 90px; }
 .lg-pal input[type=text] { width: 150px; }
-/* Live LED strips (#27, preview A) */
-.strips { display: grid; gap: 8px; }
-.srow { display: grid; grid-template-columns: 200px minmax(0,1fr) 44px; gap: 12px; align-items: center; font-size: 13px; }
-.srow .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.srow .c { font-family: var(--mono); font-size: 11px; color: var(--dim); text-align: right; }
-.srow .ls { display: flex; gap: 2px; height: 14px; align-items: center; }
-.srow .ls b { flex: 1; height: 100%; border-radius: 2px; background: #111; }
-.srow .ls em { font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--warn); padding-left: 6px; white-space: nowrap; }
+/* Case view (#27): every LED at its place in a side view of the case */
+.case-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.case-head .seg button:disabled { opacity: .4; cursor: default; }
+.btn.acc { border-color: var(--acc); color: var(--acc); }
+.case-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .case-wrap { grid-template-columns: minmax(0, 1fr); } }
+svg.case { width: 100%; height: auto; display: block; touch-action: none; max-height: 440px; }
+svg.case text { font-family: var(--mono); font-size: 11px; fill: var(--dim); letter-spacing: .04em; }
+svg.case .shell { fill: rgba(0,0,0,.25); stroke: var(--line2); }
+svg.case .plate { fill: rgba(255,255,255,.015); stroke: rgba(255,255,255,.05); }
+svg.case .split { stroke: rgba(255,255,255,.05); }
+svg.case .bd { fill: rgba(255,255,255,.035); stroke: rgba(255,255,255,.1); }
+svg.case .hub { fill: rgba(0,0,0,.35); stroke: rgba(255,255,255,.08); }
+svg.case .led { fill: #111; }
+svg.case .led.wash { fill-opacity: .2; }
+svg.case .box { fill: none; stroke: transparent; }
+svg.case .dev { outline: none; }
+svg.case .dev:focus-visible .box { stroke: var(--acc); }
+svg.case.arrange .dev { cursor: grab; }
+svg.case.arrange .dev:active { cursor: grabbing; }
+svg.case.arrange .dev .box { stroke: var(--line2); stroke-dasharray: 4 4; }
+svg.case .dev.sel .box { stroke: var(--acc); stroke-dasharray: none; }
+.case-wrap .side { display: flex; flex-direction: column; gap: 10px; }
+.case-wrap .item { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--glass2); }
+.case-wrap .item .t { font-size: 13px; }
+.case-wrap .item .btn { align-self: flex-start; margin-top: 8px; }
+.case-wrap .item.warn .t::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-right: 8px; vertical-align: 1px; }
+.case-wrap .opt { display: flex; gap: 10px; align-items: center; }
+.case-wrap .opt .grow { display: flex; flex-direction: column; gap: 2px; }
+.case-wrap .note { font-size: 12px; color: var(--dim); }
 .body { flex: 1; display: flex; min-height: 0; }
 nav { width: 200px; flex: none; padding: 16px 10px; border-right: 1px solid var(--line); background: rgba(10,11,12,.3); display: flex; flex-direction: column; gap: 2px; }
 nav .brand { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12px; letter-spacing: .24em; padding: 4px 12px 18px; }

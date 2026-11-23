@@ -352,21 +352,107 @@ const pages = {
       const n = $('#l-tname').value.trim();
       if (n) rgb.theme('save', n); else $('#l-tname').focus();
     },
-    // ---- live LED strips (#27): one row per device, every LED in order ----
+    // ---- case view (#27): every LED at its place in a side view of the case; Wave and Sweep can run across it ----
+    arranging: false,
+    sel: null, // key of the selected device
+    caseSig: () => (ST ? ST.layout.map((p) => `${p.key}${p.x},${p.y},${p.pts.length}`).join() + ST.devices.map((d) => d.zones.filter((z) => !z.leds).length).join() : ''),
     strips() {
       const el = $('#l-strips'); if (!el) return;
-      const rows = ST ? ST.devices.map((d) => {
-        const empty = d.zones.filter((z) => !z.leds).map((z) => z.name);
-        return `<div class="srow"><span class="n" title="${esc(d.name)}">${esc(d.name)}</span><span class="ls" data-k="${esc(d.key)}">${'<b></b>'.repeat(d.leds)}${empty.length ? `<em>${esc(empty.join(', '))}: 0 LEDs, size not set</em>` : ''}</span><span class="c">${d.leds}</span></div>`;
-      }) : [];
-      this.stripSig = ST ? ST.devices.map((d) => d.key + d.leds).join() : '';
-      el.innerHTML = `<span class="lbl">live</span><div class="strips">${rows.join('') || '<span class="sub">Waiting for OpenRGB.</span>'}</div>`;
+      this.stripSig = this.caseSig();
+      if (!ST || !ST.layout.length) { el.innerHTML = '<span class="lbl">case</span><span class="sub">Waiting for OpenRGB.</span>'; return; }
+      const DRAW = {
+        ram: (p) => `<rect x="0" y="0" width="${p.w}" height="${p.h}" rx="2" class="bd"/>`,
+        cooler: () => '<circle cx="60" cy="60" r="56" class="bd"/><circle cx="60" cy="60" r="34" class="hub"/>',
+        gpu: (p) => `<rect x="0" y="0" width="${p.w}" height="${p.h}" rx="6" class="bd"/>`,
+        board: (p) => `<rect x="0" y="0" width="${p.w}" height="${p.h}" rx="4" class="bd"/>`,
+        strip: (p) => `<rect x="0" y="0" width="${p.w}" height="${p.h}" rx="6" class="bd"/>`,
+        desk: (p) => `<rect x="4" y="0" width="${p.w - 8}" height="${p.h}" rx="26" class="bd"/>`,
+      };
+      const devs = ST.layout.map((p) => {
+        const leds = p.pts.map(([x, y], i) => {
+          const lx = x - p.x, ly = y - p.y;
+          if (p.kind === 'gpu' && p.pts.length === 1) return `<rect class="led" data-i="${i}" x="20" y="${p.h / 2 - 5}" width="${p.w - 40}" height="10" rx="5"/>`;
+          // the cooler's middle holds the logo (a dot) and, on the Prism, the fan (a soft wash behind it)
+          const wash = p.kind === 'cooler' && lx === p.w / 2 && ly === p.h / 2 && i > 0;
+          return `<circle class="led${wash ? ' wash' : ''}" data-i="${i}" cx="${lx}" cy="${ly}" r="${wash ? 26 : 5}"/>`;
+        }).sort((a, b) => b.includes(' wash') - a.includes(' wash'));
+        return `<g class="dev${this.sel === p.key ? ' sel' : ''}" data-k="${esc(p.key)}" transform="translate(${p.x} ${p.y})" tabindex="0" role="button" aria-label="${esc(p.name)}"><rect class="box" x="-6" y="-6" width="${p.w + 12}" height="${p.h + 12}" rx="8"/>${(DRAW[p.kind] || DRAW.strip)(p)}${leds.join('')}</g>`;
+      });
+      const empty = ST.devices.flatMap((d) => d.zones.filter((z) => !z.leds).map((z) => z.name));
+      const L = S.lighting;
+      el.innerHTML = `<div class="case-head"><span class="lbl">case</span>
+          <div class="seg" role="group" aria-label="Where Wave and Sweep run"><button data-across="1">Across the case</button><button data-across="0">Each device</button></div>
+          <div class="seg" role="group" aria-label="Direction" id="l-dir"><button data-dir="x">Left to right</button><button data-dir="y">Bottom to top</button><button data-dir="r">From the CPU out</button></div>
+          <span class="grow"></span><button class="btn${this.arranging ? ' acc' : ''}" id="l-arrange">${this.arranging ? 'Done' : 'Arrange'}</button></div>
+        <div class="case-wrap">
+          <svg class="case${this.arranging ? ' arrange' : ''}" id="l-case" viewBox="0 0 760 520" role="img" aria-label="Side view of the case with every device and its LEDs">
+            <rect x="20" y="20" width="580" height="480" rx="14" class="shell"/><rect x="130" y="40" width="360" height="380" rx="6" class="plate"/>
+            <text x="36" y="490">CASE · SIDE VIEW</text><text x="626" y="390">DESK</text><line x1="616" y1="20" x2="616" y2="500" class="split"/>
+            ${devs.join('')}
+          </svg>
+          <div class="side">
+            <div class="item" id="l-sel"></div>
+            <div class="item"><div class="opt"><span class="grow"><span class="t">Mouse and other desk devices</span><span class="sub">Join the effect from beside the case</span></span><button class="tg" id="l-desk" aria-pressed="${L.desk !== false}" aria-label="Desk devices join the effect"></button></div></div>
+            ${empty.length ? `<div class="item warn"><span class="t">Not placed: ${empty.length} zone${empty.length > 1 ? 's' : ''}</span><span class="sub">${esc(empty.join(' and '))} report${empty.length > 1 ? '' : 's'} 0 LEDs. Set the size in OpenRGB and ${empty.length > 1 ? 'they appear' : 'it appears'} here.</span></div>` : ''}
+            <span class="note">Across the case changes Wave and Sweep. The other effects give every LED one colour, so they look the same either way.</span>
+          </div>
+        </div>`;
+      this.caseControls(); this.selInfo();
+      const svg = $('#l-case');
+      el.onclick = (e) => {
+        const b = e.target.closest('button'); if (!b) return;
+        if (b.dataset.across) setLighting({ across: b.dataset.across === '1' }, false);
+        else if (b.dataset.dir && !b.disabled) setLighting({ dir: b.dataset.dir }, false);
+        else if (b.id === 'l-desk') setLighting({ desk: S.lighting.desk === false }, false);
+        else if (b.id === 'l-arrange') { this.arranging = !this.arranging; this.strips(); return; }
+        else if (b.id === 'l-putback') { S.layout = { ...S.layout }; delete S.layout[this.sel]; rgb.layout(this.sel, null); return; }
+        else return;
+        this.caseControls();
+      };
+      const pick = (k) => { this.sel = k; svg.querySelectorAll('.dev').forEach((g) => g.classList.toggle('sel', g.dataset.k === k)); this.selInfo(); };
+      svg.onkeydown = (e) => { const g = e.target.closest('.dev'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(g.dataset.k); } };
+      let drag = null;
+      const at = (e) => { const q = svg.createSVGPoint(); q.x = e.clientX; q.y = e.clientY; return q.matrixTransform(svg.getScreenCTM().inverse()); };
+      svg.onpointerdown = (e) => {
+        const g = e.target.closest('.dev'); if (!g || e.button !== 0) return;
+        pick(g.dataset.k);
+        if (!this.arranging) return;
+        const p = ST.layout.find((x) => x.key === g.dataset.k), q = at(e);
+        drag = { g, p, dx: q.x - p.x, dy: q.y - p.y, x: p.x, y: p.y };
+        svg.setPointerCapture(e.pointerId); this.dragging = true;
+      };
+      svg.onpointermove = (e) => {
+        if (!drag) return;
+        const q = at(e);
+        drag.x = Math.round(Math.min(760 - drag.p.w, Math.max(0, q.x - drag.dx)));
+        drag.y = Math.round(Math.min(520 - drag.p.h, Math.max(0, q.y - drag.dy)));
+        drag.g.setAttribute('transform', `translate(${drag.x} ${drag.y})`);
+      };
+      svg.onpointerup = svg.onpointercancel = () => {
+        if (!drag) return;
+        const { p, x, y } = drag; drag = null; this.dragging = false;
+        if (x !== p.x || y !== p.y) { S.layout = { ...S.layout, [p.key]: [x, y] }; rgb.layout(p.key, [x, y]); this.selInfo(); }
+      };
+    },
+    caseControls() {
+      const L = S.lighting, el = $('#l-strips'); if (!el || !$('#l-dir')) return;
+      el.querySelectorAll('[data-across]').forEach((b) => b.setAttribute('aria-pressed', (b.dataset.across === '1') === (L.across !== false)));
+      const dirOn = L.across !== false && ['wave', 'sweep'].includes(L.effect);
+      el.querySelectorAll('[data-dir]').forEach((b) => { b.setAttribute('aria-pressed', b.dataset.dir === (L.dir || 'x')); b.disabled = !dirOn; });
+      $('#l-desk').setAttribute('aria-pressed', L.desk !== false);
+    },
+    selInfo() {
+      const el = $('#l-sel'); if (!el) return;
+      const p = ST && ST.layout.find((x) => x.key === this.sel);
+      el.innerHTML = p
+        ? `<span class="t">${esc(p.name)}</span><span class="sub">${p.pts.length} LED${p.pts.length > 1 ? 's' : ''}${this.arranging ? '. Drag it to where it sits in your case.' : ''}</span>${this.arranging && S.layout && S.layout[p.key] ? '<button class="btn" id="l-putback">Put back</button>' : ''}`
+        : '<span class="t">Nothing selected</span><span class="sub">Click a device to see it here. Arrange lets you drag it to where it sits in your case.</span>';
     },
     paintStrips(m) {
+      if (this.dragging) return;
       for (const [k, cs] of Object.entries(m)) {
-        const row = $(`#l-strips .ls[data-k="${CSS.escape(k)}"]`); if (!row) continue;
-        const bs = row.querySelectorAll('b');
-        for (let i = 0; i < cs.length && i < bs.length; i++) bs[i].style.background = '#' + cs[i].toString(16).padStart(6, '0');
+        const g = $(`#l-case .dev[data-k="${CSS.escape(k)}"]`); if (!g) continue;
+        for (const el of g.querySelectorAll('.led')) { const c = cs[+el.dataset.i]; if (c != null) el.style.fill = '#' + c.toString(16).padStart(6, '0'); }
       }
     },
     // The global bar. Rebuilt on effect or colour changes from here, the footer or the tray.
@@ -876,7 +962,7 @@ function setLighting(patch, rebuild = true) {
   Object.assign(S.lighting, patch);
   rgb.lighting(patch);
   footer();
-  if (page === 'lighting') { if (rebuild) pages.lighting.paint(); if (ST) pages.lighting.live(); }
+  if (page === 'lighting') { if (rebuild) pages.lighting.paint(); pages.lighting.caseControls(); if (ST) pages.lighting.live(); }
   if (page === 'home' && ST) pages.home.live();
 }
 function footer() {
@@ -1061,7 +1147,7 @@ function onState(s) {
   drawSetup();
   health('st-guard', !s.guard, s.guard, s.guard ? 'Apex guard active' : 'Apex guard idle');
   if (page === 'fans' && fansChanged) pages[page].build();
-  if (page === 'lighting' && pages.lighting.stripSig !== s.devices.map((d) => d.key + d.leds).join()) pages.lighting.strips();
+  if (page === 'lighting' && !pages.lighting.dragging && pages.lighting.stripSig !== pages.lighting.caseSig()) pages.lighting.strips();
   pages[page].live();
 }
 
