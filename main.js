@@ -62,6 +62,7 @@ const state = {
   openrgb: { ok: false, msg: 'connecting' },
   sensors: { ok: false, msg: 'starting', admin: isAdmin(), unclean: false },
   guard: false,
+  fanApps: [], // [{ label, scope }] other apps driving fans (#26)
   conflicts: null, // [{ name, label, note, closable, service, running }] while the in-app prompt is open
   devices: [], // { key, id, name, type, leds, zones: [{name, leds}] }
   hw: [],
@@ -275,7 +276,9 @@ function sensorValue(id) {
 function driveFans() {
   for (const c of state.controls) {
     const f = settings.fans[c.id];
-    if (!f || f.mode === 'bios') { if (c.ours) send({ cmd: 'auto', id: c.id }); continue; }
+    // Another fan app drives this header: two writers make the fan hunt, so KelvinRGB lets go until it closes (#26).
+    const other = C.fanAppFor(state.fanApps, c.kind);
+    if (!f || f.mode === 'bios' || other) { if (c.ours) send({ cmd: 'auto', id: c.id }); continue; }
     if (f.mode === 'fixed') { send({ cmd: 'set', id: c.id, duty: f.fixed ?? 50 }); continue; }
     const temp = sensorValue(f.sensor);
     // Lost the sensor: run the fan hard rather than guess.
@@ -337,6 +340,8 @@ function notify(body) {
 // Shows conflicting apps in the window (red = running, green = closed). Hardware waits for "Continue" at startup.
 function handleConflicts(tasklistCsv) {
   lastProcs = C.parse(tasklistCsv);
+  const fa = C.fanApps(lastProcs);
+  if (JSON.stringify(fa) !== JSON.stringify(state.fanApps)) { state.fanApps = fa; log(`fans: ${fa.length ? fa.map((a) => a.label).join(', ') + ' running' : 'no other fan app'}`); push(); }
   if (state.conflicts) {
     const running = new Set(lastProcs.map((p) => p.name.toLowerCase()));
     let changed = false;
