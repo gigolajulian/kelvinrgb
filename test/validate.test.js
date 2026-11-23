@@ -32,3 +32,15 @@ test('device off switch', () => {
   assert.deepStrictEqual(V.device({ off: true }), { off: true });
   assert.deepStrictEqual(V.device({ off: 'yes' }), {}); // only a real boolean
 });
+
+test('palette and themes (#27)', () => {
+  assert.deepStrictEqual(V.lighting({ palette: ['#C8323C', '#3b4fd8'] }).palette, ['#c8323c', '#3b4fd8']);
+  assert.deepStrictEqual(V.lighting({ palette: [] }).palette, []);
+  assert.strictEqual(V.lighting({ palette: ['#c8323c'] }).palette, undefined);
+  assert.strictEqual(V.lighting({ palette: ['#c8323c', 'red'] }).palette, undefined);
+  assert.strictEqual(V.lighting({ palette: ['#111111', '#222222', '#333333', '#444444'] }).palette, undefined);
+  const t = V.theme({ name: ' Ember ', lighting: { effect: 'wave', palette: ['#c8323c', '#f0a35e'], bogus: 1 }, zones: { 'dev|x': { 0: '#FFFFFF', bad: '#000000' } } });
+  assert.deepStrictEqual(t, { name: 'Ember', lighting: { effect: 'wave', palette: ['#c8323c', '#f0a35e'] }, zones: { 'dev|x': { 0: '#ffffff' } } });
+  assert.strictEqual(V.theme({ name: '' }), null);
+  assert.strictEqual(V.theme({ name: 'x'.repeat(41) }), null);
+});
