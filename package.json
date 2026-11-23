@@ -1,6 +1,6 @@
 {
   "name": "kelvinrgb",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "private": true,
   "description": "One dark window for PC lighting, fans and sensors, on OpenRGB and LibreHardwareMonitor.",
   "main": "main.js",
