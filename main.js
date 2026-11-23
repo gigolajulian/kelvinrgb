@@ -51,9 +51,10 @@ const DEFAULTS = {
 let settings = structuredClone(DEFAULTS);
 try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
 let saveTimer;
+const writeSettings = () => { saveTimer = null; fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2)); };
 function save() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2)), 300);
+  saveTimer = setTimeout(writeSettings, 300);
 }
 
 // ---------- shared state pushed to the window ----------
@@ -61,6 +62,7 @@ const state = {
   openrgb: { ok: false, msg: 'connecting' },
   sensors: { ok: false, msg: 'starting', admin: isAdmin(), unclean: false },
   guard: false,
+  fanApps: [], // [{ label, scope }] other apps driving fans (#26)
   conflicts: null, // [{ name, label, note, closable, service, running }] while the in-app prompt is open
   devices: [], // { key, id, name, type, leds, zones: [{name, leds}] }
   hw: [],
@@ -110,18 +112,27 @@ async function connectOpenRgb() {
   // A rescan (ours or OpenRGB's) renumbers devices; stale ids would paint the wrong device.
   c.on('deviceListUpdated', () => loadDevices().catch((e) => log(`reload devices: ${e.message}`)));
   await loadDevices();
+  if (rescanWanted) { rescanWanted = false; log('rescan: an app let go of its devices'); c.requestRescan(); }
 }
 
 async function loadDevices() {
   const devs = await client.getAllControllerData();
+  const before = new Set(state.devices.map((d) => d.key));
   state.devices = devs.map((d) => ({
     key: `${d.name}|${d.location}`, id: d.deviceId, name: d.name, type: d.type, firmware: String(d.version || '').trim(),
     leds: d.colors.length, zones: d.zones.map((z) => ({ name: z.name, leds: z.ledsCount })),
   }));
   for (const d of state.devices) if (d.leds) client.setCustomMode(d.id);
+  // The mode OpenRGB picked (Direct, Custom or Static), so checkModes can tell when another app takes a device back.
+  (await client.getAllControllerData()).forEach((x, i) => { if (state.devices[i]) state.devices[i].mode = x.activeMode; });
+  sent.clear();
   state.openrgb = { ok: true, msg: `${state.devices.length} devices` };
   stepSplash(3);
   log(`OpenRGB: ${state.devices.map((d) => d.name).join(', ')}`);
+  // Devices that appeared since the last list (an app let go, detection finished) flash white so you can see which (#23).
+  const fresh = before.size ? state.devices.filter((d) => d.leds && !before.has(d.key)) : [];
+  for (const d of fresh) identify.set(d.key, Date.now() + 2000);
+  if (fresh.length) log(`new devices: ${fresh.map((d) => d.name).join(', ')}`);
   push();
   startRender();
   stepSplash(4); // lighting painted
@@ -134,21 +145,30 @@ function startRender() {
   render();
 }
 
-function render() {
-  if (!client || state.guard) return;
+// effect: override for one frame ('static' paints the resting state on quit or before Apex, #25).
+// Last frame sent per device: unchanged frames are skipped (less bus traffic), but resent each second in case a device drifts.
+const sent = new Map();
+// Lian Li Strimer controllers can't take 30 fps and drop frames unevenly, which reads as jitter (#24).
+// They get every second frame: a steady 15 fps, still on the shared clock.
+const SLOW = /strimer|lian li/i;
+let frameNo = 0;
+function render(effect) {
+  if (!client || (state.guard && !effect)) return; // the guard paints one resting frame before letting go
+  frameNo++;
   const L = settings.lighting;
+  const fx = effect || L.effect;
   const base = M.hexToRgb(L.color);
   const t = Date.now() / 1000;
   const now = Date.now();
   for (const d of state.devices) {
-    if (!d.leds) continue;
+    if (!d.leds || (!effect && frameNo % 2 && SLOW.test(d.name))) continue;
     const dev = settings.devices[d.key] || {};
     const bright = (L.on && !dev.off ? L.brightness / 100 : 0) * ((dev.brightness ?? 100) / 100);
     const flashing = (identify.get(d.key) || 0) > now;
     const colors = [];
     for (let i = 0; i < d.leds; i++) {
       const c = flashing ? (Math.floor(now / 250) % 2 ? { red: 255, green: 255, blue: 255 } : { red: 0, green: 0, blue: 0 })
-        : M.frame(L.effect, base, t, L.speed, i, d.leds);
+        : M.frame(fx, base, t, L.speed, i, d.leds);
       colors.push(M.tune(c, dev, flashing ? 1 : bright));
     }
     // Per-zone colour overrides paint that zone's LEDs a fixed colour instead of the effect.
@@ -163,10 +183,35 @@ function render() {
     // Wraith Prism fan blade: only its blue input works (red + green stay on as warm yellow), so blue sets yellow..white.
     // Measured 2026-11-20: visible from ~192, midpoint ~224, white from ~240. See HANDOFF.
     if (d.name === 'AMD Wraith Prism' && !flashing && colors[1]) colors[1] = { red: 255, green: 255, blue: L.on && !dev.off ? (dev.fanWhite ?? 240) : 0 };
+    const sig = colors.map((c) => (c.red << 16) | (c.green << 8) | c.blue).join(), last = sent.get(d.key);
+    if (!effect && last && last.sig === sig && now - last.at < 1000) continue;
+    sent.set(d.key, { sig, at: now });
     try { client.updateLeds(d.id, colors); } catch (e) { log(`updateLeds ${d.name}: ${e.message}`); }
   }
   for (const [k, until] of identify) if (until <= now) { identify.delete(k); startRender(); }
 }
+
+// A device another app (or its own firmware) pulled out of KelvinRGB's mode runs its own effect at its own speed and
+// phase (#24). Every 5 s, put it back and log who has it.
+let checkingModes = false;
+async function checkModes() {
+  if (!client || state.guard || checkingModes) return;
+  checkingModes = true;
+  try {
+    const now = await client.getAllControllerData();
+    // OpenRGB found more (or fewer) devices since the last list, e.g. it was still detecting when we first asked (#23).
+    if (now.length !== state.devices.length) return await loadDevices();
+    now.forEach((x, i) => {
+      const d = state.devices[i];
+      if (!d.leds || d.mode == null || x.activeMode === d.mode) return;
+      d.taken = (d.taken || 0) + 1; // the log stays quiet when an app keeps fighting
+      if (d.taken === 1 || d.taken % 60 === 0) log(`${d.name} switched to its own ${x.modes[x.activeMode]?.name || 'mode'} (${d.taken}x), another app may be driving it; taking it back`);
+      client.setCustomMode(d.id);
+      sent.delete(d.key);
+    });
+  } catch (e) { log(`mode check: ${e.message}`); } finally { checkingModes = false; }
+}
+setInterval(checkModes, 5000);
 
 // ---------- sensors + fans ----------
 let sidecar = null;
@@ -231,7 +276,9 @@ function sensorValue(id) {
 function driveFans() {
   for (const c of state.controls) {
     const f = settings.fans[c.id];
-    if (!f || f.mode === 'bios') { if (c.ours) send({ cmd: 'auto', id: c.id }); continue; }
+    // Another fan app drives this header: two writers make the fan hunt, so KelvinRGB lets go until it closes (#26).
+    const other = C.fanAppFor(state.fanApps, c.kind);
+    if (!f || f.mode === 'bios' || other) { if (c.ours) send({ cmd: 'auto', id: c.id }); continue; }
     if (f.mode === 'fixed') { send({ cmd: 'set', id: c.id, duty: f.fixed ?? 50 }); continue; }
     const temp = sensorValue(f.sensor);
     // Lost the sensor: run the fan hard rather than guess.
@@ -257,7 +304,7 @@ function checkGuard() {
       state.sensors = { ...state.sensors, ok: false, msg: 'paused for apex' };
       push();
       await G.enter({
-        stopRender: () => clearInterval(renderTimer),
+        stopRender: () => { clearInterval(renderTimer); identify.clear(); render('static'); }, // hold a calm colour, not a frozen frame
         stopSidecar,
         disconnect: () => { if (client) { client.removeAllListeners('disconnect'); client.disconnect(); client = null; } },
         wait: (ms) => new Promise((r) => setTimeout(r, ms)),
@@ -293,6 +340,8 @@ function notify(body) {
 // Shows conflicting apps in the window (red = running, green = closed). Hardware waits for "Continue" at startup.
 function handleConflicts(tasklistCsv) {
   lastProcs = C.parse(tasklistCsv);
+  const fa = C.fanApps(lastProcs);
+  if (JSON.stringify(fa) !== JSON.stringify(state.fanApps)) { state.fanApps = fa; log(`fans: ${fa.length ? fa.map((a) => a.label).join(', ') + ' running' : 'no other fan app'}`); push(); }
   if (state.conflicts) {
     const running = new Set(lastProcs.map((p) => p.name.toLowerCase()));
     let changed = false;
@@ -306,7 +355,8 @@ function handleConflicts(tasklistCsv) {
   if (settings.closeConflicts === false) return firstCheckDone();
   const names = [...new Set([...C.toClose(lastProcs).map((p) => p.name), ...C.toWarn(lastProcs)])].filter((n) => !declined.has(n.toLowerCase()));
   if (!names.length) return firstCheckDone();
-  state.conflicts = names.map((n) => ({ name: n, label: C.label(n), note: C.WARN[n] || n, closable: C.closable(n), service: !!C.service(n), running: true }));
+  const devs = state.devices.map((d) => d.name);
+  state.conflicts = names.map((n) => ({ name: n, label: C.label(n), note: C.WARN[n] || n, holds: C.holdsText(n, devs), closable: C.closable(n), service: !!C.service(n), running: true }));
   if (win && !win.isVisible()) showWindow(); // the prompt needs a visible window (hidden ones get no state)
   push();
 }
@@ -317,7 +367,7 @@ function stopConflictService(name) {
       log(`conflicts: sc stop ${svc} failed: ${stdout.trim() || err.message}`);
       const c = state.conflicts?.find((x) => x.name === name);
       if (c) { c.note = 'Could not stop the service. KelvinRGB needs to run as admin.'; c.service = false; push(); }
-    } else notify(`KelvinRGB stopped ${svc} until the next restart.`);
+    } else { notify(`KelvinRGB stopped ${svc} until the next restart.`); rescanSoon(); }
     setTimeout(checkGuard, 1500); // the service process takes a moment to exit
   });
 }
@@ -329,9 +379,16 @@ function closeConflict(name) {
   if (!pids.length) return checkGuard();
   execFile(SYS('taskkill.exe'), ['/F', '/T', ...pids.flatMap((p) => ['/PID', p])], { windowsHide: true }, (err, stdout, stderr) => {
     if (err && !/SUCCESS/i.test(stdout)) log(`conflicts: taskkill ${name} failed: ${(stderr || err.message).trim()}`);
-    else notify(C.message([name]));
+    else { notify(C.message([name])); rescanSoon(); }
     checkGuard(); // re-read the process list now so the row turns green without waiting for the poll
   });
+}
+// An app just let go of its devices: ask OpenRGB to detect again so they show up (#23). Before the first connect,
+// connectOpenRgb does it once connected.
+let rescanWanted = false;
+function rescanSoon() {
+  rescanWanted = true;
+  setTimeout(() => { if (client && rescanWanted) { rescanWanted = false; log('rescan: an app let go of its devices'); client.requestRescan(); } }, 2000);
 }
 function finishConflicts() {
   if (!state.conflicts) return;
@@ -502,7 +559,7 @@ async function installOpenRgb() {
 const updater = U.create({
   version: app.getVersion(), log, packaged: app.isPackaged,
   onChange: () => { state.update = { ...updater.view(), kind: updater.state.kind, v: updater.state.v }; push(); updateTray(true); },
-  beforeInstall: async () => { quitting = true; clearInterval(renderTimer); await stopSidecar(); if (client) client.disconnect(); },
+  beforeInstall: async () => { quitting = true; await restLights(); await stopSidecar(); },
   spawn: (file, args) => spawn(file, args, { detached: true, stdio: 'ignore' }).unref(),
   quit: () => app.quit(),
 });
@@ -679,14 +736,24 @@ app.whenReady().then(() => {
   setInterval(() => updater.check(false), 6 * 3600e3);
 });
 
+// Stop the effect on a resting frame (the chosen colour, static; black if lights are off), then let go of OpenRGB (#25).
+async function restLights() {
+  clearInterval(renderTimer);
+  identify.clear();
+  if (!client) return;
+  try { render('static'); } catch (e) { log(`rest: ${e.message}`); }
+  await new Promise((r) => setTimeout(r, 150)); // let the server apply it before the socket closes
+  try { client.removeAllListeners('disconnect'); client.disconnect(); } catch {}
+  client = null;
+}
+
 let quitting = false;
 app.on('before-quit', async (e) => {
   if (quitting) return;
   e.preventDefault();
   quitting = true;
-  clearInterval(renderTimer);
-  await stopSidecar();
-  if (client) client.disconnect();
-  app.quit();
+  setTimeout(() => app.exit(0), 8000); // a stuck step must never leave a windowless copy running (#23)
+  try { if (saveTimer) { clearTimeout(saveTimer); writeSettings(); } await restLights(); await stopSidecar(); } catch (x) { log(`quit: ${x.message}`); }
+  app.exit(0);
 });
 app.on('window-all-closed', () => {}); // the tray keeps KelvinRGB running

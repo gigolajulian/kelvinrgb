@@ -60,6 +60,16 @@ function fanHelp() {
   return 'No fan controller answered. Install the PawnIO driver (pawnio.eu), then restart KelvinRGB. Fans on a hub or the GPU are not controlled here.';
 }
 const sensorById = (id) => sensors().find((s) => s.id === id) || null;
+// Who drives this fan now (#26): another fan app, KelvinRGB, the hub's own default, or the BIOS.
+const fanApp = (c) => (ST.fanApps || []).find((a) => a.scope === 'all' || a.scope === (c.kind === 'hub' ? 'hub' : 'board'));
+function fanOwner(c) {
+  const f = S.fans[c.id], app = fanApp(c), mine = f && f.mode !== 'bios';
+  if (app) return mine ? `${app.label} (your ${f.mode === 'fixed' ? 'setting' : 'curve'} waits)` : app.label;
+  if (mine) return `KelvinRGB · ${f.mode === 'fixed' ? `Fixed ${f.fixed}%` : 'Curve'}`;
+  return c.kind === 'hub' ? 'Hub default' : c.ours ? 'BIOS · held 100% until reboot' : 'BIOS';
+}
+// A header asked for 30% or more that reads 0 rpm has nothing plugged in.
+const fanEmpty = (c) => fanRpm(c) === 0 && c.value >= 30;
 function fanRpm(c) {
   const h = ST.hw.find((x) => x.name === c.hw);
   const s = h && h.sensors.find((x) => x.type === 'Fan' && x.index === c.index);
@@ -225,11 +235,14 @@ const pages = {
 
       const cur = fans.length ? Object.keys(PRESETS).find((p) => fans.every((c) => S.fans[c.id]?.mode === 'curve' && JSON.stringify(S.fans[c.id].points) === JSON.stringify(PRESETS[p]))) : null;
       $$('#h-fan [data-v]').forEach((b) => { b.setAttribute('aria-pressed', b.dataset.v === cur); b.disabled = !fans.length || !!ST.guard; });
+      const set = fans.filter((c) => S.fans[c.id] && S.fans[c.id].mode !== 'bios' && !fanApp(c)).length;
+      const apps = [...new Set((ST.fanApps || []).map((a) => a.label))].join(', ');
       $('#h-fan-s').textContent = !fans.length || ST.guard ? fanHelp()
-        : `${cur ? `${cur} on all ${fans.length} fans` : 'Custom curves'} · never below ${FLOOR}%`;
+        : !set ? `No curves set: ${apps || 'BIOS'} in control`
+        : `${cur && !apps ? `${cur} on all ${fans.length} fans` : `KelvinRGB drives ${set} of ${fans.length} fans`}${apps ? ` · ${apps} running` : ''} · never below ${FLOOR}%`;
       $('#h-fan-l').innerHTML = fans.map((c, i) => {
         const duty = c.value >= 0 ? Math.round(c.value) : null;
-        return `<div><span class="k">${esc(fanName(c))}</span><span class="v">${rpms[i] != null ? `${rpms[i]} rpm` : ''}</span><span class="meter"><i style="width:${duty ?? 0}%"></i></span><span class="v p">${duty != null ? duty + '%' : '-'}</span></div>`;
+        return `<div class="${fanEmpty(c) ? 'empty' : ''}" title="${esc(fanOwner(c))}"><span class="k">${esc(fanName(c))}</span><span class="v">${fanEmpty(c) ? 'empty' : rpms[i] != null ? `${rpms[i]} rpm` : ''}</span><span class="meter"><i style="width:${duty ?? 0}%"></i></span><span class="v p">${duty != null ? duty + '%' : '-'}</span></div>`;
       }).join('');
 
       const hw = (re) => (ST.hw.find((h) => re.test(h.type)) || {}).name;
@@ -613,6 +626,7 @@ const pages = {
       }
       const f = this.edit;
       main.innerHTML = `<div class="hd"><h1>Fans</h1><span class="sub">Never below ${FLOOR}%. If KelvinRGB stops, board fans go back to the BIOS and hub fans to 100%.</span></div>
+      <p class="helptext" id="c-busy" hidden></p>
       <p class="helptext" id="c-unclean" hidden>The sensor service was force-killed earlier this boot, so fans left on BIOS are held at 100% until you reboot.</p>
       ${c ? `<div class="grid" style="grid-template-columns:270px minmax(0,1fr);align-items:start">
         <div class="g" style="padding:8px" id="c-list"></div>
@@ -689,10 +703,13 @@ const pages = {
       const box = $('#c-list'); if (!box) return;
       $('#c-unclean').hidden = !ST.sensors.unclean;
       box.innerHTML = ST.controls.map((c) => {
-        const f = S.fans[c.id];
-        const mode = !f || f.mode === 'bios' ? (c.kind === 'hub' ? 'Hub default' : c.ours ? 'held 100% until reboot' : 'BIOS') : f.mode === 'fixed' ? `Fixed ${f.fixed}%` : 'Curve';
-        return `<button class="fan" data-id="${esc(c.id)}" aria-pressed="${c.id === this.sel}"><span>${esc(fanName(c))}</span><span class="mono">${fanRpm(c) ?? '-'} rpm</span><span class="m">${mode} · ${Math.round(c.value)}%</span></button>`;
+        const empty = fanEmpty(c);
+        return `<button class="fan${empty ? ' empty' : ''}" data-id="${esc(c.id)}" aria-pressed="${c.id === this.sel}"><span>${esc(fanName(c))}</span><span class="mono">${empty ? 'empty' : `${fanRpm(c) ?? '-'} rpm`}</span><span class="m">${esc(fanOwner(c))} · ${Math.round(c.value)}%</span><span class="m">${esc(c.hw)}</span></button>`;
       }).join('');
+      // Two apps on one header make the fan hunt, so Apply waits until the other app closes (main enforces it too).
+      const sel = ST.controls.find((x) => x.id === this.sel), app = sel && fanApp(sel), any = ST.controls.some(fanApp);
+      if ($('#c-apply')) { $('#c-apply').disabled = !!app; $('#c-apply-all').disabled = any; }
+      if ($('#c-busy')) { $('#c-busy').hidden = !app; $('#c-busy').textContent = app ? `${app.label} is driving this fan. Close it to let KelvinRGB take over.` : ''; }
       if ($('#c-svg') && !document.querySelector('#c-svg:active')) this.drawCurve();
     },
   },
@@ -920,7 +937,7 @@ function drawConflicts(opening) {
     : cfPending.has(x.name) ? (now - cfPending.get(x.name) < 8000 ? 'closing' : 'still running') : 'running';
   $('#cf-count').textContent = left ? `${left} of ${c.length} running` : `all ${c.length} closed`;
   $('#cf-list').innerHTML = c.map((x) => `<li class="${x.running ? 'on' : 'off'}"><span class="dot"></span>
-    <span class="grow">${esc(x.label)}${x.note && x.note !== x.name ? `<small>${esc(x.note)}</small>` : ''}</span>
+    <span class="grow">${esc(x.label)}${x.note && x.note !== x.name ? `<small>${esc(x.note)}</small>` : ''}${x.holds ? `<small>${esc(x.holds)}</small>` : ''}</span>
     <span class="lbl state">${state(x)}</span></li>`).join('');
   const closable = c.filter(canClose), busy = closable.some((x) => state(x) === 'closing');
   const all = $('#cf-all'), done = $('#cf-done');
