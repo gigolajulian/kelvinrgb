@@ -1017,6 +1017,16 @@ $('#ft-dots').oncontextmenu = (e) => {
   pk.click();
 };
 $('#ft-power').onclick = () => setLighting({ on: !S.lighting.on });
+// Copy screenshot (#27): the button, or Ctrl+Shift+S while KelvinRGB has focus. The label says when it landed.
+async function copyShot() {
+  const b = $('#ft-shot'); if (b.disabled) return;
+  b.disabled = true;
+  const ok = await rgb.shot().catch(() => false);
+  b.classList.add(ok ? 'done' : 'fail'); b.title = ok ? 'Copied to the clipboard' : 'Could not copy';
+  setTimeout(() => { b.classList.remove('done', 'fail'); b.title = 'Copy screenshot (Ctrl+Shift+S)'; b.disabled = false; }, 1600);
+}
+$('#ft-shot').onclick = copyShot;
+addEventListener('keydown', (e) => { if (e.ctrlKey && e.shiftKey && e.code === 'KeyS') { e.preventDefault(); copyShot(); } });
 $('#ft-bright').oninput = (e) => setLighting({ brightness: +e.target.value }, false);
 $$('nav [data-page]').forEach((b) => (b.onclick = () => go(b.dataset.page)));
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
