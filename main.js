@@ -111,10 +111,12 @@ async function connectOpenRgb() {
   // A rescan (ours or OpenRGB's) renumbers devices; stale ids would paint the wrong device.
   c.on('deviceListUpdated', () => loadDevices().catch((e) => log(`reload devices: ${e.message}`)));
   await loadDevices();
+  if (rescanWanted) { rescanWanted = false; log('rescan: an app let go of its devices'); c.requestRescan(); }
 }
 
 async function loadDevices() {
   const devs = await client.getAllControllerData();
+  const before = new Set(state.devices.map((d) => d.key));
   state.devices = devs.map((d) => ({
     key: `${d.name}|${d.location}`, id: d.deviceId, name: d.name, type: d.type, firmware: String(d.version || '').trim(),
     leds: d.colors.length, zones: d.zones.map((z) => ({ name: z.name, leds: z.ledsCount })),
@@ -126,6 +128,10 @@ async function loadDevices() {
   state.openrgb = { ok: true, msg: `${state.devices.length} devices` };
   stepSplash(3);
   log(`OpenRGB: ${state.devices.map((d) => d.name).join(', ')}`);
+  // Devices that appeared since the last list (an app let go, detection finished) flash white so you can see which (#23).
+  const fresh = before.size ? state.devices.filter((d) => d.leds && !before.has(d.key)) : [];
+  for (const d of fresh) identify.set(d.key, Date.now() + 2000);
+  if (fresh.length) log(`new devices: ${fresh.map((d) => d.name).join(', ')}`);
   push();
   startRender();
   stepSplash(4); // lighting painted
@@ -344,7 +350,8 @@ function handleConflicts(tasklistCsv) {
   if (settings.closeConflicts === false) return firstCheckDone();
   const names = [...new Set([...C.toClose(lastProcs).map((p) => p.name), ...C.toWarn(lastProcs)])].filter((n) => !declined.has(n.toLowerCase()));
   if (!names.length) return firstCheckDone();
-  state.conflicts = names.map((n) => ({ name: n, label: C.label(n), note: C.WARN[n] || n, closable: C.closable(n), service: !!C.service(n), running: true }));
+  const devs = state.devices.map((d) => d.name);
+  state.conflicts = names.map((n) => ({ name: n, label: C.label(n), note: C.WARN[n] || n, holds: C.holdsText(n, devs), closable: C.closable(n), service: !!C.service(n), running: true }));
   if (win && !win.isVisible()) showWindow(); // the prompt needs a visible window (hidden ones get no state)
   push();
 }
@@ -355,7 +362,7 @@ function stopConflictService(name) {
       log(`conflicts: sc stop ${svc} failed: ${stdout.trim() || err.message}`);
       const c = state.conflicts?.find((x) => x.name === name);
       if (c) { c.note = 'Could not stop the service. KelvinRGB needs to run as admin.'; c.service = false; push(); }
-    } else notify(`KelvinRGB stopped ${svc} until the next restart.`);
+    } else { notify(`KelvinRGB stopped ${svc} until the next restart.`); rescanSoon(); }
     setTimeout(checkGuard, 1500); // the service process takes a moment to exit
   });
 }
@@ -367,9 +374,16 @@ function closeConflict(name) {
   if (!pids.length) return checkGuard();
   execFile(SYS('taskkill.exe'), ['/F', '/T', ...pids.flatMap((p) => ['/PID', p])], { windowsHide: true }, (err, stdout, stderr) => {
     if (err && !/SUCCESS/i.test(stdout)) log(`conflicts: taskkill ${name} failed: ${(stderr || err.message).trim()}`);
-    else notify(C.message([name]));
+    else { notify(C.message([name])); rescanSoon(); }
     checkGuard(); // re-read the process list now so the row turns green without waiting for the poll
   });
+}
+// An app just let go of its devices: ask OpenRGB to detect again so they show up (#23). Before the first connect,
+// connectOpenRgb does it once connected.
+let rescanWanted = false;
+function rescanSoon() {
+  rescanWanted = true;
+  setTimeout(() => { if (client && rescanWanted) { rescanWanted = false; log('rescan: an app let go of its devices'); client.requestRescan(); } }, 2000);
 }
 function finishConflicts() {
   if (!state.conflicts) return;
