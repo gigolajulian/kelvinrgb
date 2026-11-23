@@ -43,3 +43,23 @@ test('frame: a palette keeps every effect inside its colours (#27)', () => {
   // under two colours: the old rainbow
   assert.deepStrictEqual(frame('spectrum', red, 1, 40, 0, 1, [red]), frame('spectrum', red, 1, 40));
 });
+
+test('frame: colour cycle, sweep and temperature (#27)', () => {
+  const red = hexToRgb('#c8323c'), blue = hexToRgb('#3b4fd8'), pal = [red, blue];
+  const step = 4 / (0.05 + 0.4 * 0.95); // one colour per step at speed 40
+  // cycle: holds the first colour, then the second, every LED alike
+  assert.deepStrictEqual(frame('cycle', red, step * 0.3, 40, 0, 5, pal), red);
+  assert.deepStrictEqual(frame('cycle', red, step * 1.3, 40, 4, 5, pal), blue);
+  // sweep: bright where the band is, dim floor elsewhere
+  const pass = 2 / (0.05 + 0.4 * 0.95), at = (frac) => pass * ((frac + 0.3) / 1.6);
+  const lit = frame('sweep', red, at(0), 40, 0, 11, pal), dim = frame('sweep', red, at(0), 40, 10, 11, pal);
+  assert.ok(lit.red > 190 && dim.red < 20, `lit ${lit.red} dim ${dim.red}`);
+  assert.deepStrictEqual(frame('sweep', red, pass + at(0), 40, 0, 11, pal), blue); // next pass, next colour
+  // temperature: the bluer colour is cool and the redder warm, whatever order they were picked in
+  assert.deepStrictEqual(frame('temp', red, 0, 40, 0, 1, pal, 30), blue);
+  assert.deepStrictEqual(frame('temp', red, 0, 40, 0, 1, pal, 90), red);
+  assert.deepStrictEqual(frame('temp', red, 0, 40, 0, 1, [blue, red], 90), red);
+  assert.deepStrictEqual(frame('temp', red, 0, 40, 0, 1, pal, null), blue);
+  const mid = frame('temp', red, 0, 40, 0, 1, pal, 60);
+  assert.ok(mid.red < red.red && mid.red > blue.red);
+});

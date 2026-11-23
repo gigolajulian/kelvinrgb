@@ -10,7 +10,8 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const main = $('#page');
 
-const EFFECTS = [['static', 'Static'], ['breathing', 'Breathing'], ['spectrum', 'Spectrum'], ['wave', 'Wave'], ['off', 'Off']];
+const EFFECTS = [['static', 'Static'], ['breathing', 'Breathing'], ['spectrum', 'Spectrum'], ['wave', 'Wave'], ['cycle', 'Colour cycle'], ['sweep', 'Sweep'], ['temp', 'Temperature'], ['off', 'Off']];
+const TEMP_RANGE = [35, 85]; // lib/math.js maps these to the cool and warm colours
 const SWATCHES = [['White', '#ffffff'], ['Red', '#c8323c'], ['Orange', '#ff6a1a'], ['Cobalt', '#2f5bff'], ['Teal', '#13a3a3'], ['Violet', '#8a5cff']];
 const PRESETS = {
   Quiet: [[30, 25], [55, 30], [70, 50], [85, 80], [95, 100]],
@@ -313,6 +314,10 @@ const pages = {
       this.paint();
       this.draw();
     },
+    tempText() {
+      const t = ST && cpuTemp();
+      return `${t ? `CPU <span class="num">${Math.round(t.value)} °C</span>` : 'CPU temperature unavailable: sensors need admin'} · bluest colour at ${TEMP_RANGE[0]} °C, reddest at ${TEMP_RANGE[1]} °C`;
+    },
     // ---- effect colours and themes (#27) ----
     palette() {
       const L = S.lighting, pal = L.palette || [];
@@ -366,14 +371,26 @@ const pages = {
     },
     // The global bar. Rebuilt on effect or colour changes from here, the footer or the tray.
     paint() {
-      const L = S.lighting, c = L.color, anim = ['breathing', 'spectrum', 'wave'].includes(L.effect);
-      const FX = { static: c, breathing: `linear-gradient(90deg,#111,${c},#111)`, spectrum: 'linear-gradient(90deg,#c8323c,#ff6a1a,#13a3a3,#2f5bff,#8a5cff)', wave: `repeating-linear-gradient(90deg,${c} 0 5px,#111 5px 10px)`, off: '#111' };
+      const L = S.lighting, c = L.color, anim = ['breathing', 'spectrum', 'wave', 'cycle', 'sweep'].includes(L.effect);
+      // Previews follow the effect colours when they are set, like the lights do.
+      const own = (L.palette || []).length >= 2, p = own ? L.palette : null;
+      const warmth = (h) => parseInt(h.slice(1, 3), 16) - parseInt(h.slice(5, 7), 16); // same rule as lib/math.js temp
+      const ends = own ? [...p].sort((a, b) => warmth(a) - warmth(b)).filter((_, i, a) => i === 0 || i === a.length - 1) : ['#3b4fd8', '#c8323c'];
+      const FX = {
+        static: c, breathing: `linear-gradient(90deg,#111,${c},#111)`,
+        spectrum: own ? `linear-gradient(90deg,${p.join(',')})` : 'linear-gradient(90deg,#c8323c,#ff6a1a,#13a3a3,#2f5bff,#8a5cff)',
+        wave: own ? `repeating-linear-gradient(90deg,${p.map((x, i) => `${x} ${i * 5}px ${(i + 1) * 5}px`).join(',')})` : `repeating-linear-gradient(90deg,${c} 0 5px,#111 5px 10px)`,
+        cycle: `linear-gradient(90deg,${own ? p[0] : c} 0 40%,${own ? p[1] : '#3b4fd8'} 60% 100%)`,
+        sweep: `linear-gradient(90deg,#111 0 20%,${own ? p[0] : c} 50%,#111 80%)`,
+        temp: `linear-gradient(90deg,${ends[0]},${ends[1]})`, off: '#111',
+      };
       const a = document.activeElement, keep = a && (a.id ? '#' + a.id : a.dataset.fx ? `[data-fx="${a.dataset.fx}"]` : null);
       this.palette();
       $('#l-all').innerHTML = `<span class="lbl">every device</span>
         <div class="fx">${EFFECTS.map(([k, l]) => `<button data-fx="${k}" aria-pressed="${k === L.effect}"><span class="pv" style="background:${FX[k]}"></span>${l}</button>`).join('')}</div>
         <div class="lg-col"><input type="color" id="l-color" class="cdot" value="${c}" aria-label="Colour"><input type="text" id="l-hex" class="num" value="${c}" aria-label="Hex colour"></div>
         <div class="lg-sl">${anim ? `<label class="ctl"><span class="lbl">speed</span><input type="range" id="l-speed" min="0" max="100" value="${L.speed}"><span class="v num" id="l-speed-v">${L.speed}</span></label>` : ''}
+          ${L.effect === 'temp' ? `<div class="ctl"><span class="lbl">follows</span><span class="sub" id="l-temp">${this.tempText()}</span><span></span></div>` : ''}
           <label class="ctl"><span class="lbl">brightness</span><input type="range" class="br" id="l-bright" min="0" max="100" value="${L.brightness}" style="--p:${L.brightness}%"><span class="v num" id="l-bright-v">${L.brightness}%</span></label></div>`;
       if (keep && $(keep)) $(keep).focus();
     },
@@ -580,6 +597,7 @@ const pages = {
       el.onpointerup = el.onpointercancel = () => { el.onpointermove = el.onpointerup = el.onpointercancel = null; this.dragging = false; this.draw(); };
     },
     live() {
+      if ($('#l-temp')) $('#l-temp').innerHTML = this.tempText(); // fixed text plus a number, nothing from outside
       if (this.dragging || !$('#l-grid')) return;
       if (ST.devices.map((d) => d.key).join() !== this.sig) this.draw(); else this.refresh();
     },
@@ -963,6 +981,9 @@ function drawSetup() {
     el.dataset.s = s; el.querySelector('.t').textContent = t;
     btn.textContent = b; btn.hidden = !b; btn.disabled = !!ST.guard; btn.classList.toggle('p', s === 'need');
   }
+  const au = ST.autostart || {};
+  $('#su-auto').hidden = !au.supported; // installed app only, like Settings
+  $('#su-auto-tg').setAttribute('aria-pressed', !!au.on);
   $('#su-what-pawnio').textContent = 'Kernel driver from pawnio.eu · 3.4 MB · ' + (x.bundled ? 'ships with KelvinRGB' : 'opens the download page') + ' · GPL-2, source at github.com/namazso/PawnIO · asks Windows for admin once';
   const left = Object.values(rows).filter((r) => r[0] === 'need').length;
   $('#su-sub').textContent = ST.guard ? 'Apex or Easy Anti-Cheat is running. Setup waits until the game closes.'
@@ -971,6 +992,7 @@ function drawSetup() {
 }
 $('#setup').addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) rgb.setup(b.dataset.act); });
 $('#su-done').onclick = closeSetup;
+$('#su-auto-tg').onclick = (e) => rgb.autostart(e.currentTarget.getAttribute('aria-pressed') !== 'true');
 $('#setup').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSetup(); });
 addEventListener('focus', () => { if (suOpen) rgb.setup('recheck'); }); // back from the browser after a download
 
