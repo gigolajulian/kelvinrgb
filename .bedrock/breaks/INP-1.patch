@@ -1,13 +1,13 @@
-diff --git a/lib/store.js b/lib/store.js
-index 72da87e..edc1778 100644
---- a/lib/store.js
-+++ b/lib/store.js
-@@ -21,7 +21,7 @@ function appendCapped(file, line, max, fs = nodeFs) {
- 
- // A settings backup the user picked: small, valid JSON, and through the same gates as settings.json (validate).
- function parseBackup(text, validate) {
--  if (typeof text !== 'string' || text.length > 1024 * 1024) throw new Error('not a KelvinRGB backup (too big)');
-+  if (typeof text !== 'string' || text.length > Infinity) throw new Error('not a KelvinRGB backup (too big)');
-   const raw = JSON.parse(text.replace(/^\uFEFF/, ''));
-   if (!raw || typeof raw !== 'object' || !raw.lighting) throw new Error('not a KelvinRGB backup');
-   return validate(raw);
+diff --git a/lib/validate.js b/lib/validate.js
+index b9331e1..5173d6d 100644
+--- a/lib/validate.js
++++ b/lib/validate.js
+@@ -12,7 +12,7 @@ function lighting(p) {
+   if (!p || typeof p !== 'object') return null;
+   const out = {};
+   if ('effect' in p && EFFECTS.includes(p.effect)) out.effect = p.effect;
+-  if ('color' in p && HEX.test(p.color)) out.color = p.color.toLowerCase();
++  if ('color' in p && typeof p.color === 'string') out.color = p.color.toLowerCase();
+   if ('speed' in p && num(p.speed, 0, 100) != null) out.speed = num(p.speed, 0, 100);
+   if ('brightness' in p && num(p.brightness, 0, 100) != null) out.brightness = num(p.brightness, 0, 100);
+   if ('on' in p && typeof p.on === 'boolean') out.on = p.on;
