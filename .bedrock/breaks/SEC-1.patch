@@ -1,5 +1,5 @@
 diff --git a/lib/math.js b/lib/math.js
-index c9d27ce..7144b56 100644
+index 822846c..6a7ac6b 100644
 --- a/lib/math.js
 +++ b/lib/math.js
 @@ -1,6 +1,7 @@
