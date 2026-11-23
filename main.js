@@ -120,6 +120,9 @@ async function loadDevices() {
     leds: d.colors.length, zones: d.zones.map((z) => ({ name: z.name, leds: z.ledsCount })),
   }));
   for (const d of state.devices) if (d.leds) client.setCustomMode(d.id);
+  // The mode OpenRGB picked (Direct, Custom or Static), so checkModes can tell when another app takes a device back.
+  (await client.getAllControllerData()).forEach((x, i) => { if (state.devices[i]) state.devices[i].mode = x.activeMode; });
+  sent.clear();
   state.openrgb = { ok: true, msg: `${state.devices.length} devices` };
   stepSplash(3);
   log(`OpenRGB: ${state.devices.map((d) => d.name).join(', ')}`);
@@ -136,8 +139,12 @@ function startRender() {
 }
 
 // effect: override for one frame ('static' paints the resting state on quit or before Apex, #25).
+// Last frame sent per device: unchanged frames are skipped (less bus traffic), but resent each second in case a device drifts.
+const sent = new Map();
 function render(effect) {
   if (!client || (state.guard && !effect)) return; // the guard paints one resting frame before letting go
+  // The server is behind: drop this frame rather than queue it, so every device keeps showing the same moment (#24).
+  if (!effect && client.socket?.writableLength > 64 * 1024) return;
   const L = settings.lighting;
   const fx = effect || L.effect;
   const base = M.hexToRgb(L.color);
@@ -166,10 +173,34 @@ function render(effect) {
     // Wraith Prism fan blade: only its blue input works (red + green stay on as warm yellow), so blue sets yellow..white.
     // Measured 2026-11-20: visible from ~192, midpoint ~224, white from ~240. See HANDOFF.
     if (d.name === 'AMD Wraith Prism' && !flashing && colors[1]) colors[1] = { red: 255, green: 255, blue: L.on && !dev.off ? (dev.fanWhite ?? 240) : 0 };
+    const sig = colors.map((c) => (c.red << 16) | (c.green << 8) | c.blue).join(), last = sent.get(d.key);
+    if (!effect && last && last.sig === sig && now - last.at < 1000) continue;
+    sent.set(d.key, { sig, at: now });
     try { client.updateLeds(d.id, colors); } catch (e) { log(`updateLeds ${d.name}: ${e.message}`); }
   }
   for (const [k, until] of identify) if (until <= now) { identify.delete(k); startRender(); }
 }
+
+// A device another app (or its own firmware) pulled out of KelvinRGB's mode runs its own effect at its own speed and
+// phase (#24). Every 5 s, put it back and log who has it.
+let checkingModes = false;
+async function checkModes() {
+  if (!client || state.guard || checkingModes) return;
+  checkingModes = true;
+  try {
+    const now = await client.getAllControllerData();
+    if (now.length !== state.devices.length) return; // a rescan is under way; deviceListUpdated reloads
+    now.forEach((x, i) => {
+      const d = state.devices[i];
+      if (!d.leds || d.mode == null || x.activeMode === d.mode) return;
+      d.taken = (d.taken || 0) + 1; // shown on the device, and the log stays quiet when an app keeps fighting
+      if (d.taken === 1 || d.taken % 60 === 0) log(`${d.name} switched to its own ${x.modes[x.activeMode]?.name || 'mode'} (${d.taken}x), another app may be driving it; taking it back`);
+      client.setCustomMode(d.id);
+      sent.delete(d.key);
+    });
+  } catch (e) { log(`mode check: ${e.message}`); } finally { checkingModes = false; }
+}
+setInterval(checkModes, 5000);
 
 // ---------- sensors + fans ----------
 let sidecar = null;
