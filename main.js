@@ -1,5 +1,5 @@
 // KelvinRGB: one window for lighting (OpenRGB SDK), sensors and fans (LibreHardwareMonitor sidecar).
-const { app, BrowserWindow, ipcMain, Notification, session, shell, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Notification, session, shell, Tray, Menu, nativeImage } = require('electron');
 const { spawn, execFile, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -11,6 +11,7 @@ const V = require('./lib/validate');
 const G = require('./lib/guard');
 const U = require('./lib/update');
 const D = require('./lib/drivers');
+const S = require('./lib/store');
 
 const FLOOR = 25;
 const GUARD_PROCS = ['r5apex.exe', 'r5apex_dx12.exe', 'easyanticheat.exe', 'easyanticheat_eos.exe'];
@@ -51,7 +52,7 @@ const DEFAULTS = {
 let settings = structuredClone(DEFAULTS);
 try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
 let saveTimer;
-const writeSettings = () => { saveTimer = null; fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2)); };
+const writeSettings = () => { saveTimer = null; S.writeAtomic(settingsFile, JSON.stringify(settings, null, 2)); };
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(writeSettings, 300);
@@ -72,14 +73,14 @@ const state = {
 let win;
 // A hidden window gets nothing: it would only redraw for nobody. showWindow() sends the latest state.
 function push() { if (win && !win.isDestroyed() && win.isVisible()) win.webContents.send('state', state); updateTray(); }
-// The installed app has no console, so the log also goes to %APPDATA%\KelvinRGB\log.txt (reset each launch).
+// The installed app has no console, so the log also goes to %APPDATA%\KelvinRGB\log.txt (reset each launch, capped at 1 MB).
 const logFile = path.join(app.getPath('userData'), 'log.txt');
 try { fs.writeFileSync(logFile, ''); } catch {}
 function log(msg) {
   const line = `${new Date().toLocaleTimeString()} ${msg}`;
-  state.log = [...state.log.slice(-49), line];
+  state.log = S.ring(state.log, line, 50);
   console.log(msg);
-  fs.appendFile(logFile, line + '\n', () => {});
+  try { S.appendCapped(logFile, line + '\n', 1024 * 1024); } catch {}
 }
 
 // ---------- lighting ----------
@@ -101,7 +102,7 @@ async function connectOpenRgb() {
     state.openrgb = { ok: false, msg: exe ? 'starting openrgb' : 'openrgb not installed' };
     if (exe && !launchedOpenRgb) {
       launchedOpenRgb = true;
-      spawn(exe, ['--server', '--startminimized'], { detached: true, stdio: 'ignore' }).unref();
+      spawn(exe, D.OPENRGB.args, { detached: true, stdio: 'ignore' }).unref();
       log('launched OpenRGB SDK server');
     }
     push();
@@ -424,6 +425,24 @@ on('rescan', () => { if (client) { client.requestRescan(); setTimeout(() => load
 on('glass', (v) => { settings.glass = v === true; save(); applyGlass(); });
 on('splash', (v) => { settings.splash = v === true; save(); });
 on('openLog', () => shell.openPath(logFile)); // fixed path, nothing taken from the renderer
+// Settings backup: the user picks the file in a system dialog; an import goes through the same gates as settings.json.
+on('backup', async (a) => {
+  const filters = [{ name: 'KelvinRGB settings', extensions: ['json'] }];
+  try {
+    if (a === 'export') {
+      const r = await dialog.showSaveDialog(win, { defaultPath: 'KelvinRGB settings.json', filters });
+      if (!r.canceled && r.filePath) { S.writeAtomic(r.filePath, JSON.stringify(settings, null, 2)); log(`backup: saved ${r.filePath}`); }
+    } else if (a === 'import') {
+      const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters });
+      if (r.canceled || !r.filePaths[0]) return;
+      settings = S.parseBackup(fs.readFileSync(r.filePaths[0], 'utf8'), (raw) => V.settings(raw, DEFAULTS, FLOOR));
+      save(); startRender(); driveFans(); applyGlass();
+      if (win && !win.isDestroyed()) win.webContents.send('settings', settings);
+      updateTray(true);
+      log(`backup: loaded ${r.filePaths[0]}`);
+    }
+  } catch (e) { log(`backup: ${e.message}`); dialog.showErrorBox('KelvinRGB', `Could not load the backup: ${e.message}`); }
+});
 on('quit', () => app.quit());
 on('autostart', (v) => setAutostart(v === true));
 on('update', (a) => { if (a === 'check') updater.check(true); else if (a === 'install') updater.install(); else if (a === 'releases') shell.openExternal(U.RELEASES); else if (a === 'openrgb') shell.openExternal('https://openrgb.org'); });

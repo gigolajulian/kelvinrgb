@@ -746,6 +746,7 @@ const pages = {
           <div><span class="t"><span>Fan floor</span><span>No fan goes below this</span></span><span class="mono">${FLOOR}%</span></div>
           <div><span class="t"><span>Setup</span><span>OpenRGB, the PawnIO driver and fan control: what each is and whether it runs</span></span><button class="btn" id="s-setup">Open</button></div>
           <div><span class="t"><span>Log file</span><span>%APPDATA%\\KelvinRGB\\log.txt, reset each launch</span></span><button class="btn" id="s-log">Open</button></div>
+          <div><span class="t"><span>Settings backup</span><span>Colours, devices and fan curves in one file</span></span><span class="row" style="gap:8px"><button class="btn" id="s-exp">Export</button><button class="btn" id="s-imp">Import</button></span></div>
         </div></div>
         <div class="g" style="padding:6px 16px"><div class="set">
           <div><span class="t"><span>Updates</span><span id="s-upd-t">Checks GitHub quietly at start and every 6 hours</span></span><span class="row" style="gap:8px"><button class="btn" id="s-upd">Check</button><button class="btn" id="s-rel">Releases</button></span></div>
@@ -760,6 +761,8 @@ const pages = {
       $('#s-conf').onclick = (e) => { S.closeConflicts = flip(e.currentTarget); rgb.closeConflicts(S.closeConflicts); };
       $('#s-glass').onclick = (e) => { S.glass = flip(e.currentTarget); rgb.glass(S.glass); applyGlass(); };
       $('#s-log').onclick = () => rgb.openLog();
+      $('#s-exp').onclick = () => rgb.backup('export');
+      $('#s-imp').onclick = () => rgb.backup('import');
       $('#s-upd').onclick = () => rgb.update(ST?.update?.action || 'check');
       $('#s-rel').onclick = () => rgb.update('releases');
       $('#s-orgb-link').onclick = (e) => { e.preventDefault(); rgb.update('openrgb'); };

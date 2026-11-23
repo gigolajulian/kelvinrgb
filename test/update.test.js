@@ -112,3 +112,37 @@ test('a download with the right checksum but no valid signature never runs', asy
     assert.ok(!ran);
   } finally { global.fetch = real; }
 });
+
+const release = (size) => ({ tag_name: 'v9.0.0', assets: [{ name: 'KelvinRGB Setup 9.0.0.exe', browser_download_url: 'https://github.com/dl', size, digest: `sha256:${sha}` }, { name: 'KelvinRGB Setup 9.0.0.exe.sig', browser_download_url: 'https://github.com/sig' }] });
+
+test('every GitHub call carries a timeout, so a dead network never hangs the updater', async () => {
+  const real = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (!(opts && opts.signal instanceof AbortSignal)) throw new Error(`no timeout on ${url}`);
+    return { status: 200, ok: true, json: async () => release(3) };
+  };
+  try {
+    const u = U.create({ version: '9.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
+    await u.check(true);
+    assert.strictEqual(u.state.kind, 'current', u.state.msg);
+  } finally { global.fetch = real; }
+});
+
+test('a download bigger than the release stops early and never runs', async () => {
+  const real = global.fetch;
+  let pulled = 0;
+  async function* body() { for (let i = 0; i < 100; i++) { pulled++; yield Buffer.alloc(1024); } }
+  global.fetch = async (url) => url.includes('api.github.com')
+    ? { status: 200, ok: true, json: async () => release(1500) }
+    : { ok: true, url: 'https://objects.githubusercontent.com/x', body: body() };
+  try {
+    let ran = false;
+    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn: () => { ran = true; }, quit() {}, packaged: true });
+    await u.check(true);
+    await u.install();
+    assert.strictEqual(u.state.kind, 'failed');
+    assert.match(u.state.msg, /bigger than the release/);
+    assert.ok(pulled <= 3, `kept downloading: ${pulled} chunks`);
+    assert.ok(!ran);
+  } finally { global.fetch = real; }
+});

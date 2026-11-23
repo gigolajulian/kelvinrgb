@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('rgb', {
   glass: (on) => ipcRenderer.send('glass', on),
   splash: (on) => ipcRenderer.send('splash', on),
   openLog: () => ipcRenderer.send('openLog'),
+  backup: (action) => ipcRenderer.send('backup', String(action)), // export | import
   quit: () => ipcRenderer.send('quit'),
   autostart: (on) => ipcRenderer.send('autostart', on),
   setup: (action) => ipcRenderer.send('setup', String(action)), // recheck | openrgb | pawnio

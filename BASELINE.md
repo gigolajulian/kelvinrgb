@@ -5,7 +5,7 @@ Stage: 1
 Parts: desktop, local, web
 Features: none
 Checklist version: 2026.11.20.5
-Level: light
+Level: full
 Gate answer: 
 Gate asked: 
 Next ask after: 
@@ -30,3 +30,31 @@ Detected: a project with dependencies (package.json); has web pages (renderer\in
 | EXIT-6 | desktop, local | open | | | | | gap (no test; handled in code): the sidecar returns every fan to BIOS on stdin EOF, on 5 s without a ping, on exception and on ProcessExit, and marks an unclean exit so the next start holds 100% (sidecar/sidecar.cs). gap: no automated test of the watchdog; the detached OpenRGB server outlives a crash (same as EXIT-1). medium |
 | DATA-1 | any | open | | | | | person: only settings.json (%APPDATA%\KelvinRGB) holds user data; losing it drops curves and colours, fans go back to BIOS. Owner to decide: accept the risk, or a settings export. small |
 | REL-1 | any | open | | | | | gap: npm test (6 files, 30 tests, all pass 2026-11-22) runs only by hand; no .github/workflows, no pre-merge hook. small |
+| DEV-1 | any | open | | | | | Reuse a running dev server; stop every server you start before ending the turn; nothing left running in worktrees |
+| SEC-2 | any | open | | | | | Secrets inventory: what each unlocks, its scope, where it's stored, how to rotate it in minutes |
+| SEC-4 | any | open | | | | | Known-vulnerable dependencies are flagged automatically, and update proposals arrive on their own (OWASP A03 supply chain) |
+| LOC-2 | local | open | | | | | If exposed beyond the machine, the firewall allows private networks only |
+| INP-2 | any | open | | | | | User data is written atomically (temp file, then rename), so a crash never corrupts it |
+| MEM-1 | any | open | | | | | Memory budget written for a modest device (8-16 GB, integrated graphics): idle and working |
+| MEM-2 | desktop, local | open | | | | | Measured against the budget: commit and working set, 10 min idle and 10 min in use |
+| MEM-4 | any | open | | | | | Big files and bodies are streamed, never loaded whole; byte budgets on anything that streams or stores |
+| MEM-5 | desktop, local | open | | | | | Heavy models and runtimes load only when needed and are released; thread pools and arenas capped |
+| MEM-6 | desktop, local, web | open | | | | | A memory-ceiling regression test in the suite |
+| EXIT-2 | desktop, local | open | | | | | Nothing starts at login unless the user turned it on; uninstall removes everything it added |
+| EXIT-3 | desktop, local | open | | | | | No leftovers: when the app moves, is renamed or a part is retired, its own cleanup removes every startup entry, scheduled task, service and handler it registered; nothing at login points into a dev folder or a .venv |
+| EXIT-4 | desktop, local | open | | | | | Quiet when idle: in the background or tray it averages under 0.5% CPU and no graphics use over 10 min, waking on events or timers of a minute or more, never busy-polling |
+| OPS-8 | local | open | | | | | Data survives a restart: nothing users rely on lives only in memory; processes are stateless or persist state durably |
+| DATA-2 | any | open | | | | | Crashes and errors reach the developer (a local log at least; any remote reporting opt-in) |
+| REL-2 | desktop | open | | | | | The app's auto-updates are signed and size-checked, and never restart in the middle of the user's work |
+| PLAT-1 | desktop, local | open | | | | | Paths work on every supported OS: long paths, spaces, non-ASCII, case differences |
+| PLAT-2 | desktop, web | open | | | | | High-DPI: 125-200% scaling and 4K render sharp, nothing clipped |
+| LIC-1 | any | open | | | | | Own licence chosen; third-party licences compatible and credited |
+| SEC-8 | any | open | | | | | Operator accounts (code host, cloud, registrar, email, stores) use 2FA or passkeys; tokens are least-privilege and expire |
+| SEC-9 | any | open | | | | | Config lives outside code; development, staging and production are separate; production secrets never on a dev machine's disk in plain text |
+| SEC-10 | any | open | | | | | No homemade crypto; random values for tokens and codes come from a cryptographic source |
+| NET-1 | any | open | | | | | Every outbound call has a timeout, retries with backoff and jitter, and stops after repeated failures |
+| DATA-3 | desktop, local | open | | | | | Stored data and schemas are versioned with forward migrations; data from older versions still opens |
+| TIME-1 | any | open | | | | | Times stored in UTC, or deliberately local with the reason written down (a camera's local day); time zones, daylight-saving changes and clock skew tested where dates matter |
+| DOC-1 | any | open | | | | | A README says how to run, test and release it; big decisions recorded (short decision notes) |
+| PERF-2 | desktop, local | open | | | | | Cold start and main actions timed on a modest device, with a written budget |
+| SEC-13 | desktop, local | open | | | | | Secrets the app keeps on the user's device live in the OS keychain or a file only the user can read; never in logs or plain config |
