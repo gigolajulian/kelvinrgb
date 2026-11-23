@@ -1,0 +1,300 @@
+{
+  "SEC-1@any": {
+    "result": "proven",
+    "command": "node scripts/secret-scan.js",
+    "break": ".bedrock/breaks/SEC-1.patch",
+    "patch_sha256": "6812f58261bf68ddb454b933fff89f7e4d265b88de8f4525190a0803d097604d",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/math.js": "1b802d54d143e90173b6bc225f9595729a04b9bb684ae706b207a1ff834d0583",
+      "scripts/secret-scan.js": "d263231669de77db5ed8fc295d7ef08dd5a0c3110f5152105c5d2848a76c3dec",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 4.1,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "SEC-3@any": {
+    "result": "proven",
+    "command": "node scripts/lock-check.js lock",
+    "break": ".bedrock/breaks/SEC-3.patch",
+    "patch_sha256": "e9d8ee8593c60f4d3b30e6aee132af6aa47334a947c88f263e7526126b532175",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "package.json": "74534c0db2166daac03d958c9b1dcf208491c9d7bfcb4ae1f4dbda2692ac0132",
+      "scripts/lock-check.js": "1ca7589c613ea8348d54c106d1e0ede112551a2c00eef7653f57a4d9c09e1bf9",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.3,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "SEC-5@any": {
+    "result": "proven",
+    "command": "node --test --test-name-pattern=\"right checksum but no valid signature\" test/update.test.js",
+    "break": ".bedrock/breaks/SEC-5.patch",
+    "patch_sha256": "9482d4d5d5b41720f8293259260e826b3519ba3fc00aff7604bf034d0a2eba86",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/update.js": "5e2b8006ba773db09ae4cbffb85f1f6f0badaf295559e51f57558b8b002d427a",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.7,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "LOC-1@local": {
+    "result": "proven",
+    "command": "node --test --test-name-pattern=\"loopback only\" test/drivers.test.js",
+    "break": ".bedrock/breaks/LOC-1.patch",
+    "patch_sha256": "fd1e1bb0a8e0fbd32c1d76a2e59f1ce8bea93f491eff70a3d03fdd96963f55a5",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/drivers.js": "7f837273e2e226ade38b9ddcfe7035e05d10a474495d3a8d5b4764eabe459997",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.6,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "INP-1@any": {
+    "result": "proven",
+    "command": "node --test --test-name-pattern=\"settings from disk fall back\" test/validate.test.js",
+    "break": ".bedrock/breaks/INP-1.patch",
+    "patch_sha256": "f2680a6cef194101231e331d13e1bc0c164431609d193efd8130b5c51942c701",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/validate.js": "8be0af5cc95805f1bc2db5420a9faaaf8ea4df077d8abd17bba26d54573e03c9",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.6,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "MEM-3@any": {
+    "result": "proven",
+    "command": "node --test --test-name-pattern=\"last 50 lines\" test/store.test.js",
+    "break": ".bedrock/breaks/MEM-3.patch",
+    "patch_sha256": "b7acd87459de87fa919f68d5eca313f23c08260464c4e3254539ac2ef4f6dcdd",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/store.js": "11a42a96c999d5db03ad59886ab810bdd6c4849ce02a4133c21ec13c7d818bc9",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.6,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "EXIT-5@desktop, local": {
+    "result": "proven",
+    "command": "node --test --test-name-pattern=\"never grows past its cap\" test/store.test.js",
+    "break": ".bedrock/breaks/EXIT-5.patch",
+    "patch_sha256": "4a7fc47a998bdefc480719d2db7076cda3b69032d22a85c0e17efb0dddc53295",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/store.js": "11a42a96c999d5db03ad59886ab810bdd6c4849ce02a4133c21ec13c7d818bc9",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 4.8,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "REL-1@any": {
+    "result": "proven",
+    "command": "npm test",
+    "break": ".bedrock/breaks/REL-1.patch",
+    "patch_sha256": "d07a4da7464e2e6300bd6c4900a942567a659b51646ed702b169dad32c507d49",
+    "sha": "db33e934439e158071d691a15b19275fd3087414",
+    "files": {
+      "lib/validate.js": "8be0af5cc95805f1bc2db5420a9faaaf8ea4df077d8abd17bba26d54573e03c9",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 10.1,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "SEC-4@any": {
+    "result": "proven",
+    "command": "node scripts/lock-check.js dependabot",
+    "break": ".bedrock/breaks/SEC-4.patch",
+    "patch_sha256": "c74e845e624bfc675d38465d4e5cdc7d5a861a254f3ec0066e00ed7dc258e639",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      ".github/dependabot.yml": "185bf25f18213bd9188ae68874eda05b991a6c5005732e9715a6935c3840ea10",
+      "scripts/lock-check.js": "1ca7589c613ea8348d54c106d1e0ede112551a2c00eef7653f57a4d9c09e1bf9",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.3,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "INP-2@any": {
+    "result": "proven",
+    "command": "node --test --test-name-pattern=\"crash mid-save\" test/store.test.js",
+    "break": ".bedrock/breaks/INP-2.patch",
+    "patch_sha256": "352552a78cf3534b6b72a90cf4c1dfe22907a0738761ae05d772a56c19cd127a",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/store.js": "11a42a96c999d5db03ad59886ab810bdd6c4849ce02a4133c21ec13c7d818bc9",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.7,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "EXIT-3@desktop, local": {
+    "result": "proven",
+    "command": "node scripts/uninstall-check.js",
+    "break": ".bedrock/breaks/EXIT-3.patch",
+    "patch_sha256": "b900d20d93413418c99c5e96ee5bd61575c035ec09f291bae445a5d978514731",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "build/installer.nsh": "a008df02c2849d3522ea8e694f116c31b4466e1a40abac1d948f622c55b7142b",
+      "scripts/uninstall-check.js": "a83ccbf80ac22286dbd903b9f3e61810a0e7460bac70cd70b371df43a490724b",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.3,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "REL-2@desktop": {
+    "result": "proven",
+    "command": "node --test --test-name-pattern=\"bigger than the release\" test/update.test.js",
+    "break": ".bedrock/breaks/REL-2.patch",
+    "patch_sha256": "3f60e6730d8631cd2be3e19cb1f1e4de112e4c220e753424e5152d5a08142fbf",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/update.js": "5e2b8006ba773db09ae4cbffb85f1f6f0badaf295559e51f57558b8b002d427a",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.7,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "NET-1@any": {
+    "result": "proven",
+    "command": "node --test --test-name-pattern=\"carries a timeout\" test/update.test.js",
+    "break": ".bedrock/breaks/NET-1.patch",
+    "patch_sha256": "68e711c62ee7160ae518bd3d1636cab0bccc02a067407b48904dccab34782ca0",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/update.js": "5e2b8006ba773db09ae4cbffb85f1f6f0badaf295559e51f57558b8b002d427a",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.7,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  },
+  "EXIT-1@desktop, local": {
+    "result": "proven",
+    "command": "node --test --test-name-pattern=\"quit stops the OpenRGB server\" test/guard.test.js",
+    "break": ".bedrock/breaks/EXIT-1.patch",
+    "patch_sha256": "30c815687936a068974ef3aa2f52ffef8f7dbbf1f81c6b14d8fa0eb077322a6b",
+    "sha": "f182e9f56bcd52c7c3c98fb1ad5358fafdc8b862",
+    "files": {
+      "lib/guard.js": "ab515070ae70a4b90630aae91905ed4d51fd8c7f06d00fb8be39eed319900bea",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "0d746fc49992eea9fe15af45a4da7b94a066c78a7435ed20fcc57aadd8fd7674",
+      "test/update.test.js": "8fd371a77427ef591977846a5a5cc64a02e09f5c29a91ecaa50c3a9445a124b7",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 3.6,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
+  }
+}

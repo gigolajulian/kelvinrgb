@@ -1,0 +1,13 @@
+diff --git a/lib/store.js b/lib/store.js
+index 83bb67d..ecfae61 100644
+--- a/lib/store.js
++++ b/lib/store.js
+@@ -4,7 +4,7 @@ const nodeFs = require('node:fs');
+ // Write to a temp file, then rename over the real one: a crash mid-write leaves the old file whole.
+ // On Windows the rename can fail for a moment (EPERM, EBUSY) while antivirus or a reader holds the file: retry a few times.
+ function writeAtomic(file, text, fs = nodeFs, tries = 5) {
+-  const tmp = `${file}.tmp`;
++  const tmp = file;
+   fs.writeFileSync(tmp, text);
+   for (let i = 1; ; i++) {
+     try { return fs.renameSync(tmp, file); } catch (e) {

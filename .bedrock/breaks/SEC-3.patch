@@ -1,0 +1,13 @@
+diff --git a/package.json b/package.json
+index a533a27..6668945 100644
+--- a/package.json
++++ b/package.json
+@@ -14,7 +14,7 @@
+   },
+   "dependencies": {
+     "bufferpack": "0.0.6",
+-    "openrgb-sdk": "0.6.0"
++    "openrgb-sdk": "^0.6.0"
+   },
+   "devDependencies": {
+     "electron": "^45.1.0",

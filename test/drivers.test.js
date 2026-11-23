@@ -92,3 +92,11 @@ test('windowsRows marks a Windows Update offer for that maker', () => {
   assert.strictEqual(D.windowsRows(raw, [])[0].tone, 'ok');
   assert.strictEqual(D.windowsRows(raw, null)[0].tone, 'dim');
 });
+
+test('OpenRGB server is started on loopback only', () => {
+  const a = D.OPENRGB.args;
+  assert.ok(a.includes('--server'));
+  const i = a.indexOf('--server-host');
+  assert.ok(i >= 0, 'no --server-host: OpenRGB would decide where its unauthenticated port listens');
+  assert.strictEqual(a[i + 1], '127.0.0.1');
+});

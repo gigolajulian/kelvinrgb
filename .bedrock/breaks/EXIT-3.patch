@@ -1,0 +1,11 @@
+diff --git a/build/installer.nsh b/build/installer.nsh
+index 65ed942..693245b 100644
+--- a/build/installer.nsh
++++ b/build/installer.nsh
+@@ -34,6 +34,5 @@
+ ; when the old copy's uninstaller runs before the new one installs, so autostart survives updates.
+ !macro customUnInstall
+   ${ifNot} ${isUpdated}
+-    nsExec::Exec '"$SYSDIR\schtasks.exe" /Delete /TN KelvinRGB /F'
+   ${endIf}
+ !macroend

@@ -1,0 +1,13 @@
+diff --git a/lib/validate.js b/lib/validate.js
+index 0676bb5..0cf3b0a 100644
+--- a/lib/validate.js
++++ b/lib/validate.js
+@@ -12,7 +12,7 @@ function lighting(p) {
+   if (!p || typeof p !== 'object') return null;
+   const out = {};
+   if ('effect' in p && EFFECTS.includes(p.effect)) out.effect = p.effect;
+-  if ('color' in p && HEX.test(p.color)) out.color = p.color.toLowerCase();
++  if ('color' in p && typeof p.color === 'string') out.color = p.color.toLowerCase();
+   if ('speed' in p && num(p.speed, 0, 100) != null) out.speed = num(p.speed, 0, 100);
+   if ('brightness' in p && num(p.brightness, 0, 100) != null) out.brightness = num(p.brightness, 0, 100);
+   if ('on' in p && typeof p.on === 'boolean') out.on = p.on;

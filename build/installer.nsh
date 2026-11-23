@@ -29,3 +29,11 @@
     IntCmp $R1 10 0 kelvin_gone
   kelvin_done:
 !macroend
+
+; Uninstall removes the "Start with Windows" logon task KelvinRGB created (main.js TASK). Skipped during an update,
+; when the old copy's uninstaller runs before the new one installs, so autostart survives updates.
+!macro customUnInstall
+  ${ifNot} ${isUpdated}
+    nsExec::Exec '"$SYSDIR\schtasks.exe" /Delete /TN KelvinRGB /F'
+  ${endIf}
+!macroend

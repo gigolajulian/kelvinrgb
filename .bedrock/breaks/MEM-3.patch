@@ -1,0 +1,13 @@
+diff --git a/lib/store.js b/lib/store.js
+index 83bb67d..7278ee7 100644
+--- a/lib/store.js
++++ b/lib/store.js
+@@ -15,7 +15,7 @@ function writeAtomic(file, text, fs = nodeFs, tries = 5) {
+ }
+ 
+ // Keep the last n items: the in-memory log never grows past n lines.
+-const ring = (arr, item, n) => [...arr.slice(-(n - 1)), item];
++const ring = (arr, item, n) => [...arr, item];
+ 
+ // Append a line; once the file passes max bytes, start it over so one long session can't fill the disk.
+ function appendCapped(file, line, max, fs = nodeFs) {

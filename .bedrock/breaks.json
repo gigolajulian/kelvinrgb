@@ -1,0 +1,72 @@
+{
+ "SEC-1": {
+  "file": "lib/math.js",
+  "find": "const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));",
+  "replace": "const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));\n// leftover from testing: AKIAZ7QX2LMN4PRT8VWY"
+ },
+ "SEC-3": {
+  "file": "package.json",
+  "find": "\"openrgb-sdk\": \"0.6.0\"",
+  "replace": "\"openrgb-sdk\": \"^0.6.0\""
+ },
+ "SEC-4": {
+  "file": ".github/dependabot.yml",
+  "find": "  - package-ecosystem: github-actions\n",
+  "replace": "  - package-ecosystem: docker\n"
+ },
+ "SEC-5": {
+  "file": "lib/update.js",
+  "find": "    return crypto.verify(null,",
+  "replace": "    return true || crypto.verify(null,"
+ },
+ "LOC-1": {
+  "file": "lib/drivers.js",
+  "find": "args: ['--server', '--server-host', '127.0.0.1', '--startminimized'],",
+  "replace": "args: ['--server', '--startminimized'],"
+ },
+ "INP-1": {
+  "file": "lib/validate.js",
+  "find": "if ('color' in p && HEX.test(p.color)) out.color",
+  "replace": "if ('color' in p && typeof p.color === 'string') out.color"
+ },
+ "INP-2": {
+  "file": "lib/store.js",
+  "find": "const tmp = `${file}.tmp`;",
+  "replace": "const tmp = file;"
+ },
+ "MEM-3": {
+  "file": "lib/store.js",
+  "find": "const ring = (arr, item, n) => [...arr.slice(-(n - 1)), item];",
+  "replace": "const ring = (arr, item, n) => [...arr, item];"
+ },
+ "EXIT-5": {
+  "file": "lib/store.js",
+  "find": "if (size + line.length > max)",
+  "replace": "if (size < 0)"
+ },
+ "EXIT-3": {
+  "file": "build/installer.nsh",
+  "find": "    nsExec::Exec '\"$SYSDIR\\schtasks.exe\" /Delete /TN KelvinRGB /F'\n",
+  "replace": ""
+ },
+ "REL-1": {
+  "file": "lib/validate.js",
+  "find": "out.fixed = num(p.fixed, floor, 100) ?? 50;",
+  "replace": "out.fixed = num(p.fixed, 0, 100) ?? 50;"
+ },
+ "REL-2": {
+  "file": "lib/update.js",
+  "find": "        if (got > Math.min(rel.size || MAX_BYTES, MAX_BYTES)) throw new Error('download is bigger than the release says, not installing');\n",
+  "replace": ""
+ },
+ "NET-1": {
+  "file": "lib/update.js",
+  "find": "Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(TIMEOUT) });",
+  "replace": "Accept: 'application/vnd.github+json' } });"
+ },
+ "EXIT-1": {
+  "file": "lib/guard.js",
+  "find": "  if (pid) { try { await d.killOpenRgb(pid); } catch (e) { d.log(`quit: ${e.message}`); } }\n",
+  "replace": ""
+ }
+}

@@ -1,0 +1,12 @@
+diff --git a/lib/math.js b/lib/math.js
+index 822846c..6a7ac6b 100644
+--- a/lib/math.js
++++ b/lib/math.js
+@@ -1,6 +1,7 @@
+ // Pure helpers: color tuning, effect frames, fan curves. No I/O, so they are easy to test.
+ 
+ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
++// leftover from testing: AKIAZ7QX2LMN4PRT8VWY
+ 
+ function hexToRgb(hex) {
+   const n = parseInt(hex.replace('#', ''), 16);

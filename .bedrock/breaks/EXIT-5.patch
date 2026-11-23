@@ -1,0 +1,13 @@
+diff --git a/lib/store.js b/lib/store.js
+index 83bb67d..13079b1 100644
+--- a/lib/store.js
++++ b/lib/store.js
+@@ -21,7 +21,7 @@ const ring = (arr, item, n) => [...arr.slice(-(n - 1)), item];
+ function appendCapped(file, line, max, fs = nodeFs) {
+   let size = 0;
+   try { size = fs.statSync(file).size; } catch {}
+-  if (size + line.length > max) fs.writeFileSync(file, `(log restarted at ${max} bytes)\n${line}`);
++  if (size < 0) fs.writeFileSync(file, `(log restarted at ${max} bytes)\n${line}`);
+   else fs.appendFileSync(file, line);
+ }
+ 

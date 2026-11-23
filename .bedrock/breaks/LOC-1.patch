@@ -1,0 +1,13 @@
+diff --git a/lib/drivers.js b/lib/drivers.js
+index 728aa2c..ba1b36a 100644
+--- a/lib/drivers.js
++++ b/lib/drivers.js
+@@ -79,7 +79,7 @@ const OPENRGB = {
+   page: 'https://codeberg.org/OpenRGB/OpenRGB/releases',
+   api: 'https://codeberg.org/api/v1/repos/OpenRGB/OpenRGB/releases/latest',
+   // Loopback only: the SDK port has no password, so other devices on the network must not reach it.
+-  args: ['--server', '--server-host', '127.0.0.1', '--startminimized'],
++  args: ['--server', '--startminimized'],
+ };
+ 
+ // Download, check the hash, write to an admin-owned temp folder under a random name, run, delete.
