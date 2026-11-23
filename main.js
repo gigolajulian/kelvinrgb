@@ -1,5 +1,5 @@
 // KelvinRGB: one window for lighting (OpenRGB SDK), sensors and fans (LibreHardwareMonitor sidecar).
-const { app, BrowserWindow, dialog, ipcMain, Notification, session, shell, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Notification, session, shell, Tray, Menu, nativeImage } = require('electron');
 const { spawn, execFile, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -436,6 +436,18 @@ const on = (ch, fn) => ipcMain.on(ch, (e, ...a) => { if (ours(e)) fn(...a); else
 const hasDevice = (k) => state.devices.some((d) => d.key === k);
 const hasFan = (id) => state.controls.some((c) => c.id === id);
 ipcMain.handle('get', (e) => (ours(e) ? { settings, state, floor: FLOOR } : null));
+// Copy screenshot (#27): the window runs as admin, so screenshot tools that don't get no hotkeys while it has focus.
+// This copies the page to the clipboard instead, on the solid background (the glass would paste as see-through).
+ipcMain.handle('shot', async (e) => {
+  if (!ours(e) || !win) return false;
+  const img = await win.webContents.capturePage();
+  const { width, height } = img.getSize(), px = img.toBitmap(); // BGRA, premultiplied alpha
+  for (let i = 0; i < px.length; i += 4) { const k = 1 - px[i + 3] / 255; px[i] += 0x0c * k; px[i + 1] += 0x0b * k; px[i + 2] += 0x0a * k; px[i + 3] = 255; }
+  const png = nativeImage.createFromBitmap(px, { width, height }).toPNG();
+  await clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]);
+  log(`screenshot copied (${width}x${height})`);
+  return true;
+});
 on('lighting', (patch) => { const p = V.lighting(patch); if (!p) return; Object.assign(settings.lighting, p); save(); startRender(); updateTray(); });
 on('device', (key, patch) => {
   const p = V.device(patch); if (!p || !hasDevice(key)) return;

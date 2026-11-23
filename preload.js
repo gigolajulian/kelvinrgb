@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('rgb', {
   get: () => ipcRenderer.invoke('get'),
+  shot: () => ipcRenderer.invoke('shot'), // copy the window to the clipboard
   onState: (fn) => ipcRenderer.on('state', (_e, s) => fn(s)),
   lighting: (patch) => ipcRenderer.send('lighting', patch),
   device: (key, patch) => ipcRenderer.send('device', key, patch),
