@@ -275,5 +275,16 @@
     "seconds": 4.5,
     "date": "2026-11-22",
     "bedrock": "2.9.5"
+  },
+  "EXIT-1@desktop, local": {
+    "result": "stale-break",
+    "command": "node --test --test-name-pattern=\"quit stops the OpenRGB server\" test/guard.test.js",
+    "break": ".bedrock/breaks/EXIT-1.patch",
+    "patch_sha256": null,
+    "sha": "0f0525ba36f1d8e0031872987764aaf8cbe514a0",
+    "files": null,
+    "seconds": 0.0,
+    "date": "2026-11-22",
+    "bedrock": "2.9.5"
   }
 }
