@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('rgb', {
   identify: (key) => ipcRenderer.send('identify', key),
   leds: (on) => ipcRenderer.send('leds', on === true), // live LED colours for the Lighting page strips
   onLeds: (fn) => ipcRenderer.on('leds', (_e, m) => fn(m)),
+  layout: (key, spot) => ipcRenderer.send('layout', String(key), spot ?? null), // Arrange: [x, y], or null to reset
   theme: (op, arg) => ipcRenderer.send('theme', String(op), arg), // save name | apply index | delete index
   fan: (id, cfg) => ipcRenderer.send('fan', id, cfg),
   rescan: () => ipcRenderer.send('rescan'),

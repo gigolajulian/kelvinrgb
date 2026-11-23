@@ -8,6 +8,7 @@ const { Client } = require('openrgb-sdk');
 const M = require('./lib/math');
 const C = require('./lib/conflicts');
 const V = require('./lib/validate');
+const Lay = require('./lib/layout');
 const G = require('./lib/guard');
 const U = require('./lib/update');
 const D = require('./lib/drivers');
@@ -41,7 +42,7 @@ else if (!isAdmin() && !(DEV && process.env.RGB_NO_ELEVATE)) {
 // ---------- settings ----------
 const settingsFile = path.join(app.getPath('userData'), 'settings.json');
 const DEFAULTS = {
-  lighting: { effect: 'static', color: '#c8323c', speed: 40, brightness: 80, on: true, palette: ['#c8323c', '#3b4fd8'] }, // palette: effect colours, [] = rainbow (#27)
+  lighting: { effect: 'static', color: '#c8323c', speed: 40, brightness: 80, on: true, palette: ['#c8323c', '#3b4fd8'], across: true, dir: 'x', desk: true }, // palette: effect colours, [] = rainbow; across/dir/desk: case layout (#27)
   themes: [ // saved looks (#27): name, lighting, per-device zone colours
     { name: 'Blood and cobalt', lighting: { effect: 'wave', color: '#c8323c', palette: ['#c8323c', '#3b4fd8'] }, zones: {} },
     { name: 'Teal night', lighting: { effect: 'breathing', color: '#4fc1c6', palette: ['#4fc1c6', '#3b4fd8'] }, zones: {} },
@@ -49,6 +50,7 @@ const DEFAULTS = {
     { name: 'Violet spot', lighting: { effect: 'static', color: '#8a4fd8', palette: ['#8a4fd8', '#e6e7e8'] }, zones: {} },
   ],
   devices: {}, // key -> { off, brightness, gain: [r,g,b], gamma, fanWhite, zones }
+  layout: {},  // key -> [x, y] in the case view, where Arrange put it (lib/layout.js)
   fans: {},    // control id -> { mode: bios|curve|fixed, sensor, points, shape, fixed }
   closeConflicts: true, // show the conflict list when RGB apps that fight us run (lib/conflicts.js)
   glass: true, // Windows 11 acrylic behind the window
@@ -72,6 +74,7 @@ const state = {
   fanApps: [], // [{ label, scope }] other apps driving fans (#26)
   conflicts: null, // [{ name, label, note, closable, service, running }] while the in-app prompt is open
   devices: [], // { key, id, name, type, leds, zones: [{name, leds}] }
+  layout: [],  // lib/layout.js place(): every device's box and LED points in the case view
   hw: [],
   controls: [],
   log: [],
@@ -136,6 +139,7 @@ async function loadDevices() {
   // The mode OpenRGB picked (Direct, Custom or Static), so checkModes can tell when another app takes a device back.
   (await client.getAllControllerData()).forEach((x, i) => { if (state.devices[i]) state.devices[i].mode = x.activeMode; });
   sent.clear();
+  state.layout = Lay.place(state.devices, settings.layout);
   state.openrgb = { ok: true, msg: `${state.devices.length} devices` };
   stepSplash(3);
   log(`OpenRGB: ${state.devices.map((d) => d.name).join(', ')}`);
@@ -164,6 +168,7 @@ const sent = new Map();
 const SLOW = /strimer|lian li/i;
 let frameNo = 0;
 let ledsWanted = false; // the Lighting page's strip preview is open
+const POS = 10000;
 function render(effect) {
   if (!client || (state.guard && !effect)) return; // the guard paints one resting frame before letting go
   frameNo++;
@@ -173,6 +178,9 @@ function render(effect) {
   const pal = (L.palette || []).map(M.hexToRgb);
   const cpu = fx === 'temp' ? temp(/Tctl|Package|Tdie/, /^Cpu$/) : null;
   const t = Date.now() / 1000;
+  // Across the case (#27): Wave and Sweep take each LED's place in the case view instead of its index in the device.
+  const across = L.across && (fx === 'wave' || fx === 'sweep') ? new Map(state.layout.filter((p) => !p.desk || L.desk).map((p) => [p.key, p])) : null;
+  const mid = across && Lay.centre(state.layout);
   const preview = ledsWanted && win && win.isVisible() && frameNo % 3 === 0 ? {} : null; // ~10 fps to the Lighting page
   const now = Date.now();
   for (const d of state.devices) {
@@ -182,8 +190,11 @@ function render(effect) {
     const flashing = (identify.get(d.key) || 0) > now;
     const colors = [];
     for (let i = 0; i < d.leds; i++) {
+      const at = across && across.get(d.key)?.pts[i];
+      // shortcut: a position 0..1 goes in as LED i of POS, since frame() reads i / n; fine while frame stays index-based
       const c = flashing ? (Math.floor(now / 250) % 2 ? { red: 255, green: 255, blue: 255 } : { red: 0, green: 0, blue: 0 })
-        : M.frame(fx, base, t, L.speed, i, d.leds, pal, cpu);
+        : at ? M.frame(fx, base, t, L.speed, Math.round(Lay.along(at, L.dir, mid) * (POS - 1)), POS, pal, cpu)
+          : M.frame(fx, base, t, L.speed, i, d.leds, pal, cpu);
       colors.push(M.tune(c, dev, flashing ? 1 : bright));
     }
     // Per-zone colour overrides paint that zone's LEDs a fixed colour instead of the effect.
@@ -431,6 +442,15 @@ on('device', (key, patch) => {
   const cur = settings.devices[key] || {};
   if (p.zones) { p.zones = { ...cur.zones, ...p.zones }; for (const z in p.zones) if (!p.zones[z]) delete p.zones[z]; }
   settings.devices[key] = { ...cur, ...p }; save(); render();
+});
+// Arrange (#27): move one device in the case view, or null to put it back where KelvinRGB guessed; '*' resets all.
+on('layout', (key, spot) => {
+  if (key === '*') settings.layout = {};
+  else if (!hasDevice(key)) return;
+  else if (spot === null) delete settings.layout[key];
+  else { const p = V.spot(spot); if (!p) return; settings.layout[key] = p; }
+  state.layout = Lay.place(state.devices, settings.layout);
+  save(); push();
 });
 on('leds', (v) => { ledsWanted = v === true; startRender(); });
 // Themes (#27): save the current look under a name, apply one, or delete one.
