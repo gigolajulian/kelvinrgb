@@ -316,7 +316,7 @@ const pages = {
     },
     tempText() {
       const t = ST && cpuTemp();
-      return `${t ? `CPU ${Math.round(t.value)} °C` : 'CPU temperature needs the sensor service'} · cool at ${TEMP_RANGE[0]} °C, warm at ${TEMP_RANGE[1]} °C`;
+      return `${t ? `CPU <span class="num">${Math.round(t.value)} °C</span>` : 'CPU temperature unavailable: sensors need admin'} · bluest colour at ${TEMP_RANGE[0]} °C, reddest at ${TEMP_RANGE[1]} °C`;
     },
     // ---- effect colours and themes (#27) ----
     palette() {
@@ -597,7 +597,7 @@ const pages = {
       el.onpointerup = el.onpointercancel = () => { el.onpointermove = el.onpointerup = el.onpointercancel = null; this.dragging = false; this.draw(); };
     },
     live() {
-      if ($('#l-temp')) $('#l-temp').textContent = this.tempText();
+      if ($('#l-temp')) $('#l-temp').innerHTML = this.tempText(); // fixed text plus a number, nothing from outside
       if (this.dragging || !$('#l-grid')) return;
       if (ST.devices.map((d) => d.key).join() !== this.sig) this.draw(); else this.refresh();
     },
