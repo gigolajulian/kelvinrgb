@@ -97,6 +97,7 @@ const identify = new Map(); // device key -> until (ms)
 function findOpenRgb() { return OPENRGB_EXE.find((p) => fs.existsSync(p)); }
 
 let launchedOpenRgb = false;
+let openRgbPid = 0; // the OpenRGB server KelvinRGB started, stopped again on quit (EXIT-1)
 let started = false; // set once the startup conflict prompt is answered
 async function connectOpenRgb() {
   if (client || state.guard || !started || driversBusy === 'openrgb') return; // not while its installer runs
@@ -108,7 +109,9 @@ async function connectOpenRgb() {
     state.openrgb = { ok: false, msg: exe ? 'starting openrgb' : 'openrgb not installed' };
     if (exe && !launchedOpenRgb) {
       launchedOpenRgb = true;
-      spawn(exe, D.OPENRGB.args, { detached: true, stdio: 'ignore' }).unref();
+      const p = spawn(exe, D.OPENRGB.args, { detached: true, stdio: 'ignore' });
+      openRgbPid = p.pid || 0;
+      p.unref();
       log('launched OpenRGB SDK server');
     }
     push();
@@ -811,7 +814,13 @@ app.on('before-quit', async (e) => {
   e.preventDefault();
   quitting = true;
   setTimeout(() => app.exit(0), 8000); // a stuck step must never leave a windowless copy running (#23)
-  try { if (saveTimer) { clearTimeout(saveTimer); writeSettings(); } await restLights(); await stopSidecar(); } catch (x) { log(`quit: ${x.message}`); }
+  await G.quit({
+    flush: () => { if (saveTimer) { clearTimeout(saveTimer); writeSettings(); } },
+    restLights, stopSidecar, log,
+    ourOpenRgb: () => openRgbPid,
+    // by PID and image name together, so a reused PID can never kill something else
+    killOpenRgb: (pid) => new Promise((r) => execFile(SYS('taskkill.exe'), ['/F', '/T', '/FI', `PID eq ${pid}`, '/FI', 'IMAGENAME eq OpenRGB.exe'], { windowsHide: true }, () => r())),
+  });
   app.exit(0);
 });
 app.on('window-all-closed', () => {}); // the tray keeps KelvinRGB running

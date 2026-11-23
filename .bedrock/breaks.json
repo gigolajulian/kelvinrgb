@@ -63,5 +63,10 @@
   "file": "lib/update.js",
   "find": "Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(TIMEOUT) });",
   "replace": "Accept: 'application/vnd.github+json' } });"
+ },
+ "EXIT-1": {
+  "file": "lib/guard.js",
+  "find": "  if (pid) { try { await d.killOpenRgb(pid); } catch (e) { d.log(`quit: ${e.message}`); } }\n",
+  "replace": ""
  }
 }
