@@ -358,6 +358,8 @@ const pages = {
     caseSig: () => (ST ? ST.layout.map((p) => `${p.key}${p.x},${p.y},${p.pts.length}`).join() + ST.devices.map((d) => d.zones.filter((z) => !z.leds).length).join() : ''),
     strips() {
       const el = $('#l-strips'); if (!el) return;
+      const had = document.activeElement && document.activeElement.closest && document.activeElement.closest('#l-case .dev');
+      queueMicrotask(() => { if (had) $(`#l-case .dev[data-k="${CSS.escape(had.dataset.k)}"]`)?.focus(); });
       this.stripSig = this.caseSig();
       if (!ST || !ST.layout.length) { el.innerHTML = '<span class="lbl">case</span><span class="sub">Waiting for OpenRGB.</span>'; return; }
       const DRAW = {
@@ -385,7 +387,7 @@ const pages = {
           <div class="seg" role="group" aria-label="Direction" id="l-dir"><button data-dir="x">Left to right</button><button data-dir="y">Bottom to top</button><button data-dir="r">From the CPU out</button></div>
           <span class="grow"></span><button class="btn${this.arranging ? ' acc' : ''}" id="l-arrange">${this.arranging ? 'Done' : 'Arrange'}</button></div>
         <div class="case-wrap">
-          <svg class="case${this.arranging ? ' arrange' : ''}" id="l-case" viewBox="0 0 760 520" role="img" aria-label="Side view of the case with every device and its LEDs">
+          <svg class="case${this.arranging ? ' arrange' : ''}" id="l-case" viewBox="0 0 760 520" preserveAspectRatio="xMinYMid meet" role="group" aria-label="Side view of the case with every device and its LEDs">
             <rect x="20" y="20" width="580" height="480" rx="14" class="shell"/><rect x="130" y="40" width="360" height="380" rx="6" class="plate"/>
             <text x="36" y="490">CASE · SIDE VIEW</text><text x="626" y="390">DESK</text><line x1="616" y1="20" x2="616" y2="500" class="split"/>
             ${devs.join('')}
@@ -393,7 +395,7 @@ const pages = {
           <div class="side">
             <div class="item" id="l-sel"></div>
             <div class="item"><div class="opt"><span class="grow"><span class="t">Mouse and other desk devices</span><span class="sub">Join the effect from beside the case</span></span><button class="tg" id="l-desk" aria-pressed="${L.desk !== false}" aria-label="Desk devices join the effect"></button></div></div>
-            ${empty.length ? `<div class="item warn"><span class="t">Not placed: ${empty.length} zone${empty.length > 1 ? 's' : ''}</span><span class="sub">${esc(empty.join(' and '))} report${empty.length > 1 ? '' : 's'} 0 LEDs. Set the size in OpenRGB and ${empty.length > 1 ? 'they appear' : 'it appears'} here.</span></div>` : ''}
+            ${empty.length ? `<div class="item warn"><span class="t">Not placed: ${empty.length} zone${empty.length > 1 ? 's' : ''}</span><span class="sub">${esc(empty.length > 1 ? `${empty.slice(0, -1).join(', ')} and ${empty[empty.length - 1]}` : empty[0])} report${empty.length > 1 ? '' : 's'} 0 LEDs. Set ${empty.length > 1 ? 'their' : 'its'} size in OpenRGB and ${empty.length > 1 ? 'they appear' : 'it appears'} here.</span></div>` : ''}
             <span class="note">Across the case changes Wave and Sweep. The other effects give every LED one colour, so they look the same either way.</span>
           </div>
         </div>`;
@@ -404,13 +406,31 @@ const pages = {
         if (b.dataset.across) setLighting({ across: b.dataset.across === '1' }, false);
         else if (b.dataset.dir && !b.disabled) setLighting({ dir: b.dataset.dir }, false);
         else if (b.id === 'l-desk') setLighting({ desk: S.lighting.desk === false }, false);
-        else if (b.id === 'l-arrange') { this.arranging = !this.arranging; this.strips(); return; }
+        else if (b.id === 'l-arrange') { this.arranging = !this.arranging; this.strips(); $('#l-arrange').focus(); return; }
         else if (b.id === 'l-putback') { S.layout = { ...S.layout }; delete S.layout[this.sel]; rgb.layout(this.sel, null); return; }
         else return;
         this.caseControls();
       };
       const pick = (k) => { this.sel = k; svg.querySelectorAll('.dev').forEach((g) => g.classList.toggle('sel', g.dataset.k === k)); this.selInfo(); };
-      svg.onkeydown = (e) => { const g = e.target.closest('.dev'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(g.dataset.k); } };
+      // Keyboard: Enter or Space selects; in Arrange, arrows move the device (Shift for bigger steps).
+      const ARROW = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      let nudge = null;
+      svg.onkeydown = (e) => {
+        const g = e.target.closest('.dev'); if (!g) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(g.dataset.k); return; }
+        if (!this.arranging || !ARROW[e.key]) return;
+        e.preventDefault(); pick(g.dataset.k);
+        const p = ST.layout.find((x) => x.key === g.dataset.k), step = e.shiftKey ? 20 : 4;
+        nudge = nudge && nudge.p === p ? nudge : { p, x: p.x, y: p.y };
+        nudge.x = Math.round(Math.min(760 - p.w, Math.max(0, nudge.x + ARROW[e.key][0] * step)));
+        nudge.y = Math.round(Math.min(520 - p.h, Math.max(0, nudge.y + ARROW[e.key][1] * step)));
+        g.setAttribute('transform', `translate(${nudge.x} ${nudge.y})`); this.dragging = true;
+      };
+      svg.onkeyup = () => {
+        if (!nudge) return;
+        const { p, x, y } = nudge; nudge = null; this.dragging = false;
+        if (x !== p.x || y !== p.y) { S.layout = { ...S.layout, [p.key]: [x, y] }; this.sel = p.key; rgb.layout(p.key, [x, y]); }
+      };
       let drag = null;
       const at = (e) => { const q = svg.createSVGPoint(); q.x = e.clientX; q.y = e.clientY; return q.matrixTransform(svg.getScreenCTM().inverse()); };
       svg.onpointerdown = (e) => {
@@ -440,6 +460,7 @@ const pages = {
       const dirOn = L.across !== false && ['wave', 'sweep'].includes(L.effect);
       el.querySelectorAll('[data-dir]').forEach((b) => { b.setAttribute('aria-pressed', b.dataset.dir === (L.dir || 'x')); b.disabled = !dirOn; });
       $('#l-desk').setAttribute('aria-pressed', L.desk !== false);
+      $('#l-desk').disabled = !dirOn; // only Wave and Sweep across the case use it
     },
     selInfo() {
       const el = $('#l-sel'); if (!el) return;
