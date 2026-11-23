@@ -141,17 +141,20 @@ function startRender() {
 // effect: override for one frame ('static' paints the resting state on quit or before Apex, #25).
 // Last frame sent per device: unchanged frames are skipped (less bus traffic), but resent each second in case a device drifts.
 const sent = new Map();
+// Lian Li Strimer controllers can't take 30 fps and drop frames unevenly, which reads as jitter (#24).
+// They get every second frame: a steady 15 fps, still on the shared clock.
+const SLOW = /strimer|lian li/i;
+let frameNo = 0;
 function render(effect) {
   if (!client || (state.guard && !effect)) return; // the guard paints one resting frame before letting go
-  // The server is behind: drop this frame rather than queue it, so every device keeps showing the same moment (#24).
-  if (!effect && client.socket?.writableLength > 64 * 1024) return;
+  frameNo++;
   const L = settings.lighting;
   const fx = effect || L.effect;
   const base = M.hexToRgb(L.color);
   const t = Date.now() / 1000;
   const now = Date.now();
   for (const d of state.devices) {
-    if (!d.leds) continue;
+    if (!d.leds || (!effect && frameNo % 2 && SLOW.test(d.name))) continue;
     const dev = settings.devices[d.key] || {};
     const bright = (L.on && !dev.off ? L.brightness / 100 : 0) * ((dev.brightness ?? 100) / 100);
     const flashing = (identify.get(d.key) || 0) > now;
@@ -189,11 +192,12 @@ async function checkModes() {
   checkingModes = true;
   try {
     const now = await client.getAllControllerData();
-    if (now.length !== state.devices.length) return; // a rescan is under way; deviceListUpdated reloads
+    // OpenRGB found more (or fewer) devices since the last list, e.g. it was still detecting when we first asked (#23).
+    if (now.length !== state.devices.length) return await loadDevices();
     now.forEach((x, i) => {
       const d = state.devices[i];
       if (!d.leds || d.mode == null || x.activeMode === d.mode) return;
-      d.taken = (d.taken || 0) + 1; // shown on the device, and the log stays quiet when an app keeps fighting
+      d.taken = (d.taken || 0) + 1; // the log stays quiet when an app keeps fighting
       if (d.taken === 1 || d.taken % 60 === 0) log(`${d.name} switched to its own ${x.modes[x.activeMode]?.name || 'mode'} (${d.taken}x), another app may be driving it; taking it back`);
       client.setCustomMode(d.id);
       sent.delete(d.key);
