@@ -920,7 +920,7 @@ function drawConflicts(opening) {
     : cfPending.has(x.name) ? (now - cfPending.get(x.name) < 8000 ? 'closing' : 'still running') : 'running';
   $('#cf-count').textContent = left ? `${left} of ${c.length} running` : `all ${c.length} closed`;
   $('#cf-list').innerHTML = c.map((x) => `<li class="${x.running ? 'on' : 'off'}"><span class="dot"></span>
-    <span class="grow">${esc(x.label)}${x.note && x.note !== x.name ? `<small>${esc(x.note)}</small>` : ''}</span>
+    <span class="grow">${esc(x.label)}${x.note && x.note !== x.name ? `<small>${esc(x.note)}</small>` : ''}${x.holds ? `<small>${esc(x.holds)}</small>` : ''}</span>
     <span class="lbl state">${state(x)}</span></li>`).join('');
   const closable = c.filter(canClose), busy = closable.some((x) => state(x) === 'closing');
   const all = $('#cf-all'), done = $('#cf-done');
