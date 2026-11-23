@@ -25,7 +25,7 @@ BASELINE.md has every row; this file is the short version.
 | # | Gap | Check | Size |
 |---|---|---|---|
 | 1 | The whole app runs as admin; only the sidecar and OpenRGB need it | (beyond the checklist) | large |
-| 2 | The installed log.txt hasn't been written since Nov 21 although the app relaunched at 22:19 on Nov 22; no crash handler writes to it | DATA-2 | medium |
+| 2 | No crash handler writes uncaught errors to log.txt (the 'log not written' alarm was a Claude sandbox copy of AppData, not a bug) | DATA-2 | small |
 | 3 | Sidecar watchdog (fans back to BIOS on crash) has no behavioural test | EXIT-6 | medium |
 | 4 | 0.95% CPU idle in the tray, over the 0.5% budget: 1 s repaint, 1 s sidecar tick, tasklist every 4 s | EXIT-4 | medium |
 | 5 | Installer held in memory until verified (capped) | MEM-4 | medium |
