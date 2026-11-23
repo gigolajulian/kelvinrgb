@@ -24,3 +24,22 @@ test('curveDuty: clamps ends, interpolates, steps', () => {
   assert.strictEqual(curveDuty(pts, 40, 'stepped'), 25);
   assert.strictEqual(curveDuty(pts, 40, 'smooth'), 30);
 });
+
+test('frame: a palette keeps every effect inside its colours (#27)', () => {
+  const red = hexToRgb('#c8323c'), blue = hexToRgb('#3b4fd8'), pal = [red, blue];
+  const inside = (c) => [0, 0.1, 0.25, 0.5, 0.75, 1].some((k) => {
+    const m = { red: red.red + (blue.red - red.red) * k, green: red.green + (blue.green - red.green) * k, blue: red.blue + (blue.blue - red.blue) * k };
+    return Math.abs(m.red - c.red) < 30 && Math.abs(m.green - c.green) < 30 && Math.abs(m.blue - c.blue) < 30;
+  });
+  for (let t = 0; t < 20; t += 0.37) {
+    assert.ok(inside(frame('spectrum', red, t, 40, 0, 1, pal)), `spectrum at ${t}`);
+    for (let i = 0; i < 10; i++) assert.ok(inside(frame('wave', red, t, 40, i, 10, pal)), `wave at ${t} led ${i}`);
+  }
+  // breathing: full colour mid-breath, black at the ends, next colour on the next breath
+  const rate = 0.05 + 0.4 * 0.95, breath = 2 / rate;
+  assert.deepStrictEqual(frame('breathing', red, breath / 2, 40, 0, 1, pal), red);
+  assert.deepStrictEqual(frame('breathing', red, breath * 1.5, 40, 0, 1, pal), blue);
+  assert.deepStrictEqual(frame('breathing', red, 0, 40, 0, 1, pal), { red: 0, green: 0, blue: 0 });
+  // under two colours: the old rainbow
+  assert.deepStrictEqual(frame('spectrum', red, 1, 40, 0, 1, [red]), frame('spectrum', red, 1, 40));
+});

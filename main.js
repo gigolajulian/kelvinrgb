@@ -41,7 +41,13 @@ else if (!isAdmin() && !(DEV && process.env.RGB_NO_ELEVATE)) {
 // ---------- settings ----------
 const settingsFile = path.join(app.getPath('userData'), 'settings.json');
 const DEFAULTS = {
-  lighting: { effect: 'static', color: '#c8323c', speed: 40, brightness: 80, on: true },
+  lighting: { effect: 'static', color: '#c8323c', speed: 40, brightness: 80, on: true, palette: ['#c8323c', '#3b4fd8'] }, // palette: effect colours, [] = rainbow (#27)
+  themes: [ // saved looks (#27): name, lighting, per-device zone colours
+    { name: 'Blood and cobalt', lighting: { effect: 'wave', color: '#c8323c', palette: ['#c8323c', '#3b4fd8'] }, zones: {} },
+    { name: 'Teal night', lighting: { effect: 'breathing', color: '#4fc1c6', palette: ['#4fc1c6', '#3b4fd8'] }, zones: {} },
+    { name: 'Ember', lighting: { effect: 'spectrum', color: '#c8323c', palette: ['#c8323c', '#f0a35e'] }, zones: {} },
+    { name: 'Violet spot', lighting: { effect: 'static', color: '#8a4fd8', palette: ['#8a4fd8', '#e6e7e8'] }, zones: {} },
+  ],
   devices: {}, // key -> { off, brightness, gain: [r,g,b], gamma, fanWhite, zones }
   fans: {},    // control id -> { mode: bios|curve|fixed, sensor, points, shape, fixed }
   closeConflicts: true, // show the conflict list when RGB apps that fight us run (lib/conflicts.js)
@@ -141,7 +147,7 @@ async function loadDevices() {
 
 function startRender() {
   clearInterval(renderTimer);
-  const animated = ['breathing', 'spectrum', 'wave'].includes(settings.lighting.effect) || identify.size;
+  const animated = ['breathing', 'spectrum', 'wave'].includes(settings.lighting.effect) || identify.size || ledsWanted;
   renderTimer = setInterval(render, animated ? 33 : 1000); // static repaints once a second in case a device drifts
   render();
 }
@@ -153,13 +159,16 @@ const sent = new Map();
 // They get every second frame: a steady 15 fps, still on the shared clock.
 const SLOW = /strimer|lian li/i;
 let frameNo = 0;
+let ledsWanted = false; // the Lighting page's strip preview is open
 function render(effect) {
   if (!client || (state.guard && !effect)) return; // the guard paints one resting frame before letting go
   frameNo++;
   const L = settings.lighting;
   const fx = effect || L.effect;
   const base = M.hexToRgb(L.color);
+  const pal = (L.palette || []).map(M.hexToRgb);
   const t = Date.now() / 1000;
+  const preview = ledsWanted && win && win.isVisible() && frameNo % 3 === 0 ? {} : null; // ~10 fps to the Lighting page
   const now = Date.now();
   for (const d of state.devices) {
     if (!d.leds || (!effect && frameNo % 2 && SLOW.test(d.name))) continue;
@@ -169,7 +178,7 @@ function render(effect) {
     const colors = [];
     for (let i = 0; i < d.leds; i++) {
       const c = flashing ? (Math.floor(now / 250) % 2 ? { red: 255, green: 255, blue: 255 } : { red: 0, green: 0, blue: 0 })
-        : M.frame(fx, base, t, L.speed, i, d.leds);
+        : M.frame(fx, base, t, L.speed, i, d.leds, pal);
       colors.push(M.tune(c, dev, flashing ? 1 : bright));
     }
     // Per-zone colour overrides paint that zone's LEDs a fixed colour instead of the effect.
@@ -184,11 +193,13 @@ function render(effect) {
     // Wraith Prism fan blade: only its blue input works (red + green stay on as warm yellow), so blue sets yellow..white.
     // Measured 2026-11-20: visible from ~192, midpoint ~224, white from ~240. See HANDOFF.
     if (d.name === 'AMD Wraith Prism' && !flashing && colors[1]) colors[1] = { red: 255, green: 255, blue: L.on && !dev.off ? (dev.fanWhite ?? 240) : 0 };
-    const sig = colors.map((c) => (c.red << 16) | (c.green << 8) | c.blue).join(), last = sent.get(d.key);
+    const packed = colors.map((c) => (c.red << 16) | (c.green << 8) | c.blue), sig = packed.join(), last = sent.get(d.key);
+    if (preview) preview[d.key] = packed;
     if (!effect && last && last.sig === sig && now - last.at < 1000) continue;
     sent.set(d.key, { sig, at: now });
     try { client.updateLeds(d.id, colors); } catch (e) { log(`updateLeds ${d.name}: ${e.message}`); }
   }
+  if (preview) win.webContents.send('leds', preview);
   for (const [k, until] of identify) if (until <= now) { identify.delete(k); startRender(); }
 }
 
@@ -415,6 +426,32 @@ on('device', (key, patch) => {
   const cur = settings.devices[key] || {};
   if (p.zones) { p.zones = { ...cur.zones, ...p.zones }; for (const z in p.zones) if (!p.zones[z]) delete p.zones[z]; }
   settings.devices[key] = { ...cur, ...p }; save(); render();
+});
+on('leds', (v) => { ledsWanted = v === true; startRender(); });
+// Themes (#27): save the current look under a name, apply one, or delete one.
+on('theme', (op, arg) => {
+  const list = settings.themes;
+  if (op !== 'save' && !(Number.isInteger(arg) && arg >= 0 && arg < list.length)) return;
+  if (op === 'save') {
+    const zones = {};
+    for (const d of state.devices) { const z = settings.devices[d.key]?.zones; if (z && Object.keys(z).length) zones[d.key] = z; }
+    const { effect, color, speed, palette } = settings.lighting;
+    const t = V.theme({ name: arg, lighting: { effect, color, speed, palette }, zones });
+    if (!t) return;
+    const i = list.findIndex((x) => x.name.toLowerCase() === t.name.toLowerCase());
+    if (i >= 0) list[i] = t; else if (list.length < 24) list.push(t); else return;
+  } else if (op === 'apply') {
+    const t = list[arg];
+    Object.assign(settings.lighting, t.lighting);
+    for (const d of state.devices) { // zones: the theme's, or none, so an old override doesn't linger
+      const cur = settings.devices[d.key];
+      if (t.zones[d.key]) settings.devices[d.key] = { ...cur, zones: { ...t.zones[d.key] } };
+      else if (cur?.zones) { const { zones: _, ...rest } = cur; settings.devices[d.key] = rest; }
+    }
+    startRender(); updateTray();
+  } else if (op === 'delete') list.splice(arg, 1);
+  else return;
+  save(); win.webContents.send('settings', settings);
 });
 on('identify', (key) => { if (hasDevice(key)) { identify.set(key, Date.now() + 2000); startRender(); } });
 on('fan', (id, cfg) => { const f = V.fan(cfg, FLOOR); if (f && hasFan(id)) { settings.fans[id] = f; save(); driveFans(); } });
@@ -709,6 +746,8 @@ app.whenReady().then(() => {
   win = new BrowserWindow({
     width: 1360, height: 880, minWidth: 900, minHeight: 600, autoHideMenuBar: true, title: 'KelvinRGB',
     icon: ICO, show: false,
+    // Dark title bar (#27, option A): the page draws the bar, Windows keeps the buttons and snap layouts.
+    titleBarStyle: 'hidden', titleBarOverlay: { color: '#00000000', symbolColor: '#9aa0a6', height: 34 },
     backgroundColor: '#00000000', backgroundMaterial: settings.glass ? 'acrylic' : 'none', // transparent so acrylic shows through
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, spellcheck: false,

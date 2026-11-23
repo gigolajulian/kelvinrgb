@@ -285,7 +285,10 @@ const pages = {
     },
     build() {
       this.dragging = false; // a tray change can rebuild mid-drag
-      main.innerHTML = `<div class="g lg-all" id="l-all"></div><div class="lgrid" id="l-grid"></div>`;
+      main.innerHTML = `<div class="g lg-all" id="l-all"></div><div class="g lg-pal" id="l-pal"></div><div class="g" id="l-strips"></div><div class="lgrid" id="l-grid"></div>`;
+      this.strips();
+      $('#l-pal').onclick = (e) => this.palClick(e);
+      $('#l-pal').onkeydown = (e) => { if (e.key === 'Enter' && e.target.id === 'l-tname') this.saveTheme(); };
       const all = $('#l-all'), grid = $('#l-grid');
       all.onclick = (e) => {
         const b = e.target.closest('[data-fx],[data-c]'); if (!b) return;
@@ -310,11 +313,63 @@ const pages = {
       this.paint();
       this.draw();
     },
+    // ---- effect colours and themes (#27) ----
+    palette() {
+      const L = S.lighting, pal = L.palette || [];
+      const cands = [...new Set([L.color, ...quick, ...pal].map((c) => c.toLowerCase()))];
+      const bar = pal.length >= 2 ? `linear-gradient(90deg,${[...pal, pal[0]].join(',')})` : 'linear-gradient(90deg,#c8323c,#ff6a1a,#13a3a3,#2f5bff,#8a5cff,#c8323c)';
+      const same = (t) => JSON.stringify(t.lighting.palette || []) === JSON.stringify(pal) && t.lighting.effect === L.effect && t.lighting.color === L.color;
+      const a = document.activeElement, keep = a && a.id;
+      $('#l-pal').innerHTML = `<div class="row"><span class="lbl">effect colours</span>
+          <span class="row pal" role="group" aria-label="Effect colours, pick 2 or 3">${cands.map((c) => `<button class="sw" data-pc="${c}" style="background:${c}" aria-pressed="${pal.includes(c)}" aria-label="${c}"></button>`).join('')}</span>
+          <button class="btn" data-rainbow="1" aria-pressed="${pal.length < 2}">Rainbow</button><span class="palbar" style="background:${bar}"></span></div>
+        <div class="row"><span class="lbl">themes</span><span class="themes">${S.themes.map((t, i) => {
+          const p = t.lighting.palette && t.lighting.palette.length >= 2 ? t.lighting.palette : [t.lighting.color || '#888888'];
+          return `<span class="theme" data-on="${same(t)}"><button data-tapply="${i}">${esc(t.name)}<i style="background:linear-gradient(90deg,${p.join(',')}${p.length < 2 ? ',' + p[0] : ''})"></i></button><button class="x" data-tdel="${i}" aria-label="Delete ${esc(t.name)}">&times;</button></span>`;
+        }).join('')}</span>
+          <input type="text" id="l-tname" maxlength="40" placeholder="Name this look" aria-label="Theme name"><button class="btn" data-tsave="1">Save</button></div>`;
+      if (keep && $('#' + keep)) $('#' + keep).focus();
+    },
+    palClick(e) {
+      const b = e.target.closest('button'); if (!b) return;
+      const L = S.lighting, pal = (L.palette || []).slice();
+      if (b.dataset.pc) {
+        const c = b.dataset.pc;
+        const next = pal.length < 2 ? [L.color.toLowerCase(), c].filter((x, i, arr) => arr.indexOf(x) === i) : pal.includes(c) ? pal.filter((x) => x !== c) : pal.length < 3 ? [...pal, c] : [...pal.slice(1), c];
+        if (next.length < 2) return; // 2 or 3 colours, or Rainbow
+        setLighting({ palette: next });
+      } else if (b.dataset.rainbow) setLighting({ palette: [] });
+      else if (b.dataset.tapply) rgb.theme('apply', +b.dataset.tapply);
+      else if (b.dataset.tdel) rgb.theme('delete', +b.dataset.tdel);
+      else if (b.dataset.tsave) this.saveTheme();
+    },
+    saveTheme() {
+      const n = $('#l-tname').value.trim();
+      if (n) rgb.theme('save', n); else $('#l-tname').focus();
+    },
+    // ---- live LED strips (#27): one row per device, every LED in order ----
+    strips() {
+      const el = $('#l-strips'); if (!el) return;
+      const rows = ST ? ST.devices.map((d) => {
+        const empty = d.zones.filter((z) => !z.leds).map((z) => z.name);
+        return `<div class="srow"><span class="n" title="${esc(d.name)}">${esc(d.name)}</span><span class="ls" data-k="${esc(d.key)}">${'<b></b>'.repeat(d.leds)}${empty.length ? `<em>${esc(empty.join(', '))}: 0 LEDs, size not set</em>` : ''}</span><span class="c">${d.leds}</span></div>`;
+      }) : [];
+      this.stripSig = ST ? ST.devices.map((d) => d.key + d.leds).join() : '';
+      el.innerHTML = `<span class="lbl">live</span><div class="strips">${rows.join('') || '<span class="sub">Waiting for OpenRGB.</span>'}</div>`;
+    },
+    paintStrips(m) {
+      for (const [k, cs] of Object.entries(m)) {
+        const row = $(`#l-strips .ls[data-k="${CSS.escape(k)}"]`); if (!row) continue;
+        const bs = row.querySelectorAll('b');
+        for (let i = 0; i < cs.length && i < bs.length; i++) bs[i].style.background = '#' + cs[i].toString(16).padStart(6, '0');
+      }
+    },
     // The global bar. Rebuilt on effect or colour changes from here, the footer or the tray.
     paint() {
       const L = S.lighting, c = L.color, anim = ['breathing', 'spectrum', 'wave'].includes(L.effect);
       const FX = { static: c, breathing: `linear-gradient(90deg,#111,${c},#111)`, spectrum: 'linear-gradient(90deg,#c8323c,#ff6a1a,#13a3a3,#2f5bff,#8a5cff)', wave: `repeating-linear-gradient(90deg,${c} 0 5px,#111 5px 10px)`, off: '#111' };
       const a = document.activeElement, keep = a && (a.id ? '#' + a.id : a.dataset.fx ? `[data-fx="${a.dataset.fx}"]` : null);
+      this.palette();
       $('#l-all').innerHTML = `<span class="lbl">every device</span>
         <div class="fx">${EFFECTS.map(([k, l]) => `<button data-fx="${k}" aria-pressed="${k === L.effect}"><span class="pv" style="background:${FX[k]}"></span>${l}</button>`).join('')}</div>
         <div class="lg-col"><input type="color" id="l-color" class="cdot" value="${c}" aria-label="Colour"><input type="text" id="l-hex" class="num" value="${c}" aria-label="Hex colour"></div>
@@ -844,6 +899,7 @@ document.addEventListener('click', (e) => { const b = e.target.closest('[data-go
 function go(p) {
   if (!pages[p]) return;
   page = p;
+  rgb.leds(p === 'lighting'); // the live strips only cost frames while they are on screen
   $$('nav [data-page]').forEach((b) => (b.dataset.page === p ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   pages[p].build();
   if (ST) pages[p].live();
@@ -983,6 +1039,7 @@ function onState(s) {
   drawSetup();
   health('st-guard', !s.guard, s.guard, s.guard ? 'Apex guard active' : 'Apex guard idle');
   if (page === 'fans' && fansChanged) pages[page].build();
+  if (page === 'lighting' && pages.lighting.stripSig !== s.devices.map((d) => d.key + d.leds).join()) pages.lighting.strips();
   pages[page].live();
 }
 
@@ -994,6 +1051,7 @@ rgb.get().then((r) => {
   go(page);
   onState(r.state);
   rgb.onState(onState);
+  rgb.onLeds((m) => { if (page === 'lighting') pages.lighting.paintStrips(m); });
   // the tray menu changed something: take main's copy and redraw
   rgb.onSettings((s) => { S = s; applyGlass(); footer(); if (page === 'lighting' || page === 'settings') go(page); if (page === 'home') pages.home.live(); });
 });
