@@ -1,8 +1,8 @@
 diff --git a/lib/store.js b/lib/store.js
-index 72da87e..9de7ec0 100644
+index 83bb67d..13079b1 100644
 --- a/lib/store.js
 +++ b/lib/store.js
-@@ -15,7 +15,7 @@ const ring = (arr, item, n) => [...arr.slice(-(n - 1)), item];
+@@ -21,7 +21,7 @@ const ring = (arr, item, n) => [...arr.slice(-(n - 1)), item];
  function appendCapped(file, line, max, fs = nodeFs) {
    let size = 0;
    try { size = fs.statSync(file).size; } catch {}

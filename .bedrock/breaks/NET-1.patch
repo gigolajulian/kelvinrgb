@@ -1,8 +1,8 @@
 diff --git a/lib/update.js b/lib/update.js
-index 2faf58e..0b79976 100644
+index 064420b..f061937 100644
 --- a/lib/update.js
 +++ b/lib/update.js
-@@ -57,7 +57,7 @@ function create({ version, log, onChange, beforeInstall, spawn, quit, packaged }
+@@ -58,7 +58,7 @@ function create({ version, log, onChange, beforeInstall, spawn, quit, packaged }
      manual = !!isManual;
      if (manual) set({ kind: 'checking' });
      try {

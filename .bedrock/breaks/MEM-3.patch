@@ -1,8 +1,8 @@
 diff --git a/lib/store.js b/lib/store.js
-index 72da87e..acbc679 100644
+index 83bb67d..7278ee7 100644
 --- a/lib/store.js
 +++ b/lib/store.js
-@@ -9,7 +9,7 @@ function writeAtomic(file, text, fs = nodeFs) {
+@@ -15,7 +15,7 @@ function writeAtomic(file, text, fs = nodeFs, tries = 5) {
  }
  
  // Keep the last n items: the in-memory log never grows past n lines.
