@@ -32,6 +32,21 @@ The build is unsigned, so Windows SmartScreen may warn the first time: More info
 
 The key is `~/.release-keys/updates-ed25519.pem` on Julian's PC (or the file `RELEASE_SIGNING_KEY` points to). It never goes in a repo. If it is lost, installed copies can't update again, so keep a backup.
 
+## Secrets
+
+The app itself stores no secrets: no accounts, tokens or keys on the user's PC. Two secrets exist on the release side.
+
+| Secret | Unlocks | Where | Rotate |
+|---|---|---|---|
+| Release signing key (ed25519) | Installed copies accept an update signed with it | `~/.release-keys/updates-ed25519.pem` on Julian's PC, plus his backup | Make a new key pair, put the public half in `lib/update.js` `PUBKEY`, ship one release signed with the old key. Copies that skip that release can't update and need a manual download. |
+| GitHub login (gh CLI, 2FA) | Push to this repo, create releases | gh's credential store on Julian's PC | `gh auth refresh` or revoke the OAuth app at github.com/settings/applications. A stolen login can upload an installer but can't sign it. |
+
+## Checks
+
+`npm test` runs the unit tests. `node scripts/secret-scan.js`, `node scripts/lock-check.js` and `node scripts/uninstall-check.js`
+check for leaked keys, lockfile drift and uninstall leftovers. CI runs the first three on every PR. BASELINE.md lists every
+production-readiness check, its proof and what's still open.
+
 ## Setup (run from source)
 
 1. Install the engines (once):
@@ -44,7 +59,7 @@ The key is `~/.release-keys/updates-ed25519.pem` on Julian's PC (or the file `RE
    PawnIO is the signed driver LibreHardwareMonitor 0.9.6 uses to read the Super I/O chip (fans, board temps).
 2. Install and build:
    ```bash
-   npm install
+   npm ci
    ```
    ```bash
    npm run build:sidecar
