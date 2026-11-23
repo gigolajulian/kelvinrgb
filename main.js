@@ -51,9 +51,10 @@ const DEFAULTS = {
 let settings = structuredClone(DEFAULTS);
 try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
 let saveTimer;
+const writeSettings = () => { saveTimer = null; fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2)); };
 function save() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2)), 300);
+  saveTimer = setTimeout(writeSettings, 300);
 }
 
 // ---------- shared state pushed to the window ----------
@@ -134,9 +135,11 @@ function startRender() {
   render();
 }
 
-function render() {
-  if (!client || state.guard) return;
+// effect: override for one frame ('static' paints the resting state on quit or before Apex, #25).
+function render(effect) {
+  if (!client || (state.guard && !effect)) return; // the guard paints one resting frame before letting go
   const L = settings.lighting;
+  const fx = effect || L.effect;
   const base = M.hexToRgb(L.color);
   const t = Date.now() / 1000;
   const now = Date.now();
@@ -148,7 +151,7 @@ function render() {
     const colors = [];
     for (let i = 0; i < d.leds; i++) {
       const c = flashing ? (Math.floor(now / 250) % 2 ? { red: 255, green: 255, blue: 255 } : { red: 0, green: 0, blue: 0 })
-        : M.frame(L.effect, base, t, L.speed, i, d.leds);
+        : M.frame(fx, base, t, L.speed, i, d.leds);
       colors.push(M.tune(c, dev, flashing ? 1 : bright));
     }
     // Per-zone colour overrides paint that zone's LEDs a fixed colour instead of the effect.
@@ -257,7 +260,7 @@ function checkGuard() {
       state.sensors = { ...state.sensors, ok: false, msg: 'paused for apex' };
       push();
       await G.enter({
-        stopRender: () => clearInterval(renderTimer),
+        stopRender: () => { clearInterval(renderTimer); identify.clear(); render('static'); }, // hold a calm colour, not a frozen frame
         stopSidecar,
         disconnect: () => { if (client) { client.removeAllListeners('disconnect'); client.disconnect(); client = null; } },
         wait: (ms) => new Promise((r) => setTimeout(r, ms)),
@@ -502,7 +505,7 @@ async function installOpenRgb() {
 const updater = U.create({
   version: app.getVersion(), log, packaged: app.isPackaged,
   onChange: () => { state.update = { ...updater.view(), kind: updater.state.kind, v: updater.state.v }; push(); updateTray(true); },
-  beforeInstall: async () => { quitting = true; clearInterval(renderTimer); await stopSidecar(); if (client) client.disconnect(); },
+  beforeInstall: async () => { quitting = true; await restLights(); await stopSidecar(); },
   spawn: (file, args) => spawn(file, args, { detached: true, stdio: 'ignore' }).unref(),
   quit: () => app.quit(),
 });
@@ -679,14 +682,24 @@ app.whenReady().then(() => {
   setInterval(() => updater.check(false), 6 * 3600e3);
 });
 
+// Stop the effect on a resting frame (the chosen colour, static; black if lights are off), then let go of OpenRGB (#25).
+async function restLights() {
+  clearInterval(renderTimer);
+  identify.clear();
+  if (!client) return;
+  try { render('static'); } catch (e) { log(`rest: ${e.message}`); }
+  await new Promise((r) => setTimeout(r, 150)); // let the server apply it before the socket closes
+  try { client.removeAllListeners('disconnect'); client.disconnect(); } catch {}
+  client = null;
+}
+
 let quitting = false;
 app.on('before-quit', async (e) => {
   if (quitting) return;
   e.preventDefault();
   quitting = true;
-  clearInterval(renderTimer);
-  await stopSidecar();
-  if (client) client.disconnect();
-  app.quit();
+  setTimeout(() => app.exit(0), 8000); // a stuck step must never leave a windowless copy running (#23)
+  try { if (saveTimer) { clearTimeout(saveTimer); writeSettings(); } await restLights(); await stopSidecar(); } catch (x) { log(`quit: ${x.message}`); }
+  app.exit(0);
 });
 app.on('window-all-closed', () => {}); // the tray keeps KelvinRGB running
