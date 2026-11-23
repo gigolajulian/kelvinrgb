@@ -277,13 +277,23 @@
     "bedrock": "2.9.5"
   },
   "EXIT-1@desktop, local": {
-    "result": "stale-break",
+    "result": "proven",
     "command": "node --test --test-name-pattern=\"quit stops the OpenRGB server\" test/guard.test.js",
     "break": ".bedrock/breaks/EXIT-1.patch",
-    "patch_sha256": null,
-    "sha": "0f0525ba36f1d8e0031872987764aaf8cbe514a0",
-    "files": null,
-    "seconds": 0.0,
+    "patch_sha256": "30c815687936a068974ef3aa2f52ffef8f7dbbf1f81c6b14d8fa0eb077322a6b",
+    "sha": "ed80a1cec7f72ba31da39ae28de0cf42f64bc842",
+    "files": {
+      "lib/guard.js": "ab515070ae70a4b90630aae91905ed4d51fd8c7f06d00fb8be39eed319900bea",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/math.test.js": "13bad91e7a7cfdfd575995a43bb4c2256b133050cd81e826cbdc6d89f6dee2f8",
+      "test/store.test.js": "ada1b0fce0970336ae4bc1fd5984ded017cf12f03adfed3a4de10bb3b571e6c1",
+      "test/update.test.js": "f1c98c3ecb3c2f9e940f252858c1848d231d43d7e6e8e33be73708a197beb708",
+      "test/validate.test.js": "298b03b2c2ff0df51322d1a0cc4d9396537bd8485c43e0628e40ee97f3f2225a"
+    },
+    "seconds": 5.4,
     "date": "2026-11-22",
     "bedrock": "2.9.5"
   }
