@@ -117,14 +117,40 @@ const release = (size) => ({ tag_name: 'v9.0.0', assets: [{ name: 'KelvinRGB Set
 
 test('every GitHub call carries a timeout, so a dead network never hangs the updater', async () => {
   const real = global.fetch;
+  const seen = [];
   global.fetch = async (url, opts) => {
     if (!(opts && opts.signal instanceof AbortSignal)) throw new Error(`no timeout on ${url}`);
-    return { status: 200, ok: true, json: async () => release(3) };
+    seen.push(url);
+    if (url.includes('api.github.com')) return { status: 200, ok: true, json: async () => release(3) };
+    if (url.endsWith('/sig')) return { ok: true, text: async () => 'not a signature' };
+    return { ok: true, url: 'https://objects.githubusercontent.com/x', body: [Buffer.from('abc')] };
   };
   try {
-    const u = U.create({ version: '9.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
+    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
     await u.check(true);
-    assert.strictEqual(u.state.kind, 'current', u.state.msg);
+    assert.strictEqual(u.state.kind, 'available', u.state.msg);
+    await u.install();
+    assert.doesNotMatch(u.state.msg || '', /no timeout/);
+    assert.strictEqual(seen.length, 2); // check + download; the checksum stops it before the signature
+  } finally { global.fetch = real; }
+});
+
+test('the signature fetch carries a timeout too', async () => {
+  const real = global.fetch;
+  const body = Buffer.from('abc');
+  const digest = require('node:crypto').createHash('sha256').update(body).digest('hex');
+  const rel = { tag_name: 'v9.0.0', assets: [{ name: 'KelvinRGB Setup 9.0.0.exe', browser_download_url: 'https://github.com/dl', size: 3, digest: `sha256:${digest}` }, { name: 'KelvinRGB Setup 9.0.0.exe.sig', browser_download_url: 'https://github.com/sig' }] };
+  global.fetch = async (url, opts) => {
+    if (!(opts && opts.signal instanceof AbortSignal)) throw new Error(`no timeout on ${url}`);
+    if (url.includes('api.github.com')) return { status: 200, ok: true, json: async () => rel };
+    if (url.endsWith('/sig')) return { ok: true, text: async () => 'not a signature' };
+    return { ok: true, url: 'https://objects.githubusercontent.com/x', body: [body] };
+  };
+  try {
+    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
+    await u.check(true);
+    await u.install();
+    assert.match(u.state.msg, /signature does not match/);
   } finally { global.fetch = real; }
 });
 

@@ -58,7 +58,7 @@ const DEFAULTS = {
 let settings = structuredClone(DEFAULTS);
 try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
 let saveTimer;
-const writeSettings = () => { saveTimer = null; S.writeAtomic(settingsFile, JSON.stringify(settings, null, 2)); };
+const writeSettings = () => { saveTimer = null; try { S.writeAtomic(settingsFile, JSON.stringify(settings, null, 2)); } catch (e) { log(`settings: not saved: ${e.message}`); } };
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(writeSettings, 300);

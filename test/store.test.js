@@ -20,6 +20,19 @@ test('a crash mid-save leaves the old settings whole', () => {
   assert.ok(!fs.existsSync(`${file}.tmp`));
 });
 
+test('a save survives a file held for a moment by antivirus', () => {
+  const dir = tmp(), file = path.join(dir, 'settings.json');
+  fs.writeFileSync(file, '{"old":true}');
+  let busy = 2;
+  const held = { ...fs, renameSync: (a, b) => { if (busy-- > 0) throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' }); return fs.renameSync(a, b); } };
+  S.writeAtomic(file, '{"new":true}', held);
+  assert.strictEqual(fs.readFileSync(file, 'utf8'), '{"new":true}');
+  const stuck = { ...fs, renameSync: () => { throw Object.assign(new Error('EPERM'), { code: 'EPERM' }); } };
+  assert.throws(() => S.writeAtomic(file, '{"lost":true}', stuck), /EPERM/);
+  assert.strictEqual(fs.readFileSync(file, 'utf8'), '{"new":true}');
+  assert.ok(!fs.existsSync(`${file}.tmp`));
+});
+
 test('the in-memory log keeps only the last 50 lines', () => {
   let log = [];
   for (let i = 0; i < 500; i++) log = S.ring(log, `line ${i}`, 50);
