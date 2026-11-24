@@ -46,7 +46,7 @@
  },
  "EXIT-3": {
   "file": "build/installer.nsh",
-  "find": "    nsExec::Exec '\"$SYSDIR\\schtasks.exe\" /Delete /TN KelvinRGB /F'\n",
+  "find": "nsExec::Exec '\"$SYSDIR\\schtasks.exe\" /Delete /TN KelvinRGB /F'",
   "replace": ""
  },
  "REL-1": {
@@ -66,7 +66,7 @@
  },
  "EXIT-1": {
   "file": "lib/guard.js",
-  "find": "  if (pid) { try { await d.killOpenRgb(pid); } catch (e) { d.log(`quit: ${e.message}`); } }\n",
+  "find": "if (pid) { try { await d.killOpenRgb(pid); } catch (e) { d.log(`quit: ${e.message}`); } }",
   "replace": ""
  },
  "EXIT-6": {
