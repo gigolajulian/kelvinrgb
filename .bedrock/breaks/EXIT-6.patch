@@ -1,0 +1,13 @@
+diff --git a/sidecar/pump.cs b/sidecar/pump.cs
+index f7f498f..60ac9a9 100644
+--- a/sidecar/pump.cs
++++ b/sidecar/pump.cs
+@@ -51,7 +51,7 @@ static class Pump
+                 lastMsg.Restart();
+                 try { handle(line); } catch (Exception ex) { log("message failed: " + ex.Message); }
+             }
+-            if (eof.IsSet && inbox.IsEmpty) { restoreAll(); return; }
++            if (eof.IsSet && inbox.IsEmpty) { return; }
+             if (lastMsg.ElapsedMilliseconds > watchdogMs && touched() > 0)
+             {
+                 log("watchdog: app silent for " + watchdogMs / 1000.0 + " s, fans back to BIOS");

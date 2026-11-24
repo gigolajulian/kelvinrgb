@@ -11,8 +11,8 @@
  },
  "SEC-4": {
   "file": ".github/dependabot.yml",
-  "find": "  - package-ecosystem: github-actions\n",
-  "replace": "  - package-ecosystem: docker\n"
+  "find": "  - package-ecosystem: github-actions",
+  "replace": "  - package-ecosystem: docker"
  },
  "SEC-5": {
   "file": "lib/update.js",

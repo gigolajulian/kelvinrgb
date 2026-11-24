@@ -1,0 +1,13 @@
+diff --git a/sidecar/pump.cs b/sidecar/pump.cs
+index f7f498f..53f8df8 100644
+--- a/sidecar/pump.cs
++++ b/sidecar/pump.cs
+@@ -12,7 +12,7 @@ static class Pump
+ 
+     // Uptime as 64-bit ms: Environment.TickCount wraps after 24.9 days, which made a later restart look like a new boot.
+     public static DateTime BootTime() { return BootTime(DateTime.UtcNow, GetTickCount64()); }
+-    public static DateTime BootTime(DateTime utcNow, ulong uptimeMs) { return utcNow - TimeSpan.FromMilliseconds(uptimeMs); }
++    public static DateTime BootTime(DateTime utcNow, ulong uptimeMs) { return utcNow - TimeSpan.FromMilliseconds(uptimeMs & int.MaxValue); }
+ 
+     // Exception or process exit -> fans back.
+     public static void Guard(Action restoreAll, Action<string> log)
