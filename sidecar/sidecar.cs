@@ -102,6 +102,7 @@ static class Core
                 else if (cmd == "auto") Restore(m["id"] as string);
             }
             if (cmd == "autoAll") RestoreAll();
+            else if (cmd == "openrgb") Pump.ChildPid = Convert.ToInt32(m["pid"]); // the OpenRGB server the app started, 0 before a planned stop
         }
         catch (Exception ex) { Log(cmd + " failed: " + ex.Message); }
     }

@@ -26,7 +26,26 @@ static class Pump
         Console.CancelKeyPress += delegate { restoreAll(); };
     }
 
-    // Reads lines from stdin and hands each to handle. stdin closed (the app quit or was killed) -> restoreAll, return.
+    // The OpenRGB server the app started (0 = none). Stopped when stdin closes while it is still set: the app crashed
+    // or was killed. The app sets it back to 0 before a planned stop, so quit and the Apex guard keep their own order.
+    public static int ChildPid;
+    public static string ChildName = "OpenRGB";
+
+    static void StopChild(Action<string> log)
+    {
+        if (ChildPid <= 0) return;
+        try
+        {
+            var p = Process.GetProcessById(ChildPid);
+            // by PID and name together, so a reused PID never kills something else
+            if (!string.Equals(p.ProcessName, ChildName, StringComparison.OrdinalIgnoreCase)) return;
+            p.Kill();
+            log("app gone: stopped the OpenRGB server it started");
+        }
+        catch (Exception ex) { log("app gone: OpenRGB not stopped: " + ex.Message); }
+    }
+
+    // Reads lines from stdin and hands each to handle. stdin closed (the app quit or was killed) -> restoreAll, StopChild, return.
     // No line for watchdogMs while touched() > 0 (the app hung) -> restoreAll. tick runs about once a second.
     public static void Run(Action<string> handle, Action restoreAll, Func<int> touched, Action tick, Action<string> log, int watchdogMs)
     {
@@ -51,7 +70,7 @@ static class Pump
                 lastMsg.Restart();
                 try { handle(line); } catch (Exception ex) { log("message failed: " + ex.Message); }
             }
-            if (eof.IsSet && inbox.IsEmpty) { restoreAll(); return; }
+            if (eof.IsSet && inbox.IsEmpty) { restoreAll(); StopChild(log); return; }
             if (lastMsg.ElapsedMilliseconds > watchdogMs && touched() > 0)
             {
                 log("watchdog: app silent for " + watchdogMs / 1000.0 + " s, fans back to BIOS");

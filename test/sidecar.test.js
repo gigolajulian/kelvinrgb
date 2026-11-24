@@ -68,3 +68,40 @@ test('sidecar: boot time stays right past 24.9 days of uptime (the crash marker 
     assert.strictEqual(ticks, EPOCH + BigInt(now - ms) * BigInt(TICKS), `${days} days of uptime`);
   }
 });
+
+// A stand-in for the OpenRGB server KelvinRGB started: a long ping, killed at the end of each test.
+function standIn() {
+  const p = spawn(path.join(process.env.SystemRoot || 'C:\Windows', 'System32', 'PING.EXE'), ['-n', '60', '127.0.0.1'], { windowsHide: true, stdio: 'ignore' });
+  const gone = new Promise((r) => p.once('exit', () => r(true)));
+  return { p, gone: () => Promise.race([gone, new Promise((r) => setTimeout(() => r(false), 1500))]) };
+}
+
+test('sidecar: KelvinRGB crashing or killed stops the OpenRGB server it started', async () => {
+  const s = standIn();
+  try {
+    const { out } = await run(['pump', '60000'], async (p, get) => {
+      await until(get, /ready/);
+      p.stdin.write(`child ${s.p.pid} PING\n`);
+      await new Promise((r) => setTimeout(r, 200));
+      p.stdin.end(); // the app died without saying goodbye
+    });
+    assert.match(out, /app gone: stopped the OpenRGB server/);
+    assert.ok(await s.gone(), 'the server is still running');
+  } finally { s.p.kill(); }
+});
+
+test('sidecar: a planned stop or another program under that PID is never killed', async () => {
+  // planned stop: the app sets the PID back to 0 first; reused PID: the process there has another name
+  for (const line of [(pid) => [`child ${pid} PING`, 'child 0 PING'], (pid) => [`child ${pid} OpenRGB`]]) {
+    const s = standIn();
+    try {
+      await run(['pump', '60000'], async (p, get) => {
+        await until(get, /ready/);
+        for (const l of line(s.p.pid)) p.stdin.write(`${l}\n`);
+        await new Promise((r) => setTimeout(r, 200));
+        p.stdin.end();
+      });
+      assert.ok(!(await s.gone()), 'killed something it should have left alone');
+    } finally { s.p.kill(); }
+  }
+});

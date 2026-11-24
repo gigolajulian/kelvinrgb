@@ -113,6 +113,7 @@ async function connectOpenRgb() {
       launchedOpenRgb = true;
       const p = spawn(exe, D.OPENRGB.args, { detached: true, stdio: 'ignore' });
       openRgbPid = p.pid || 0;
+      send({ cmd: 'openrgb', pid: openRgbPid }); // the sidecar stops it if KelvinRGB crashes (EXIT-6)
       p.unref();
       log('launched OpenRGB SDK server');
     }
@@ -273,6 +274,7 @@ function stopSidecar() {
     const p = sidecar;
     const t = setTimeout(() => { p.kill(); resolve(); }, 4000);
     p.once('exit', () => { clearTimeout(t); resolve(); });
+    send({ cmd: 'openrgb', pid: 0 }); // a planned stop: quit and the Apex guard stop OpenRGB in their own order
     p.stdin.end(); // sidecar hands every fan back to BIOS on EOF
   });
 }
@@ -285,6 +287,7 @@ function onSidecarLine(line) {
     state.sensors = { ok: true, msg: m.admin ? 'ok' : 'no admin', admin: m.admin, unclean: m.unclean };
     stepSplash(2);
     log(`sidecar ready:${m.controls} fan controls, admin ${m.admin}`);
+    send({ cmd: 'openrgb', pid: openRgbPid });
   }
   if (m.type === 'tick') {
     state.hw = m.hw;

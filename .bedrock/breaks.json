@@ -71,8 +71,8 @@
  },
  "EXIT-6": {
   "file": "sidecar/pump.cs",
-  "find": "if (eof.IsSet && inbox.IsEmpty) { restoreAll(); return; }",
-  "replace": "if (eof.IsSet && inbox.IsEmpty) { return; }"
+  "find": "{ restoreAll(); StopChild(log); return; }",
+  "replace": "{ restoreAll(); return; }"
  },
  "TIME-1": {
   "file": "sidecar/pump.cs",

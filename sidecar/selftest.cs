@@ -1,6 +1,6 @@
 // Test harness for pump.cs, built by test/sidecar.test.js with Windows' csc. Never shipped.
 // Fake fans: "set" touches one, restoreAll prints how many went back. Modes:
-//   pump <watchdogMs>   run the real loop; "crash" makes the next tick throw
+//   pump <watchdogMs>   run the real loop; "crash" makes the next tick throw, "child <pid> <name>" sets the OpenRGB stand-in
 //   boot <uptimeMs>     print the boot time pump.cs works out, as UTC ticks
 using System;
 using System.Threading;
@@ -22,7 +22,7 @@ static class SelfTest
         Pump.Guard(restoreAll, log);
         Console.WriteLine("ready");
         Pump.Run(
-            delegate (string line) { if (line == "set") Interlocked.Increment(ref touched); if (line == "crash") crash = true; },
+            delegate (string line) { if (line == "set") Interlocked.Increment(ref touched); if (line == "crash") crash = true; if (line.StartsWith("child ")) { var a = line.Split(' '); Pump.ChildPid = int.Parse(a[1]); Pump.ChildName = a[2]; } },
             restoreAll,
             delegate { return touched; },
             delegate { if (crash) throw new InvalidOperationException("boom"); },
