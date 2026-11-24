@@ -29,9 +29,9 @@
     "command": "node scripts/lock-check.js lock",
     "break": ".bedrock/breaks/SEC-3.patch",
     "patch_sha256": "f28a0358583694fde56538692f9e9396db2cfc0992c7c3db409f2b6a12b9d54a",
-    "sha": "6c99402ebb9e6fdd62bedff85a1de268be1207d8",
+    "sha": "4ebd67f18f9adab5cb7c9eb92dd49f7caa3a35e1",
     "files": {
-      "package.json": "38d643dd6159cf30230b26c03de87b46a4c05058aa27669bc6cfb9c7b1946022",
+      "package.json": "00725aab3ab1beb71d0e1299394be048b34f2d99a6784b39f9ab035751d64780",
       "scripts/lock-check.js": "1ca7589c613ea8348d54c106d1e0ede112551a2c00eef7653f57a4d9c09e1bf9",
       "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
       "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
@@ -40,12 +40,13 @@
       "test/layout.test.js": "c5596a6a20556329b73d42e3ee426bfe5dc87ee6b30ce3aaf43942cf1fa4d21a",
       "test/math.test.js": "189881c94ab16d8e98a85c12d25c1caa73961ff7ba11db731166348f1a923bcc",
       "test/memory.test.js": "63706a33270f13bf2b68a1dcc4cc5fdf1383cfc5861bb3f4b0d1d42d26fc55f7",
+      "test/procwatch.test.js": "672fcfa93ec0afa4fdb978e8b93b4d223560b3482b4f1b2698c30e47fe41cde1",
       "test/sidecar.test.js": "62596ff8903c628d3b173794869b39a1814d8b586049e50444c8d0b4ebe8c73c",
       "test/store.test.js": "458a3165daca299c58f995b5c18cec8584bbfa644ec34975c77a111d5137ac9e",
       "test/update.test.js": "d36d09b333a3066441eca52e17d9321d46aee1715bccc6ccbc06523cb9b1c48d",
       "test/validate.test.js": "b3ef108f5a5c52c02a82007ef555bf56ceb3bb4759593266a2e2356aee766b5a"
     },
-    "seconds": 3.8,
+    "seconds": 3.5,
     "date": "2026-11-24",
     "bedrock": "2.9.5"
   },
@@ -488,9 +489,9 @@
     "command": "node scripts/licence-check.js",
     "break": ".bedrock/breaks/LIC-1.patch",
     "patch_sha256": "3302352ffc97729d7a566b08a1d765f358ab7364af0c93acbdc13f4e0ee50d01",
-    "sha": "6c99402ebb9e6fdd62bedff85a1de268be1207d8",
+    "sha": "4ebd67f18f9adab5cb7c9eb92dd49f7caa3a35e1",
     "files": {
-      "package.json": "38d643dd6159cf30230b26c03de87b46a4c05058aa27669bc6cfb9c7b1946022",
+      "package.json": "00725aab3ab1beb71d0e1299394be048b34f2d99a6784b39f9ab035751d64780",
       "scripts/licence-check.js": "a547dac9b5676b2f296d22f7da25df3483a281e5f64c7faa195d613074c2f991",
       "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
       "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
@@ -499,12 +500,13 @@
       "test/layout.test.js": "c5596a6a20556329b73d42e3ee426bfe5dc87ee6b30ce3aaf43942cf1fa4d21a",
       "test/math.test.js": "189881c94ab16d8e98a85c12d25c1caa73961ff7ba11db731166348f1a923bcc",
       "test/memory.test.js": "63706a33270f13bf2b68a1dcc4cc5fdf1383cfc5861bb3f4b0d1d42d26fc55f7",
+      "test/procwatch.test.js": "672fcfa93ec0afa4fdb978e8b93b4d223560b3482b4f1b2698c30e47fe41cde1",
       "test/sidecar.test.js": "62596ff8903c628d3b173794869b39a1814d8b586049e50444c8d0b4ebe8c73c",
       "test/store.test.js": "458a3165daca299c58f995b5c18cec8584bbfa644ec34975c77a111d5137ac9e",
       "test/update.test.js": "d36d09b333a3066441eca52e17d9321d46aee1715bccc6ccbc06523cb9b1c48d",
       "test/validate.test.js": "b3ef108f5a5c52c02a82007ef555bf56ceb3bb4759593266a2e2356aee766b5a"
     },
-    "seconds": 3.7,
+    "seconds": 3.5,
     "date": "2026-11-24",
     "bedrock": "2.9.5"
   },
