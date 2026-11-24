@@ -89,6 +89,10 @@ function log(msg) {
   console.log(msg);
   try { S.appendCapped(logFile, line + '\n', 1024 * 1024); } catch {}
 }
+// A closed console (the terminal that ran npm start went away) makes console.log throw EPIPE; uncaught, that error
+// would be logged through console.log again, in a loop that pegs a core and rewrites log.txt.
+process.stdout.on('error', () => {});
+process.stderr.on('error', () => {});
 S.catchCrashes(process, log);
 
 // ---------- lighting ----------
@@ -319,40 +323,71 @@ function driveFans() {
 setInterval(() => send({ cmd: 'ping' }), 1000); // keeps the sidecar watchdog fed
 
 // ---------- Apex / Easy Anti-Cheat guard ----------
-function checkGuard() {
-  execFile(SYS('tasklist.exe'), ['/FO', 'CSV', '/NH'], { windowsHide: true }, async (err, out) => {
-    if (err) return;
-    const names = out.toLowerCase();
-    const active = GUARD_PROCS.some((p) => names.includes(`"${p}"`));
-    if (active) firstCheckDone(); else handleConflicts(out); // never prompt or kill while the game runs
-    if (active === state.guard) return;
-    state.guard = active;
-    if (active) {
-      log('apex guard: game running, releasing fans and lighting, stopping OpenRGB');
-      endSplash(); // sensors and lighting wait for the game, so don't hold the splash for them
-      state.openrgb = { ok: false, msg: 'paused for apex' };
-      state.sensors = { ...state.sensors, ok: false, msg: 'paused for apex' };
-      push();
-      await G.enter({
-        stopRender: () => { clearInterval(renderTimer); identify.clear(); render('static'); }, // hold a calm colour, not a frozen frame
-        stopSidecar,
-        disconnect: () => { if (client) { client.removeAllListeners('disconnect'); client.disconnect(); client = null; } },
-        wait: (ms) => new Promise((r) => setTimeout(r, ms)),
-        killOpenRgb: () => new Promise((r) => {
-          if (!names.includes('"openrgb.exe"')) return r();
-          if (!launchedOpenRgb) log('apex guard: OpenRGB was already running before KelvinRGB, stopping it anyway');
-          execFile(SYS('taskkill.exe'), ['/F', '/T', '/IM', 'OpenRGB.exe'], { windowsHide: true }, (e) => {
-            log(e ? `apex guard: could not stop OpenRGB: ${e.message.trim()}` : 'apex guard: OpenRGB server stopped');
-            r();
-          });
-        }),
-      });
-    } else {
-      log('apex guard: game closed, restarting OpenRGB and resuming');
-      G.leave({ startSidecar, allowRelaunch: () => { launchedOpenRgb = false; }, connect: connectOpenRgb });
-    }
-    push();
+// Process lists come from procwatch.exe (one resident helper, a list every 2 s). If it is missing or exits, the
+// 4 s timer below falls back to tasklist.exe, which costs ~300 ms of CPU per start, and tries the helper again.
+const PROCWATCH = path.join(path.dirname(SIDECAR), 'procwatch.exe');
+let procWatch = null;
+let procWatchAt = 0; // last list, or the start
+let procWatchBroken = false; // it exited before its first list: tasklist for the rest of this run
+function startProcWatch() {
+  if (!fs.existsSync(PROCWATCH)) return false;
+  const p = spawn(PROCWATCH, ['2000'], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+  procWatch = p;
+  procWatchAt = Date.now();
+  let buf = '', lists = 0;
+  p.stdout.setEncoding('utf8');
+  p.stdout.on('data', (d) => {
+    buf += d;
+    for (let i; (i = buf.indexOf('\n\n')) >= 0; buf = buf.slice(i + 2)) { lists++; procWatchAt = Date.now(); onProcs(buf.slice(0, i)); }
   });
+  p.stdin.on('error', () => {});
+  const gone = (why) => {
+    if (procWatch !== p) return;
+    procWatch = null;
+    if (!lists) procWatchBroken = true;
+    log(`process watch ${why}, ${lists ? 'restarting it' : 'using tasklist instead'}`);
+  };
+  p.on('error', (e) => gone(`failed: ${e.message}`));
+  p.on('exit', (code) => gone(`exited (${code})`));
+  return true;
+}
+function checkGuard() {
+  // a helper that hangs would leave the guard blind: no list for 10 s, stop it (its exit restarts or falls back)
+  if (procWatch && Date.now() - procWatchAt > 10000) { log('process watch: silent for 10 s, starting another'); procWatch.kill(); procWatch = null; }
+  if (procWatch || (!procWatchBroken && startProcWatch())) return;
+  execFile(SYS('tasklist.exe'), ['/FO', 'CSV', '/NH'], { windowsHide: true }, (err, out) => { if (!err) onProcs(out); });
+}
+async function onProcs(out) {
+  const names = out.toLowerCase();
+  const active = GUARD_PROCS.some((p) => names.includes(`"${p}"`));
+  if (active) firstCheckDone(); else handleConflicts(out); // never prompt or kill while the game runs
+  if (active === state.guard) return;
+  state.guard = active;
+  if (active) {
+    log('apex guard: game running, releasing fans and lighting, stopping OpenRGB');
+    endSplash(); // sensors and lighting wait for the game, so don't hold the splash for them
+    state.openrgb = { ok: false, msg: 'paused for apex' };
+    state.sensors = { ...state.sensors, ok: false, msg: 'paused for apex' };
+    push();
+    await G.enter({
+      stopRender: () => { clearInterval(renderTimer); identify.clear(); render('static'); }, // hold a calm colour, not a frozen frame
+      stopSidecar,
+      disconnect: () => { if (client) { client.removeAllListeners('disconnect'); client.disconnect(); client = null; } },
+      wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+      killOpenRgb: () => new Promise((r) => {
+        if (!names.includes('"openrgb.exe"')) return r();
+        if (!launchedOpenRgb) log('apex guard: OpenRGB was already running before KelvinRGB, stopping it anyway');
+        execFile(SYS('taskkill.exe'), ['/F', '/T', '/IM', 'OpenRGB.exe'], { windowsHide: true }, (e) => {
+          log(e ? `apex guard: could not stop OpenRGB: ${e.message.trim()}` : 'apex guard: OpenRGB server stopped');
+          r();
+        });
+      }),
+    });
+  } else {
+    log('apex guard: game closed, restarting OpenRGB and resuming');
+    G.leave({ startSidecar, allowRelaunch: () => { launchedOpenRgb = false; }, connect: connectOpenRgb });
+  }
+  push();
 }
 
 // ---------- conflicting RGB apps (like SignalRGB's ConflictMitigator) ----------

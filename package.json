@@ -39,6 +39,7 @@
         "to": "sidecar",
         "filter": [
           "sidecar.exe",
+          "procwatch.exe",
           "lib/**"
         ]
       },

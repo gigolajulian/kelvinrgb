@@ -29,7 +29,7 @@
     "command": "node scripts/lock-check.js lock",
     "break": ".bedrock/breaks/SEC-3.patch",
     "patch_sha256": "f28a0358583694fde56538692f9e9396db2cfc0992c7c3db409f2b6a12b9d54a",
-    "sha": "22e5f8cf2e715fec9a5e44d6e58b7c7a8746d6a2",
+    "sha": "6c99402ebb9e6fdd62bedff85a1de268be1207d8",
     "files": {
       "package.json": "38d643dd6159cf30230b26c03de87b46a4c05058aa27669bc6cfb9c7b1946022",
       "scripts/lock-check.js": "1ca7589c613ea8348d54c106d1e0ede112551a2c00eef7653f57a4d9c09e1bf9",
@@ -488,7 +488,7 @@
     "command": "node scripts/licence-check.js",
     "break": ".bedrock/breaks/LIC-1.patch",
     "patch_sha256": "3302352ffc97729d7a566b08a1d765f358ab7364af0c93acbdc13f4e0ee50d01",
-    "sha": "22e5f8cf2e715fec9a5e44d6e58b7c7a8746d6a2",
+    "sha": "6c99402ebb9e6fdd62bedff85a1de268be1207d8",
     "files": {
       "package.json": "38d643dd6159cf30230b26c03de87b46a4c05058aa27669bc6cfb9c7b1946022",
       "scripts/licence-check.js": "a547dac9b5676b2f296d22f7da25df3483a281e5f64c7faa195d613074c2f991",
@@ -504,7 +504,7 @@
       "test/update.test.js": "d36d09b333a3066441eca52e17d9321d46aee1715bccc6ccbc06523cb9b1c48d",
       "test/validate.test.js": "b3ef108f5a5c52c02a82007ef555bf56ceb3bb4759593266a2e2356aee766b5a"
     },
-    "seconds": 5.0,
+    "seconds": 3.7,
     "date": "2026-11-24",
     "bedrock": "2.9.5"
   },
