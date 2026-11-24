@@ -22,3 +22,5 @@ jobs:
       - run: npm test
       - run: node scripts/secret-scan.js
       - run: node scripts/lock-check.js
+      - run: node scripts/crypto-check.js
+      - run: node scripts/licence-check.js

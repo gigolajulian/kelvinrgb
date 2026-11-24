@@ -172,3 +172,38 @@ test('a download bigger than the release stops early and never runs', async () =
     assert.ok(!ran);
   } finally { global.fetch = real; }
 });
+
+test('the installer streams to disk while it downloads, and only a verified one is kept and run', async () => {
+  const crypto = require('node:crypto'), fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'krgb-dl-'));
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+  const key = publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
+  const parts = [Buffer.alloc(4096, 1), Buffer.alloc(4096, 2), Buffer.alloc(4096, 3)];
+  const whole = Buffer.concat(parts), digest = crypto.createHash('sha256').update(whole).digest('hex');
+  const onDisk = () => fs.readdirSync(dir).reduce((n, f) => n + fs.statSync(path.join(dir, f)).size, 0);
+  const seen = [];
+  async function* body(bad) { for (const p of parts) { seen.push(onDisk()); yield bad ? Buffer.alloc(p.length) : p; } }
+  const rel = { tag_name: 'v9.0.0', assets: [{ name: 'KelvinRGB Setup 9.0.0.exe', browser_download_url: 'https://github.com/dl', size: whole.length, digest: `sha256:${digest}` }, { name: 'KelvinRGB Setup 9.0.0.exe.sig', browser_download_url: 'https://github.com/sig' }] };
+  const real = global.fetch;
+  let bad = false;
+  global.fetch = async (url) => url.includes('api.github.com') ? { status: 200, ok: true, json: async () => rel }
+    : url.endsWith('/sig') ? { ok: true, text: async () => crypto.sign(null, Buffer.from(`KelvinRGB 9.0.0 ${digest}\n`), privateKey).toString('base64') }
+    : { ok: true, url: 'https://objects.githubusercontent.com/x', body: body(bad) };
+  try {
+    let ran = null;
+    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn: (f) => { ran = f; }, quit() {}, packaged: true, dir, key });
+    await u.check(true);
+    await u.install();
+    assert.strictEqual(u.state.kind, 'installing', u.state.msg);
+    assert.deepStrictEqual(seen, [0, 4096, 8192]); // each chunk was on disk before the next arrived: nothing held whole in memory
+    assert.ok(fs.readFileSync(ran).equals(whole));
+    fs.unlinkSync(ran);
+    // a download that fails its checksum leaves nothing behind
+    bad = true; seen.length = 0;
+    const u2 = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn: () => { throw new Error('ran'); }, quit() {}, packaged: true, dir, key });
+    await u2.check(true);
+    await u2.install();
+    assert.match(u2.state.msg, /checksum/);
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+  } finally { global.fetch = real; fs.rmSync(dir, { recursive: true, force: true }); }
+});

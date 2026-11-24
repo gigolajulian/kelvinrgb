@@ -101,7 +101,9 @@ Settings live in `%APPDATA%\kelvinrgb\settings.json`.
 ## Credits
 
 - **[OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB)** (GPL 2.0) by Adam Honse and contributors. KelvinRGB is powered by OpenRGB: every lighting change goes through its SDK server. OpenRGB is installed separately and is not bundled.
-- **[openrgb-sdk](https://www.npmjs.com/package/openrgb-sdk)** for the Node client.
+- **[openrgb-sdk](https://www.npmjs.com/package/openrgb-sdk)** (MIT) for the Node client.
 - **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (MPL 2.0) for sensors and fan control.
 - **[PawnIO](https://pawnio.eu)** for the hardware access driver.
+- **[HidSharp](https://software.seekye.com/hidsharp)** (Apache 2.0), **BlackSharp**, **DiskInfoToolkit** and **RAMSPDToolkit** (MPL 2.0) ship with LibreHardwareMonitor; licences and sources in `resources\sidecar\lib\SIDECAR-NOTICE.txt`.
+- **[bufferpack](https://github.com/ryanrolds/bufferpack)** (BSD 3-Clause, Fair Oaks Labs) for openrgb-sdk's packet format.
 - **[IBM Plex](https://github.com/IBM/plex)** (SIL OFL 1.1) for the fonts.
