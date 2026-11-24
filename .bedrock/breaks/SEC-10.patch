@@ -1,0 +1,13 @@
+diff --git a/lib/update.js b/lib/update.js
+index 91aaef9..01e5b2f 100644
+--- a/lib/update.js
++++ b/lib/update.js
+@@ -78,7 +78,7 @@ function create({ version, log, onChange, beforeInstall, spawn, quit, packaged,
+     const v = rel.v;
+     // Admin-owned temp, random name, refuse to reuse an existing file. The download streams into it while it is
+     // hashed, so the installer is never held in memory; it runs only after the checksum and signature pass.
+-    const file = path.join(dir, `KelvinRGB-${crypto.randomUUID()}.exe`);
++    const file = path.join(dir, `KelvinRGB-${Math.random().toString(16).slice(2)}.exe`);
+     let fd = null;
+     try {
+       set({ kind: 'downloading', v, pct: 0 });

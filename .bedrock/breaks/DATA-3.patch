@@ -1,0 +1,13 @@
+diff --git a/lib/validate.js b/lib/validate.js
+index 40ab22f..125ebb3 100644
+--- a/lib/validate.js
++++ b/lib/validate.js
+@@ -80,7 +80,7 @@ function settings(raw, defaults, floor) {
+   const s = structuredClone(defaults);
+   s.version = VERSION;
+   if (!raw || typeof raw !== 'object') return s;
+-  Object.assign(s.lighting, lighting(raw.lighting) || {});
++  s.lighting = lighting(raw.lighting) || s.lighting;
+   if (raw.devices && typeof raw.devices === 'object') for (const [k, v] of Object.entries(raw.devices)) { const d = str(k, 300) && device(v); if (d) s.devices[k] = d; }
+   if (raw.fans && typeof raw.fans === 'object') for (const [k, v] of Object.entries(raw.fans)) { const f = str(k, 300) && fan(v, floor); if (f) s.fans[k] = f; }
+   if (typeof raw.closeConflicts === 'boolean') s.closeConflicts = raw.closeConflicts;

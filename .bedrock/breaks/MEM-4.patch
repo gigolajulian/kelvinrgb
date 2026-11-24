@@ -1,0 +1,25 @@
+diff --git a/lib/update.js b/lib/update.js
+index 91aaef9..cca4b0a 100644
+--- a/lib/update.js
++++ b/lib/update.js
+@@ -85,17 +85,17 @@ function create({ version, log, onChange, beforeInstall, spawn, quit, packaged,
+       const r = await fetch(rel.url, { headers: { 'User-Agent': 'KelvinRGB' }, signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT) });
+       const host = new URL(r.url).hostname;
+       if (!r.ok || !/(^|\.)github\.com$|(^|\.)githubusercontent\.com$/.test(host)) throw new Error(`download failed (${r.status} ${host})`);
+-      const hash = crypto.createHash('sha256');
++      const hash = crypto.createHash('sha256'), held = [];
+       fd = fs.openSync(file, 'wx');
+       let got = 0, last = 0;
+       for await (const c of r.body) {
+         got += c.length;
+         if (got > Math.min(rel.size || MAX_BYTES, MAX_BYTES)) throw new Error('download is bigger than the release says, not installing');
+-        fs.writeSync(fd, c); hash.update(c);
++        held.push(c); hash.update(c);
+         const pct = Math.floor((got / (rel.size || got)) * 100);
+         if (pct >= last + 5) { last = pct; set({ kind: 'downloading', v, pct }); }
+       }
+-      fs.closeSync(fd); fd = null;
++      fs.writeSync(fd, Buffer.concat(held)); fs.closeSync(fd); fd = null;
+       const sha = hash.digest('hex');
+       if (sha !== rel.sha) throw new Error('checksum does not match, not installing');
+       const s = await fetch(rel.sigUrl, { headers: { 'User-Agent': 'KelvinRGB' }, signal: AbortSignal.timeout(TIMEOUT) });

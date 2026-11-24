@@ -1,5 +1,5 @@
 diff --git a/lib/validate.js b/lib/validate.js
-index 190972d..e00f565 100644
+index 40ab22f..7bcff27 100644
 --- a/lib/validate.js
 +++ b/lib/validate.js
 @@ -61,7 +61,7 @@ function device(p) {

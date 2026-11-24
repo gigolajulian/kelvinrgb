@@ -1,8 +1,8 @@
 diff --git a/lib/store.js b/lib/store.js
-index 83bb67d..ecfae61 100644
+index e33faab..7c5027a 100644
 --- a/lib/store.js
 +++ b/lib/store.js
-@@ -4,7 +4,7 @@ const nodeFs = require('node:fs');
+@@ -5,7 +5,7 @@ const { pathToFileURL } = require('node:url');
  // Write to a temp file, then rename over the real one: a crash mid-write leaves the old file whole.
  // On Windows the rename can fail for a moment (EPERM, EBUSY) while antivirus or a reader holds the file: retry a few times.
  function writeAtomic(file, text, fs = nodeFs, tries = 5) {
