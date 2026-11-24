@@ -1,8 +1,8 @@
 diff --git a/lib/validate.js b/lib/validate.js
-index 0676bb5..bd1245b 100644
+index 190972d..e00f565 100644
 --- a/lib/validate.js
 +++ b/lib/validate.js
-@@ -52,7 +52,7 @@ function device(p) {
+@@ -61,7 +61,7 @@ function device(p) {
  function fan(p, floor) {
    if (!p || typeof p !== 'object' || !MODES.includes(p.mode)) return null;
    const out = { mode: p.mode, shape: SHAPES.includes(p.shape) ? p.shape : 'smooth' };

@@ -68,5 +68,15 @@
   "file": "lib/guard.js",
   "find": "  if (pid) { try { await d.killOpenRgb(pid); } catch (e) { d.log(`quit: ${e.message}`); } }\n",
   "replace": ""
+ },
+ "EXIT-6": {
+  "file": "sidecar/pump.cs",
+  "find": "if (eof.IsSet && inbox.IsEmpty) { restoreAll(); return; }",
+  "replace": "if (eof.IsSet && inbox.IsEmpty) { return; }"
+ },
+ "TIME-1": {
+  "file": "sidecar/pump.cs",
+  "find": "return utcNow - TimeSpan.FromMilliseconds(uptimeMs);",
+  "replace": "return utcNow - TimeSpan.FromMilliseconds(uptimeMs & int.MaxValue);"
  }
 }
