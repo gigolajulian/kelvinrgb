@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const U = require('../lib/update');
+// Installs in these tests write to a throwaway folder, never the real admin-owned temp.
+const TMP = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'krgb-upd-'));
+test.after(() => require('node:fs').rmSync(TMP, { recursive: true, force: true }));
 
 test('version compare', () => {
   assert.ok(U.newer('0.2.10', '0.2.9'));
@@ -30,7 +33,7 @@ test('a download that does not match the checksum never runs', async () => {
     : { ok: true, url: 'https://objects.githubusercontent.com/x', body: [Buffer.from('bad')] };
   try {
     let ran = false;
-    const u = U.create({ version: '0.2.2', log() {}, onChange() {}, beforeInstall() {}, spawn: () => { ran = true; }, quit() {}, packaged: true });
+    const u = U.create({ version: '0.2.2', log() {}, onChange() {}, beforeInstall() {}, spawn: () => { ran = true; }, quit() {}, packaged: true, dir: TMP });
     await u.check(true);
     assert.strictEqual(u.state.kind, 'available');
     await u.install();
@@ -45,7 +48,7 @@ test('quiet check failure stays quiet, manual one reports', async () => {
   global.fetch = async () => ({ status: 404, ok: false });
   try {
     const seen = [];
-    const u = U.create({ version: '0.2.2', log() {}, onChange: (s) => seen.push(s.kind), beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
+    const u = U.create({ version: '0.2.2', log() {}, onChange: (s) => seen.push(s.kind), beforeInstall() {}, spawn() {}, quit() {}, packaged: true, dir: TMP });
     await u.check(false);
     assert.strictEqual(u.state.kind, 'idle');
     await u.check(true);
@@ -68,7 +71,7 @@ test('up to date still offers a check, then finds a later release', async () => 
   const real = global.fetch;
   const rel = (v) => ({ status: 200, ok: true, json: async () => ({ tag_name: `v${v}`, assets: [{ name: `KelvinRGB.Setup.${v}.exe`, size: 1, browser_download_url: 'https://github.com/x', digest: `sha256:${'a'.repeat(64)}` }, { name: `KelvinRGB.Setup.${v}.exe.sig` }] }) });
   try {
-    const u = U.create({ version: '1.1.1', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
+    const u = U.create({ version: '1.1.1', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true, dir: TMP });
     global.fetch = async () => rel('1.1.1');
     await u.check(true);
     assert.strictEqual(u.state.kind, 'current');
@@ -103,7 +106,7 @@ test('a download with the right checksum but no valid signature never runs', asy
     : { ok: true, url: 'https://objects.githubusercontent.com/x', body: [body] };
   try {
     let ran = false;
-    const u = U.create({ version: '0.2.2', log: (m) => logs.push(m), onChange() {}, beforeInstall() {}, spawn: () => { ran = true; }, quit() {}, packaged: true });
+    const u = U.create({ version: '0.2.2', log: (m) => logs.push(m), onChange() {}, beforeInstall() {}, spawn: () => { ran = true; }, quit() {}, packaged: true, dir: TMP });
     await u.check(true);
     await u.install();
     assert.strictEqual(u.state.kind, 'failed');
@@ -126,7 +129,7 @@ test('every GitHub call carries a timeout, so a dead network never hangs the upd
     return { ok: true, url: 'https://objects.githubusercontent.com/x', body: [Buffer.from('abc')] };
   };
   try {
-    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
+    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true, dir: TMP });
     await u.check(true);
     assert.strictEqual(u.state.kind, 'available', u.state.msg);
     await u.install();
@@ -147,7 +150,7 @@ test('the signature fetch carries a timeout too', async () => {
     return { ok: true, url: 'https://objects.githubusercontent.com/x', body: [body] };
   };
   try {
-    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true });
+    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn() {}, quit() {}, packaged: true, dir: TMP });
     await u.check(true);
     await u.install();
     assert.match(u.state.msg, /signature does not match/);
@@ -163,7 +166,7 @@ test('a download bigger than the release stops early and never runs', async () =
     : { ok: true, url: 'https://objects.githubusercontent.com/x', body: body() };
   try {
     let ran = false;
-    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn: () => { ran = true; }, quit() {}, packaged: true });
+    const u = U.create({ version: '1.0.0', log() {}, onChange() {}, beforeInstall() {}, spawn: () => { ran = true; }, quit() {}, packaged: true, dir: TMP });
     await u.check(true);
     await u.install();
     assert.strictEqual(u.state.kind, 'failed');
