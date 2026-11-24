@@ -68,3 +68,52 @@ test('an imported backup goes through the same gates as settings.json', () => {
   assert.throws(() => S.parseBackup('{"hello":1}', gate), /not a KelvinRGB backup/);
   assert.throws(() => S.parseBackup(' '.repeat(2 * 1024 * 1024), gate), /too big/);
 });
+
+test('a pending settings save is written on quit, and a burst of changes writes once', () => {
+  const dir = tmp(), file = path.join(dir, 'settings.json');
+  const timers = { pending: null, setTimeout(fn) { this.pending = fn; return 1; }, clearTimeout() { this.pending = null; } };
+  let settings = { color: '#000000' }, writes = 0;
+  const s = S.saver(() => { writes++; S.writeAtomic(file, JSON.stringify(settings)); }, 300, timers);
+  settings = { color: '#c8323c' }; s.save(); s.save(); s.save();
+  assert.strictEqual(writes, 0); // still waiting out the burst
+  s.flush(); // quit before the 300 ms ran out
+  assert.strictEqual(writes, 1);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { color: '#c8323c' }); // what the next start reads
+  s.flush();
+  assert.strictEqual(writes, 1); // nothing pending, nothing written
+  s.save(); timers.pending();
+  assert.strictEqual(writes, 2); // the timer path writes too
+});
+
+test('an uncaught error in the main process reaches the log', async () => {
+  const proc = new (require('node:events'))(), lines = [];
+  S.catchCrashes(proc, (m) => lines.push(m));
+  proc.emit('uncaughtException', new Error('device list went away'));
+  proc.emit('unhandledRejection', new Error('sidecar pipe closed'));
+  assert.match(lines[0], /^crash: Error: device list went away\n\s+at /);
+  assert.match(lines[1], /^crash \(promise\): Error: sidecar pipe closed/);
+});
+
+test('paths: the page URL matches what Chromium reports for odd install folders', () => {
+  const { pathToFileURL } = require('node:url');
+  const dirs = ['C:\Program Files\KelvinRGB', 'C:\Users\Jülian Ğ\AppData\Local\Programs\KelvinRGB', 'D:\Apps\C# tools\KelvinRGB', `C:\${'long folder name '.repeat(20)}\KelvinRGB`];
+  for (const d of dirs) {
+    const file = path.win32.join(d, 'resources', 'app.asar', 'renderer', 'index.html');
+    // Electron's loadFile escapes # and ?, and Chromium percent-encodes spaces and non-ASCII: the same as pathToFileURL
+    assert.strictEqual(S.pageUrl(file), pathToFileURL(file).href.toLowerCase(), d);
+  }
+});
+
+test('paths: saves, logs and the installer sweep work in folders with spaces, non-ASCII and over 260 characters', () => {
+  const U = require('../lib/update');
+  let dir = path.join(tmp(), 'Jülian Ğ space');
+  while (dir.length < 300) dir = path.join(dir, 'a long folder name');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'settings.json');
+  S.writeAtomic(file, '{"ok":true}');
+  assert.strictEqual(fs.readFileSync(file, 'utf8'), '{"ok":true}');
+  S.appendCapped(path.join(dir, 'log.txt'), 'line\n', 1024);
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'log.txt'), 'utf8'), 'line\n');
+  fs.writeFileSync(path.join(dir, `KelvinRGB-${require('node:crypto').randomUUID()}.exe`), 'x');
+  assert.strictEqual(U.sweep(dir), 1);
+});

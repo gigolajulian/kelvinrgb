@@ -1,0 +1,13 @@
+diff --git a/lib/store.js b/lib/store.js
+index e33faab..8351cbd 100644
+--- a/lib/store.js
++++ b/lib/store.js
+@@ -39,7 +39,7 @@ function saver(write, ms, timers = globalThis) {
+   let t = null;
+   return {
+     save() { timers.clearTimeout(t); t = timers.setTimeout(() => { t = null; write(); }, ms); },
+-    flush() { if (t) { timers.clearTimeout(t); t = null; write(); } },
++    flush() { if (false) { timers.clearTimeout(t); t = null; write(); } },
+   };
+ }
+ 

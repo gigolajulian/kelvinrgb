@@ -11,8 +11,8 @@
  },
  "SEC-4": {
   "file": ".github/dependabot.yml",
-  "find": "  - package-ecosystem: github-actions\n",
-  "replace": "  - package-ecosystem: docker\n"
+  "find": "  - package-ecosystem: github-actions",
+  "replace": "  - package-ecosystem: docker"
  },
  "SEC-5": {
   "file": "lib/update.js",
@@ -46,7 +46,7 @@
  },
  "EXIT-3": {
   "file": "build/installer.nsh",
-  "find": "    nsExec::Exec '\"$SYSDIR\\schtasks.exe\" /Delete /TN KelvinRGB /F'\n",
+  "find": "nsExec::Exec '\"$SYSDIR\\schtasks.exe\" /Delete /TN KelvinRGB /F'",
   "replace": ""
  },
  "REL-1": {
@@ -56,7 +56,7 @@
  },
  "REL-2": {
   "file": "lib/update.js",
-  "find": "        if (got > Math.min(rel.size || MAX_BYTES, MAX_BYTES)) throw new Error('download is bigger than the release says, not installing');\n",
+  "find": "if (got > Math.min(rel.size || MAX_BYTES, MAX_BYTES)) throw new Error('download is bigger than the release says, not installing');",
   "replace": ""
  },
  "NET-1": {
@@ -66,7 +66,71 @@
  },
  "EXIT-1": {
   "file": "lib/guard.js",
-  "find": "  if (pid) { try { await d.killOpenRgb(pid); } catch (e) { d.log(`quit: ${e.message}`); } }\n",
+  "find": "if (pid) { try { await d.killOpenRgb(pid); } catch (e) { d.log(`quit: ${e.message}`); } }",
+  "replace": ""
+ },
+ "EXIT-6": {
+  "file": "sidecar/pump.cs",
+  "find": "{ restoreAll(); StopChild(log); return; }",
+  "replace": "{ restoreAll(); return; }"
+ },
+ "TIME-1": {
+  "file": "sidecar/pump.cs",
+  "find": "return utcNow - TimeSpan.FromMilliseconds(uptimeMs);",
+  "replace": "return utcNow - TimeSpan.FromMilliseconds(uptimeMs & int.MaxValue);"
+ },
+ "OPS-8": {
+  "file": "lib/store.js",
+  "find": "flush() { if (t) {",
+  "replace": "flush() { if (false) {"
+ },
+ "DATA-2": {
+  "file": "lib/store.js",
+  "find": "proc.on('uncaughtException', (e) => log(`crash: ${e && e.stack || e}`));",
+  "replace": ""
+ },
+ "DATA-3": {
+  "file": "lib/validate.js",
+  "find": "Object.assign(s.lighting, lighting(raw.lighting) || {});",
+  "replace": "s.lighting = lighting(raw.lighting) || s.lighting;"
+ },
+ "PLAT-1": {
+  "file": "lib/store.js",
+  "find": "const pageUrl = (file) => pathToFileURL(file).href.toLowerCase();",
+  "replace": "const pageUrl = (file) => new URL('file:///' + file.replace(/\\\\/g, '/')).href.toLowerCase();"
+ },
+ "MEM-4": {
+  "edits": [
+   {
+    "file": "lib/update.js",
+    "find": "fs.writeSync(fd, c); hash.update(c);",
+    "replace": "held.push(c); hash.update(c);"
+   },
+   {
+    "file": "lib/update.js",
+    "find": "      fs.closeSync(fd); fd = null;",
+    "replace": "      fs.writeSync(fd, Buffer.concat(held)); fs.closeSync(fd); fd = null;"
+   },
+   {
+    "file": "lib/update.js",
+    "find": "      const hash = crypto.createHash('sha256');",
+    "replace": "      const hash = crypto.createHash('sha256'), held = [];"
+   }
+  ]
+ },
+ "MEM-6": {
+  "file": "lib/math.js",
+  "find": "function frame(effect, base, t, speed, i = 0, n = 1, pal = [], temp = null) {",
+  "replace": "const recent = [];\nfunction frame(effect, base, t, speed, i = 0, n = 1, pal = [], temp = null) {\n  recent.push({ effect, t, i });"
+ },
+ "SEC-10": {
+  "file": "lib/update.js",
+  "find": "const file = path.join(dir, `KelvinRGB-${crypto.randomUUID()}.exe`);",
+  "replace": "const file = path.join(dir, `KelvinRGB-${Math.random().toString(16).slice(2)}.exe`);"
+ },
+ "LIC-1": {
+  "file": "package.json",
+  "find": "\"MPL-2.0.txt\",",
   "replace": ""
  }
 }

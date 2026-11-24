@@ -1,12 +1,13 @@
 diff --git a/lib/guard.js b/lib/guard.js
-index 1ac9eb4..9f6423c 100644
+index 1ac9eb4..58ca244 100644
 --- a/lib/guard.js
 +++ b/lib/guard.js
-@@ -23,7 +23,6 @@ function leave(d) {
+@@ -23,7 +23,7 @@ function leave(d) {
  async function quit(d) {
    for (const step of [d.flush, d.restLights, d.stopSidecar]) { try { await step(); } catch (e) { d.log(`quit: ${e.message}`); } }
    const pid = d.ourOpenRgb();
 -  if (pid) { try { await d.killOpenRgb(pid); } catch (e) { d.log(`quit: ${e.message}`); } }
++  
  }
  
  module.exports = { enter, leave, quit };

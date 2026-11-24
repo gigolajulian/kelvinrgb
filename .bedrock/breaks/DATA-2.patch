@@ -1,0 +1,13 @@
+diff --git a/lib/store.js b/lib/store.js
+index e33faab..af0903d 100644
+--- a/lib/store.js
++++ b/lib/store.js
+@@ -46,7 +46,7 @@ function saver(write, ms, timers = globalThis) {
+ // The installed app has no console: uncaught errors go to the log (log.txt) and the app keeps running, as
+ // Electron's own handler would, minus its dialog. Fans don't depend on it: the sidecar has its own watchdog.
+ function catchCrashes(proc, log) {
+-  proc.on('uncaughtException', (e) => log(`crash: ${e && e.stack || e}`));
++  
+   proc.on('unhandledRejection', (e) => log(`crash (promise): ${e && e.stack || e}`));
+ }
+ 

@@ -1,0 +1,12 @@
+diff --git a/lib/store.js b/lib/store.js
+index e33faab..4ebfb37 100644
+--- a/lib/store.js
++++ b/lib/store.js
+@@ -52,6 +52,6 @@ function catchCrashes(proc, log) {
+ 
+ // The window page's URL as Chromium reports it, lower-cased: IPC is accepted only from this page. Built the same
+ // way Chromium builds it, so an install folder with spaces, non-ASCII letters or # still matches.
+-const pageUrl = (file) => pathToFileURL(file).href.toLowerCase();
++const pageUrl = (file) => new URL('file:///' + file.replace(/\\/g, '/')).href.toLowerCase();
+ 
+ module.exports = { writeAtomic, ring, appendCapped, parseBackup, saver, catchCrashes, pageUrl };

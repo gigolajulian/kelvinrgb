@@ -1,0 +1,14 @@
+diff --git a/lib/math.js b/lib/math.js
+index 903b3d9..317909e 100644
+--- a/lib/math.js
++++ b/lib/math.js
+@@ -36,7 +36,9 @@ const TEMP_LO = 35, TEMP_HI = 85; // degrees C mapped to the cool and warm ends
+ // pal: 2 or 3 colours ({red,green,blue}) keep spectrum and wave inside them, and breathing steps through them
+ // one colour per breath (#27). Fewer than 2 = the old full rainbow.
+ // temp: CPU temperature in degrees C for the Temperature effect (null = no sensor, shows the cool end).
++const recent = [];
+ function frame(effect, base, t, speed, i = 0, n = 1, pal = [], temp = null) {
++  recent.push({ effect, t, i });
+   const rate = 0.05 + (speed / 100) * 0.95; // cycles per second
+   const own = pal.length >= 2;
+   if (effect === 'off') return { red: 0, green: 0, blue: 0 };

@@ -10,7 +10,6 @@
 //  - a marker file lists fans in software mode. If a previous sidecar was hard-killed (marker left behind,
 //    same boot), "back to BIOS" is not reliable, so those fans are held at 100% instead until reboot.
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -45,7 +44,6 @@ static class Core
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     static readonly object OutLock = new object();
     static readonly object FanLock = new object();
-    static readonly ConcurrentQueue<string> Inbox = new ConcurrentQueue<string>();
     static readonly Dictionary<string, ISensor> Controls = new Dictionary<string, ISensor>();
     static readonly HashSet<string> Touched = new HashSet<string>();
     static Computer computer;
@@ -60,13 +58,7 @@ static class Core
         markerPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KelvinRGB", "fans-in-software-mode.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(markerPath));
 
-        AppDomain.CurrentDomain.UnhandledException += delegate (object s, UnhandledExceptionEventArgs e)
-        {
-            Log("crash: " + e.ExceptionObject);
-            RestoreAll();
-        };
-        AppDomain.CurrentDomain.ProcessExit += delegate { RestoreAll(); };
-        Console.CancelKeyPress += delegate { RestoreAll(); };
+        Pump.Guard(RestoreAll, Log);
 
         computer = new Computer
         {
@@ -93,52 +85,26 @@ static class Core
             { "controls", Controls.Count + (hub != null ? 3 : 0) }
         });
 
-        var reader = new Thread(delegate ()
-        {
-            string line;
-            while ((line = Console.In.ReadLine()) != null) Inbox.Enqueue(line);
-            Inbox.Enqueue("{\"cmd\":\"eof\"}");
-        });
-        reader.IsBackground = true;
-        reader.Start();
+        Pump.Run(Handle, RestoreAll, delegate { return Touched.Count; }, delegate { Update(); EmitTick(); }, Log, 5000);
+    }
 
-        var lastMsg = Stopwatch.StartNew();
-        var lastTick = Stopwatch.StartNew();
-        while (true)
+    static void Handle(string line)
+    {
+        Dictionary<string, object> m;
+        try { m = Json.Deserialize<Dictionary<string, object>>(line); }
+        catch (Exception ex) { Log("bad json: " + ex.Message); return; }
+        string cmd = m.ContainsKey("cmd") ? m["cmd"] as string : null;
+        try
         {
-            string line;
-            while (Inbox.TryDequeue(out line))
+            lock (FanLock)
             {
-                lastMsg.Restart();
-                Dictionary<string, object> m;
-                try { m = Json.Deserialize<Dictionary<string, object>>(line); }
-                catch (Exception ex) { Log("bad json: " + ex.Message); continue; }
-                string cmd = m.ContainsKey("cmd") ? m["cmd"] as string : null;
-                if (cmd == "eof") { RestoreAll(); return; }
-                try
-                {
-                    lock (FanLock)
-                    {
-                        if (cmd == "set") SetDuty(m["id"] as string, Convert.ToDouble(m["duty"]));
-                        else if (cmd == "auto") Restore(m["id"] as string);
-                    }
-                    if (cmd == "autoAll") RestoreAll();
-                }
-                catch (Exception ex) { Log(cmd + " failed: " + ex.Message); }
+                if (cmd == "set") SetDuty(m["id"] as string, Convert.ToDouble(m["duty"]));
+                else if (cmd == "auto") Restore(m["id"] as string);
             }
-            if (lastMsg.ElapsedMilliseconds > 5000 && Touched.Count > 0)
-            {
-                Log("watchdog: app silent for 5 s, fans back to BIOS");
-                RestoreAll();
-            }
-            if (lastTick.ElapsedMilliseconds >= 1000)
-            {
-                lastTick.Restart();
-                Update();
-                EmitTick();
-            }
-            Thread.Sleep(50);
+            if (cmd == "autoAll") RestoreAll();
+            else if (cmd == "openrgb") Pump.ChildPid = Convert.ToInt32(m["pid"]); // the OpenRGB server the app started, 0 before a planned stop
         }
+        catch (Exception ex) { Log(cmd + " failed: " + ex.Message); }
     }
 
     static bool IsBoardFan(IHardware hw)
@@ -225,10 +191,7 @@ static class Core
         if (unclean) Log("previous sidecar exited without restoring fans; holding them at 100% until reboot or until the app sets a curve");
     }
 
-    static DateTime BootTime()
-    {
-        return DateTime.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount & int.MaxValue);
-    }
+    static DateTime BootTime() { return Pump.BootTime(); }
 
     static void EmitTick()
     {

@@ -44,3 +44,20 @@ test('palette and themes (#27)', () => {
   assert.strictEqual(V.theme({ name: '' }), null);
   assert.strictEqual(V.theme({ name: 'x'.repeat(41) }), null);
 });
+
+test('a settings.json from the first release (0.1, no version) still opens with the user\'s choices', () => {
+  // The shape main.js wrote before effect colours, themes, layout and the version field existed.
+  const old = { lighting: { effect: 'breathing', color: '#3B4FD8', speed: 55, brightness: 60, on: true }, devices: { 'Corsair Vengeance:0': { brightness: 70, gain: [1, 0.9, 0.8], gamma: 2.2 } }, fans: { '/lpc/nct6798d/0/control/1': { mode: 'curve', sensor: '/amdcpu/0/temperature/2', points: [[40, 30], [80, 90]], shape: 'linear' } }, closeConflicts: false, glass: true };
+  const D = { lighting: { effect: 'static', color: '#c8323c', speed: 40, brightness: 80, on: true, palette: ['#c8323c', '#3b4fd8'], across: true, dir: 'x', desk: true }, themes: [], devices: {}, layout: {}, fans: {}, closeConflicts: true, glass: true, splash: true, setupSeen: false, version: V.VERSION };
+  const s = V.settings(old, D, 25);
+  assert.strictEqual(s.version, V.VERSION);
+  assert.deepStrictEqual(s.lighting, { effect: 'breathing', color: '#3b4fd8', speed: 55, brightness: 60, on: true, palette: ['#c8323c', '#3b4fd8'], across: true, dir: 'x', desk: true });
+  assert.deepStrictEqual(s.devices['Corsair Vengeance:0'], { brightness: 70, gain: [1, 0.9, 0.8], gamma: 2.2 });
+  assert.deepStrictEqual(s.fans['/lpc/nct6798d/0/control/1'].points, [[40, 30], [80, 90]]);
+  assert.strictEqual(s.closeConflicts, false);
+  assert.strictEqual(s.splash, true); // new keys take their defaults
+  // a file from a newer version opens too: what this version knows is kept, the rest dropped
+  const newer = V.settings({ ...old, version: V.VERSION + 1, somethingNew: 1 }, D, 25);
+  assert.strictEqual(newer.lighting.color, '#3b4fd8');
+  assert.ok(!('somethingNew' in newer));
+});

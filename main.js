@@ -56,15 +56,13 @@ const DEFAULTS = {
   glass: true, // Windows 11 acrylic behind the window
   splash: true, // start-up splash (renderer/splash.html)
   setupSeen: false, // the first-run Setup sheet was shown once
+  version: V.VERSION, // settings.json format (lib/validate.js)
 };
 let settings = structuredClone(DEFAULTS);
 try { settings = V.settings(JSON.parse(fs.readFileSync(settingsFile, 'utf8').replace(/^﻿/, '')), DEFAULTS, FLOOR); } catch (e) { console.log(`settings: ${e.message}`); }
-let saveTimer;
-const writeSettings = () => { saveTimer = null; try { S.writeAtomic(settingsFile, JSON.stringify(settings, null, 2)); } catch (e) { log(`settings: not saved: ${e.message}`); } };
-function save() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(writeSettings, 300);
-}
+const writeSettings = () => { try { S.writeAtomic(settingsFile, JSON.stringify(settings, null, 2)); } catch (e) { log(`settings: not saved: ${e.message}`); } };
+const saver = S.saver(writeSettings, 300);
+const save = saver.save;
 
 // ---------- shared state pushed to the window ----------
 const state = {
@@ -91,6 +89,7 @@ function log(msg) {
   console.log(msg);
   try { S.appendCapped(logFile, line + '\n', 1024 * 1024); } catch {}
 }
+S.catchCrashes(process, log);
 
 // ---------- lighting ----------
 let client = null;
@@ -114,6 +113,7 @@ async function connectOpenRgb() {
       launchedOpenRgb = true;
       const p = spawn(exe, D.OPENRGB.args, { detached: true, stdio: 'ignore' });
       openRgbPid = p.pid || 0;
+      send({ cmd: 'openrgb', pid: openRgbPid }); // the sidecar stops it if KelvinRGB crashes (EXIT-6)
       p.unref();
       log('launched OpenRGB SDK server');
     }
@@ -274,6 +274,7 @@ function stopSidecar() {
     const p = sidecar;
     const t = setTimeout(() => { p.kill(); resolve(); }, 4000);
     p.once('exit', () => { clearTimeout(t); resolve(); });
+    send({ cmd: 'openrgb', pid: 0 }); // a planned stop: quit and the Apex guard stop OpenRGB in their own order
     p.stdin.end(); // sidecar hands every fan back to BIOS on EOF
   });
 }
@@ -286,6 +287,7 @@ function onSidecarLine(line) {
     state.sensors = { ok: true, msg: m.admin ? 'ok' : 'no admin', admin: m.admin, unclean: m.unclean };
     stepSplash(2);
     log(`sidecar ready:${m.controls} fan controls, admin ${m.admin}`);
+    send({ cmd: 'openrgb', pid: openRgbPid });
   }
   if (m.type === 'tick') {
     state.hw = m.hw;
@@ -430,7 +432,7 @@ function finishConflicts() {
 
 // ---------- IPC ----------
 // Main runs elevated, so every message is checked: it must come from our own page, and its data goes through lib/validate.
-const PAGE = new URL('file:///' + path.join(__dirname, 'renderer', 'index.html').replace(/\\/g, '/')).href.toLowerCase();
+const PAGE = S.pageUrl(path.join(__dirname, 'renderer', 'index.html'));
 const ours = (e) => !!win && e.sender === win.webContents && (e.senderFrame?.url || '').split('#')[0].toLowerCase() === PAGE;
 const on = (ch, fn) => ipcMain.on(ch, (e, ...a) => { if (ours(e)) fn(...a); else log(`ipc: dropped ${ch}`); });
 const hasDevice = (k) => state.devices.some((d) => d.key === k);
@@ -870,7 +872,7 @@ app.on('before-quit', async (e) => {
   quitting = true;
   setTimeout(() => app.exit(0), 8000); // a stuck step must never leave a windowless copy running (#23)
   await G.quit({
-    flush: () => { if (saveTimer) { clearTimeout(saveTimer); writeSettings(); } },
+    flush: saver.flush,
     restLights, stopSidecar, log,
     ourOpenRgb: () => openRgbPid,
     // by PID and image name together, so a reused PID can never kill something else
