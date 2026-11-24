@@ -39,13 +39,15 @@ The app itself stores no secrets: no accounts, tokens or keys on the user's PC. 
 | Secret | Unlocks | Where | Rotate |
 |---|---|---|---|
 | Release signing key (ed25519) | Installed copies accept an update signed with it | `~/.release-keys/updates-ed25519.pem` on Julian's PC, plus his backup | Make a new key pair, put the public half in `lib/update.js` `PUBKEY`, ship one release signed with the old key. Copies that skip that release can't update and need a manual download. |
-| GitHub login (gh CLI, 2FA) | Push to this repo, create releases | gh's credential store on Julian's PC | `gh auth refresh` or revoke the OAuth app at github.com/settings/applications. A stolen login can upload an installer but can't sign it. |
+| GitHub login (gh CLI, 2FA) | Push and create releases on every repository of the account, edit workflows, gists (scopes repo, workflow, read:org, gist; no expiry) | gh's credential store on Julian's PC | `gh auth refresh` or revoke the OAuth app at github.com/settings/applications. A stolen login can upload an installer but can't sign it. |
 
 ## Checks
 
-`npm test` runs the unit tests. `node scripts/secret-scan.js`, `node scripts/lock-check.js` and `node scripts/uninstall-check.js`
-check for leaked keys, lockfile drift and uninstall leftovers. CI runs the first three on every PR. BASELINE.md lists every
-production-readiness check, its proof and what's still open.
+`npm test` runs the unit tests, including the sidecar's safety loop (compiled with Windows' csc, so that test needs Windows).
+These scripts check the rest: `secret-scan.js` (leaked keys), `lock-check.js` (lockfile drift), `uninstall-check.js`
+(uninstall leftovers), `crypto-check.js` (no homemade crypto) and `licence-check.js` (bundled licences ship), all in
+`scripts/`. CI runs everything except the uninstall check on every PR. BASELINE.md lists every production-readiness check,
+its proof and what's still open.
 
 ## Setup (run from source)
 
