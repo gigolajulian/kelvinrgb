@@ -43,9 +43,11 @@ The app itself stores no secrets: no accounts, tokens or keys on the user's PC. 
 
 ## Checks
 
-`npm test` runs the unit tests. `node scripts/secret-scan.js`, `node scripts/lock-check.js` and `node scripts/uninstall-check.js`
-check for leaked keys, lockfile drift and uninstall leftovers. CI runs the first three on every PR. BASELINE.md lists every
-production-readiness check, its proof and what's still open.
+`npm test` runs the unit tests, including the sidecar's safety loop (compiled with Windows' csc, so tests run on Windows only).
+These scripts check the rest: `secret-scan.js` (leaked keys), `lock-check.js` (lockfile drift), `uninstall-check.js`
+(uninstall leftovers), `crypto-check.js` (no homemade crypto) and `licence-check.js` (bundled licences ship), all in
+`scripts/`. CI runs everything except the uninstall check on every PR. BASELINE.md lists every production-readiness check,
+its proof and what's still open.
 
 ## Setup (run from source)
 
