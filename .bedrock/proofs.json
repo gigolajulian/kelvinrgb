@@ -28,11 +28,12 @@
     "result": "proven",
     "command": "node scripts/lock-check.js lock",
     "break": ".bedrock/breaks/SEC-3.patch",
-    "patch_sha256": "f28a0358583694fde56538692f9e9396db2cfc0992c7c3db409f2b6a12b9d54a",
-    "sha": "3c3907decc3b786d3e45c3446c44bf9b773f5bdd",
+    "patch_sha256": "640452f6bca1319cf1c45a2d98b1dda8797465a41d0e2416f4a46d50ac9cd877",
+    "sha": "8083edde87ae474f1928369eb2b4196740228952",
     "files": {
-      "package.json": "b693029cf1438801f20a6e04e95993cc9fcab40e9409de361aa4c2a778bc8a12",
+      "package.json": "f5d3387c2cdf6603d907ba16372b6b82060548a32d3156ef7c1f8ef3308dec99",
       "scripts/lock-check.js": "1ca7589c613ea8348d54c106d1e0ede112551a2c00eef7653f57a4d9c09e1bf9",
+      "test/autostart.test.js": "48b5b4d6225bb9fa1e4edb631f191b42da60d3892cfc294d2ced019241afa691",
       "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
       "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
       "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
@@ -42,12 +43,12 @@
       "test/memory.test.js": "63706a33270f13bf2b68a1dcc4cc5fdf1383cfc5861bb3f4b0d1d42d26fc55f7",
       "test/procwatch.test.js": "672fcfa93ec0afa4fdb978e8b93b4d223560b3482b4f1b2698c30e47fe41cde1",
       "test/sidecar.test.js": "62596ff8903c628d3b173794869b39a1814d8b586049e50444c8d0b4ebe8c73c",
-      "test/store.test.js": "458a3165daca299c58f995b5c18cec8584bbfa644ec34975c77a111d5137ac9e",
+      "test/store.test.js": "a4e2051ebff007232ea5fc867809526c88cd65141b102252e50e567d14ab8102",
       "test/update.test.js": "d36d09b333a3066441eca52e17d9321d46aee1715bccc6ccbc06523cb9b1c48d",
       "test/validate.test.js": "b3ef108f5a5c52c02a82007ef555bf56ceb3bb4759593266a2e2356aee766b5a"
     },
-    "seconds": 4.7,
-    "date": "2026-11-24",
+    "seconds": 3.7,
+    "date": "2026-11-25",
     "bedrock": "2.9.5"
   },
   "SEC-5@any": {
@@ -488,11 +489,12 @@
     "result": "proven",
     "command": "node scripts/licence-check.js",
     "break": ".bedrock/breaks/LIC-1.patch",
-    "patch_sha256": "3302352ffc97729d7a566b08a1d765f358ab7364af0c93acbdc13f4e0ee50d01",
-    "sha": "3c3907decc3b786d3e45c3446c44bf9b773f5bdd",
+    "patch_sha256": "2b10cbec0dc70cdeaee365091c6e7e9a4d066fd5ae2bb8a0dd10a4e02a00f2be",
+    "sha": "8083edde87ae474f1928369eb2b4196740228952",
     "files": {
-      "package.json": "b693029cf1438801f20a6e04e95993cc9fcab40e9409de361aa4c2a778bc8a12",
+      "package.json": "f5d3387c2cdf6603d907ba16372b6b82060548a32d3156ef7c1f8ef3308dec99",
       "scripts/licence-check.js": "a547dac9b5676b2f296d22f7da25df3483a281e5f64c7faa195d613074c2f991",
+      "test/autostart.test.js": "48b5b4d6225bb9fa1e4edb631f191b42da60d3892cfc294d2ced019241afa691",
       "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
       "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
       "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
@@ -502,12 +504,12 @@
       "test/memory.test.js": "63706a33270f13bf2b68a1dcc4cc5fdf1383cfc5861bb3f4b0d1d42d26fc55f7",
       "test/procwatch.test.js": "672fcfa93ec0afa4fdb978e8b93b4d223560b3482b4f1b2698c30e47fe41cde1",
       "test/sidecar.test.js": "62596ff8903c628d3b173794869b39a1814d8b586049e50444c8d0b4ebe8c73c",
-      "test/store.test.js": "458a3165daca299c58f995b5c18cec8584bbfa644ec34975c77a111d5137ac9e",
+      "test/store.test.js": "a4e2051ebff007232ea5fc867809526c88cd65141b102252e50e567d14ab8102",
       "test/update.test.js": "d36d09b333a3066441eca52e17d9321d46aee1715bccc6ccbc06523cb9b1c48d",
       "test/validate.test.js": "b3ef108f5a5c52c02a82007ef555bf56ceb3bb4759593266a2e2356aee766b5a"
     },
-    "seconds": 4.6,
-    "date": "2026-11-24",
+    "seconds": 3.7,
+    "date": "2026-11-25",
     "bedrock": "2.9.5"
   },
   "SEC-10@any": {
