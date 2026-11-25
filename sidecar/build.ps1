@@ -6,4 +6,6 @@ $fw = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
 $refs = @("$fw\System.Web.Extensions.dll", "$fw\System.Management.dll", "$fw\netstandard.dll",'lib\LibreHardwareMonitorLib.dll', 'lib\HidSharp.dll')
 & "$fw\csc.exe" /nologo /optimize /platform:x64 /target:exe /out:sidecar.exe ($refs | ForEach-Object { "/r:$_" }) sidecar.cs pump.cs
 if ($LASTEXITCODE) { throw "csc failed" }
-'built sidecar.exe'
+& "$fw\csc.exe" /nologo /optimize /platform:x64 /target:exe /out:procwatch.exe procwatch.cs
+if ($LASTEXITCODE) { throw "csc failed" }
+'built sidecar.exe and procwatch.exe'

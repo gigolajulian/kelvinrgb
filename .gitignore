@@ -1,6 +1,7 @@
 node_modules/
 sidecar/lib/
 sidecar/sidecar.exe
+sidecar/procwatch.exe
 verify/
 shot*.png
 dist/
