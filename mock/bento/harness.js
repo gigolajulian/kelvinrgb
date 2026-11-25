@@ -32,6 +32,7 @@ const ST = {
       { id: 'fresco', name: 'Fresco Logic USB 3', what: 'USB 3 card. Windows has no driver for it.', device: 'USB Controller', state: 'none', installed: '', tone: 'bad' },
     ] },
 };
+ST.layout = require('../../lib/layout').place(ST.devices, {}); // the case view on the Lighting page, as main.js sends it
 if (process.argv[3] === 'pending') Object.assign(ST.drivers.openrgb, { latest: 'release_1.2', act: 'update', tone: 'warn' });
 if (process.argv[3] === 'clean') { ST.drivers.windows.forEach((w) => { w.state = 'ok'; w.installed ||= '1.0'; w.tone = 'ok'; }); }
 const S = { lighting: { on: true, effect: 'static', color: '#b3121f', brightness: 80, speed: 50 }, devices: { board: { brightness: 70 }, mouse: { zones: { 0: '#2f5bff', 1: '#2f5bff', 2: '#2f5bff' } } }, fans: Object.fromEntries([1, 2, 3, 4, 5].map((i) => ['fan' + i, { mode: 'curve', shape: 'smooth', points: [[30, 25], [50, 35], [65, 55], [80, 85], [90, 100]], fixed: 50, sensor: '/cpu/t' }])), glass: true, setupSeen: true };

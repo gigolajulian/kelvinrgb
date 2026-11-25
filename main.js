@@ -258,6 +258,7 @@ function startSidecar() {
   sidecarStopping = false;
   const p = spawn(SIDECAR, ['--floor', String(FLOOR)], { cwd: path.dirname(SIDECAR), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   sidecar = p;
+  state.sensors = { ...state.sensors, ok: false, msg: 'reading sensors' }; push(); // the window is up by now (PERF-2), so say what it waits for
   readline.createInterface({ input: p.stdout }).on('line', onSidecarLine);
   p.stderr.on('data', (b) => log(`sidecar: ${b}`));
   p.stdin.on('error', () => {});
@@ -289,7 +290,6 @@ function onSidecarLine(line) {
   if (m.type === 'log') return log(`sidecar: ${m.msg}`);
   if (m.type === 'ready') {
     state.sensors = { ok: true, msg: m.admin ? 'ok' : 'no admin', admin: m.admin, unclean: m.unclean };
-    stepSplash(4); // sensors last: the hardware scan takes ~10 s, the others under 2 s
     log(`sidecar ready:${m.controls} fan controls, admin ${m.admin}`);
     send({ cmd: 'openrgb', pid: openRgbPid });
   }
@@ -780,12 +780,12 @@ function updateTray(force) {
 
 // ---------- splash (D: logo ring + steps) ----------
 // A small glass tile centred where the window will open. The logo's own ring fills as start-up steps finish
-// (Game check: Apex or EAC, OpenRGB, lighting, sensors), each row ticks off with its time, then the tile fades and the window shows.
-// splash.js eases the ring through the running point's share so the long sensors scan never looks stuck.
+// (Game check: Apex or EAC, OpenRGB, lighting), each row ticks off with its time, then the tile fades and the window shows.
+// The ~10 s sensors scan is not on the splash: it fills in inside the window (PERF-2, under 3 s to the window).
 const SPLASH_W = 340, SPLASH_H = 440;
 let splash = null, splashStep = 0, splashAt = 0, splashEnding = false, splashTicking = false;
 const splashDone = new Map(); // point (1..4) -> when it finished
-const SPLASH_POINTS = ['game check', 'openrgb', 'lighting', 'sensors'];
+const SPLASH_POINTS = ['game check', 'openrgb', 'lighting'];
 function openSplash() {
   const b = win.getBounds();
   splash = new BrowserWindow({
@@ -799,7 +799,18 @@ function openSplash() {
   splash.loadFile(path.join(__dirname, 'renderer', 'splash.html'));
   splash.once('ready-to-show', () => splash && splash.showInactive());
   splashAt = Date.now();
+  // The window comes up invisible and click-through behind the splash, so its acrylic backdrop has settled by the time it
+  // fades in: shown cold, its first frames are a grey plate (screen recording 2026-11-25).
+  win.once('ready-to-show', () => { if (!splash || win.isVisible()) return; win.setOpacity(0); win.setIgnoreMouseEvents(true); win.setSkipTaskbar(true); win.showInactive(); });
   setTimeout(endSplash, 15000); // a point that never finishes (no OpenRGB, no admin) shows as skipped
+}
+// Fades the primed window in (0.3 s) while the splash fades out above it.
+function revealWindow() {
+  if (!win || win.isDestroyed()) return;
+  win.setIgnoreMouseEvents(false);
+  if (win.getOpacity() >= 1) return;
+  let o = 0;
+  const t = setInterval(() => { o = Math.min(1, o + 0.1); if (!win || win.isDestroyed()) return clearInterval(t); win.setOpacity(o); if (o >= 1) clearInterval(t); }, 30);
 }
 function stepSplash(i) {
   if (!splash || splashEnding || splashDone.has(i)) return;
@@ -808,25 +819,26 @@ function stepSplash(i) {
   advanceSplash();
 }
 // Points tick strictly in order, one at a time so each is seen. One that finished early waits for the ones before it
-// (sensors are last and slowest, so this is rare). The window opens only after the 4th.
+// (rare). The window opens after the last one, lighting.
 function advanceSplash() {
   if (splashTicking || !splash || splashEnding || !splashDone.has(splashStep + 1)) return;
   splashTicking = true;
   const i = ++splashStep, secs = (Math.max(0, splashDone.get(i) - (splashDone.get(i - 1) ?? splashAt)) / 1000).toFixed(1);
   splash.webContents.executeJavaScript(`step(${i}, ${JSON.stringify(secs)})`).catch(() => {});
-  setTimeout(() => { splashTicking = false; if (splashStep >= 4) endSplash(); else advanceSplash(); }, 300);
+  setTimeout(() => { splashTicking = false; if (splashStep >= SPLASH_POINTS.length) endSplash(); else advanceSplash(); }, 300);
 }
 function endSplash() {
   if (!splash || splashEnding) return;
   splashEnding = true;
-  log(`splash: closing at ${((Date.now() - splashAt) / 1000).toFixed(1)}s, ${splashStep} of 4 points ticked`);
+  log(`splash: closing at ${((Date.now() - splashAt) / 1000).toFixed(1)}s, ${splashStep} of ${SPLASH_POINTS.length} points ticked`);
   const wait = Math.max(0, 1600 - (Date.now() - splashAt)); // long enough to read the steps, not a flicker
   setTimeout(() => {
     // points after splashStep show as skipped, except ones that finished behind one that never did (sensors behind a dead OpenRGB)
     const late = [...splashDone.keys()].filter((i) => i > splashStep).map((i) => [i, ((splashDone.get(i) - splashAt) / 1000).toFixed(1)]);
     splash.webContents.executeJavaScript(`done(${splashStep}, ${JSON.stringify(late)})`).catch(() => {});
-    // the ring is full and the tile fades: show the real window, drop the splash just after
-    setTimeout(() => { const s = splash; splash = null; showWindow(); setTimeout(() => s.destroy(), 200); }, splashStep >= 4 ? 450 : 1650);
+    // The window opens as the tile starts to fade (splash.js done(): at once, or after 1.2 s with skipped points), under the
+    // splash, which stays on top (alwaysOnTop, never focused) until its 0.38 s fade is over (PERF-2).
+    setTimeout(() => { const s = splash; splash = null; revealWindow(); showWindow(); log(`start: window shown ${process.uptime().toFixed(1)}s after launch`); setTimeout(() => s.destroy(), 450); }, splashStep >= SPLASH_POINTS.length ? 0 : 1200);
   }, wait);
 }
 

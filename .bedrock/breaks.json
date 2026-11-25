@@ -132,5 +132,15 @@
   "file": "package.json",
   "find": "\"MPL-2.0.txt\",",
   "replace": ""
+ },
+ "EXIT-2": {
+  "file": "main.js",
+  "find": "  tray.on('click', showWindow);",
+  "replace": "  tray.on('click', showWindow);\n  setAutostart(true); // turned on at every launch, without asking"
+ },
+ "SEC-9": {
+  "file": "scripts/release-key.js",
+  "find": "  if (!pem.includes('ENCRYPTED')) throw new Error(`refusing ${path.basename(file)}: the signing key must be passphrase-protected (README, Release an update)`);",
+  "replace": "  if (!pem.includes('ENCRYPTED')) return crypto.createPrivateKey(pem);"
  }
 }

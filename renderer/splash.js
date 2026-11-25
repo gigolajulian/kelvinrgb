@@ -1,10 +1,10 @@
-// Called by main.js with executeJavaScript: step(i, secs) as start-up points finish (1..4), done(reached) to fade out.
+// Called by main.js with executeJavaScript: step(i, secs) as start-up points finish (1..3), done(reached) to fade out.
 // The ring is a spring chasing an honest target: the edge of what really finished, plus an estimate for the running
 // point that grows fast at first and flattens out, capped at 96% of that point's share. It never stops, never jumps,
 // and never shows a point done before main.js says so.
 const C = 390; // ring circumference (r 62)
-const SHARE = [.12, .16, .12, .60]; // game check, OpenRGB, lighting, sensors
-const EXP = [300, 1300, 300, 10400]; // expected ms for each point after the one before it (log, 2026-11-24)
+const SHARE = [.3, .4, .3]; // game check, OpenRGB, lighting (sensors fill in inside the window, PERF-2)
+const EXP = [300, 1300, 300]; // expected ms for each point after the one before it (log, 2026-11-24)
 const prog = document.getElementById('prog'), d = document.getElementById('d');
 const lis = [...document.querySelectorAll('#steps li')], N = lis.length;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -26,7 +26,7 @@ function frame(now) {
   }
   prog.style.strokeDashoffset = C - C * Math.max(0, x);
   if (shown >= N && x > .995) d.classList.add('full');
-  const li = lis[shown]; // the running row counts up, so the long sensors scan still looks alive
+  const li = lis[shown]; // the running row counts up, so a slow step still looks alive
   if (li && honest == null) li.lastElementChild.textContent = `${((now - runAt) / 1000).toFixed(1)}s`;
   if (!stopped) requestAnimationFrame(frame);
 }

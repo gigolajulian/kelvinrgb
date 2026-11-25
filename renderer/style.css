@@ -312,6 +312,9 @@ footer { display: flex; align-items: center; gap: 18px; padding: 12px 22px; bord
 .ht-t .big { margin: 4px 0 0; }
 .ht-t .spark { height: 28px; margin-top: 2px; }
 .ht-t .meter { margin-top: auto; }
+/* sensors still reading (PERF-2): the tiles hold their shape, values dim and breathe until the first reading */
+.ht.wait .ht-t .big, .ht.wait .ht-t .spark, .ht.wait .ht-t .meter { opacity: .35; animation: wait 1.6s ease-in-out infinite; }
+@keyframes wait { 50% { opacity: .15; } }
 .hc { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
 .hc2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .hq { display: flex; flex-direction: column; gap: 14px; }
