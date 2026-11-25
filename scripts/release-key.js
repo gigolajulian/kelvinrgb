@@ -1,8 +1,11 @@
-// The update signing key, passphrase-protected (SEC-9). Never printed, never in a repo.
+// The update signing keys (SEC-9). Never printed, never in a repo.
+// Everyday: helloSign() asks Windows Hello (scripts/hello-sign.ps1) to sign with a key held in this PC's TPM.
+// Recovery: loadKey(), the passphrase-protected ed25519 key, for `npm run sign -- --recovery`.
 // Which file: RELEASE_SIGNING_KEY (a path), else ~/.release-keys/updates-ed25519.enc.pem (protected), else the plain
 // updates-ed25519.pem. A protected key asks for its passphrase in the terminal, without echo. An unencrypted key is
 // refused (SEC-9): the production secret never sits on disk in plain text.
 const crypto = require('crypto');
+const { spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -37,4 +40,11 @@ async function loadKey() {
   catch { throw new Error('wrong passphrase'); }
 }
 
-module.exports = { loadKey, ask, PLAIN, PROTECTED };
+// the Hello prompt shows on screen; the signature (base64) comes back on stdout
+function helloSign(text) {
+  const r = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'hello-sign.ps1'), 'sign'], { input: text, encoding: 'utf8', stdio: ['pipe', 'pipe', 'inherit'] });
+  if (r.status !== 0) throw new Error('Windows Hello did not sign (README, Release an update)');
+  return r.stdout.trim();
+}
+
+module.exports = { loadKey, helloSign, ask, PLAIN, PROTECTED };

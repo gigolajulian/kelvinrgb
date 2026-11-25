@@ -210,3 +210,31 @@ test('the installer streams to disk while it downloads, and only a verified one 
     assert.deepStrictEqual(fs.readdirSync(dir), []);
   } finally { global.fetch = real; fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// SEC-9: only a signature from a trusted key, over this exact app, version and sha, is accepted.
+test('signatures: Hello RSA and recovery ed25519 pass, forged or wrong-key ones are refused', () => {
+  const crypto = require('node:crypto');
+  const spki = (k) => k.export({ type: 'spki', format: 'der' }).toString('base64');
+  const rsa = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }), ed = crypto.generateKeyPairSync('ed25519');
+  const other = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const keys = [spki(rsa.publicKey), spki(ed.publicKey)];
+  const text = Buffer.from(`KelvinRGB 9.0.0 ${sha}\n`);
+  const byRsa = crypto.sign('sha256', text, rsa.privateKey).toString('base64'); // what Windows Hello makes
+  const byEd = crypto.sign(null, text, ed.privateKey).toString('base64');
+  assert.ok(U.signed('9.0.0', sha, byRsa, keys));
+  assert.ok(U.signed('9.0.0', sha, byEd + '\n', keys));
+  assert.ok(!U.signed('9.0.0', sha, crypto.sign('sha256', text, other.privateKey).toString('base64'), keys), 'wrong key');
+  assert.ok(!U.signed('9.0.0', sha, Buffer.alloc(256, 7).toString('base64'), keys), 'forged');
+  assert.ok(!U.signed('9.0.1', sha, byRsa, keys), 'other version');
+  assert.ok(!U.signed('9.0.0', 'b'.repeat(64), byEd, keys), 'other installer');
+  assert.ok(!U.signed('9.0.0', sha, byEd, [keys[0]]) && !U.signed('9.0.0', sha, byRsa, [keys[1]]), 'a sig only checks against its own key type');
+  assert.ok(!U.signed('9.0.0', sha, '', keys) && !U.signed('9.0.0', sha, byRsa, []));
+});
+
+test('the shipped keys are the Hello RSA key and the ed25519 recovery key', () => {
+  const crypto = require('node:crypto');
+  const k = (b) => crypto.createPublicKey({ key: Buffer.from(b, 'base64'), format: 'der', type: 'spki' });
+  assert.strictEqual(k(U.RECOVERY).asymmetricKeyType, 'ed25519');
+  assert.ok(U.HELLO, 'HELLO is empty: paste the public key from `scripts/hello-sign.ps1 pubkey`');
+  assert.strictEqual(k(U.HELLO).asymmetricKeyType, 'rsa');
+});

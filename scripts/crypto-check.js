@@ -1,5 +1,5 @@
 // No homemade crypto (SEC-10). Reads the shipped code: main.js, preload.js, lib/, renderer/ and the sidecar.
-// Every random value comes from node:crypto, hashes are sha256, signatures are ed25519 through crypto.verify.
+// Every random value comes from node:crypto, hashes are sha256, signatures are ed25519 or RSA-sha256 (Windows Hello) through crypto.verify.
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
@@ -18,7 +18,7 @@ for (const f of files) {
   for (const [re, why] of BAD) if (re.test(text)) problems.push(`${f}: ${why}`);
 }
 const upd = fs.readFileSync(path.join(root, 'lib', 'update.js'), 'utf8');
-if (!/crypto\.verify\(null,/.test(upd) || !/type: 'spki'/.test(upd)) problems.push('lib/update.js: release signature is not checked with crypto.verify (ed25519)');
+if (!/crypto\.verify\(ALG\[/.test(upd) || !/type: 'spki'/.test(upd) || !upd.includes("const ALG = { ed25519: null, rsa: 'sha256' };")) problems.push('lib/update.js: release signature is not checked with crypto.verify (ed25519 or RSA sha256, algorithm from the trusted key)');
 if (!/crypto\.randomUUID\(\)/.test(upd)) problems.push('lib/update.js: installer temp name is not from crypto.randomUUID');
 if (problems.length) { console.error(`crypto-check:\n${problems.join('\n')}`); process.exit(1); }
 console.log(`crypto-check: ok (${files.length} files)`);
