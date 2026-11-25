@@ -10,7 +10,7 @@
   - Ambient glow `--glow` (default `#c8323c`) follows the current lighting color at 5 to 9% alpha. It is the only place lighting colors touch the UI.
 - **Type:** IBM Plex Sans 14/1.45 body, IBM Plex Mono for labels (11 px uppercase, .08em, soft color), readouts and the brand (12 px, .24em), tabular numbers. Both are bundled in `renderer/fonts` (400 and 500, OFL); 500 covers bold. Controls 13 px.
 - **Layout:** Nav 200 px. Glass panels radius 12, padding 16, 1 px line, inner top highlight. Buttons and inputs 34 px high, radius 8; segmented control radius 9 with 6 px buttons; chips and tags pill; toggles 40x22. Sheet `min(460px, 100% - 48px)`, radius 16, blur 34 px, the one drop shadow. Scrim blur 10 px.
-- **Motion:** CSS only. Sheet slides in .18 s ease-out. Meters .4 s, ambient glow .5 s, toggles .15 s, status dots .25 s. Reduced motion turns off every transition and animation.
+- **Motion:** CSS only, with one exception: the splash ring is a JS spring (`renderer/splash.js`, Julian's yes 2026-11-24) so it fills without stops or jumps. Sheet slides in .18 s ease-out. Meters .4 s, ambient glow .5 s, toggles .15 s, status dots .25 s. Reduced motion turns off every transition and animation.
 - **References:**
   - Glass mock: https://claude.ai/artifact/Qw3Yuiemh5nR6RXFqKHjj8 (session "KelvinRGB: glass redesign of the whole app", branch `redesign/glass`).
   - `mock/Main.dc.html`, `Lighting`, `Devices`, `Cooling`: the pre-glass mock (2026-10-28), layout only.
@@ -40,3 +40,4 @@ One line each, checked on every mock and build:
 - Numbers tabular. Lighting colors never tint the interface beyond the ambient glow.
 - A swatch that shows a colour value (quick colours, device chips, the Lighting pad) is content, not chrome. Selected rings on swatches use `--ink` and give way to the focus ring.
 - Check with glass on and off (`html.flat`).
+- Progress never runs ahead of the truth: a ring or bar may ease toward the running step's end, but reaches it only when that step is done.

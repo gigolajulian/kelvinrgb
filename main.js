@@ -145,7 +145,7 @@ async function loadDevices() {
   sent.clear();
   state.layout = Lay.place(state.devices, settings.layout);
   state.openrgb = { ok: true, msg: `${state.devices.length} devices` };
-  stepSplash(3);
+  stepSplash(2);
   log(`OpenRGB: ${state.devices.map((d) => d.name).join(', ')}`);
   // Devices that appeared since the last list (an app let go, detection finished) flash white so you can see which (#23).
   const fresh = before.size ? state.devices.filter((d) => d.leds && !before.has(d.key)) : [];
@@ -153,7 +153,7 @@ async function loadDevices() {
   if (fresh.length) log(`new devices: ${fresh.map((d) => d.name).join(', ')}`);
   push();
   startRender();
-  stepSplash(4); // lighting painted
+  stepSplash(3); // lighting painted
 }
 
 const ANIMATED = ['breathing', 'spectrum', 'wave', 'cycle', 'sweep', 'temp']; // temp follows the CPU, so it repaints too
@@ -289,7 +289,7 @@ function onSidecarLine(line) {
   if (m.type === 'log') return log(`sidecar: ${m.msg}`);
   if (m.type === 'ready') {
     state.sensors = { ok: true, msg: m.admin ? 'ok' : 'no admin', admin: m.admin, unclean: m.unclean };
-    stepSplash(2);
+    stepSplash(4); // sensors last: the hardware scan takes ~10 s, the others under 2 s
     log(`sidecar ready:${m.controls} fan controls, admin ${m.admin}`);
     send({ cmd: 'openrgb', pid: openRgbPid });
   }
@@ -780,11 +780,12 @@ function updateTray(force) {
 
 // ---------- splash (D: logo ring + steps) ----------
 // A small glass tile centred where the window will open. The logo's own ring fills as start-up steps finish
-// (Game check: Apex or EAC, sensors, OpenRGB, lighting), each row ticks off with its time, then the tile fades and the window shows.
+// (Game check: Apex or EAC, OpenRGB, lighting, sensors), each row ticks off with its time, then the tile fades and the window shows.
+// splash.js eases the ring through the running point's share so the long sensors scan never looks stuck.
 const SPLASH_W = 340, SPLASH_H = 440;
 let splash = null, splashStep = 0, splashAt = 0, splashEnding = false, splashTicking = false;
 const splashDone = new Map(); // point (1..4) -> when it finished
-const SPLASH_POINTS = ['game check', 'sensors', 'openrgb', 'lighting'];
+const SPLASH_POINTS = ['game check', 'openrgb', 'lighting', 'sensors'];
 function openSplash() {
   const b = win.getBounds();
   splash = new BrowserWindow({

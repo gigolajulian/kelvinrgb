@@ -183,7 +183,7 @@ function makeSplash(root, cfg) {
     prog.style.strokeDashoffset = C - C * Math.max(0, x);
     if (shown >= N && x > .995 && !root.classList.contains('full')) root.classList.add('full');
     const li = lis[shown]; // the running row counts up, so a long point still looks alive
-    if (li && cfg.creep) li.lastElementChild.textContent = ((now - runAt) / 1000).toFixed(1) + 's';
+    if (li && cfg.creep && honest == null) li.lastElementChild.textContent = ((now - runAt) / 1000).toFixed(1) + 's';
     if (!stopped) raf = requestAnimationFrame(frame);
   };
   const paint = () => lis.forEach((li, j) => { li.className = j < shown ? 'ok' : j === shown ? 'run' : ''; });
