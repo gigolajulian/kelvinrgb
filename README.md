@@ -28,17 +28,24 @@ The build is unsigned, so Windows SmartScreen may warn the first time: More info
 
 1. Bump `version` in `package.json`, then `npm run dist`.
 2. `node scripts/gh.js release create v<version> "dist/KelvinRGB Setup <version>.exe" --title "KelvinRGB <version>"`. `scripts/gh.js` runs gh with the release token (`KELVINRGB_GH_TOKEN`, see Secrets); without it, gh's own login, with a warning. Use it for `pr create` too.
-3. `npm run sign -- --upload` signs the installer and uploads `KelvinRGB.Setup.<version>.exe.sig` to that release. Installed copies refuse an update without a valid `.sig`.
+3. `npm run sign -- --upload` shows the Windows Hello prompt (fingerprint or PIN), signs the installer and uploads `KelvinRGB.Setup.<version>.exe.sig` to that release. Installed copies refuse an update without a valid `.sig`.
 
-The key is `~/.release-keys/updates-ed25519.enc.pem` on Julian's PC, protected by a passphrase the release asks for in the terminal (or the file `RELEASE_SIGNING_KEY` points to). A key without a passphrase is refused. LOUPE's `node scripts/protect-key.js` makes the protected copy once. It never goes in a repo. If it is lost, installed copies can't update again, so keep a backup.
+Installed copies trust two keys (`lib/update.js` `HELLO` and `RECOVERY`):
+- **Hello key** (everyday): RSA-2048, named `jg-release-updates`, made by Windows Hello in this PC's TPM. It can't be copied off the PC and isn't synced. `scripts/hello-sign.ps1` signs with it. The Hello prompt doesn't say what is being signed, so approve it only while running your own release. Made once with `powershell -File scripts/hello-sign.ps1 create`, which prints the public key for `HELLO`.
+- **Recovery key**: the passphrase-protected ed25519 key `~/.release-keys/updates-ed25519.enc.pem` (or the file `RELEASE_SIGNING_KEY` points to). `npm run sign -- --recovery --upload` uses it and asks for the passphrase. A key without a passphrase is refused.
+
+The Hello key is lost with a Windows reinstall, a TPM clear, a Hello PIN reset, and maybe a BIOS update (AMD fTPM). Then: make a new Hello key, put its public key in `HELLO`, and sign that release with `--recovery`.
+
+The first release that trusts the Hello key (the transition release) must be signed with `--recovery`, because older installs only trust the ed25519 key. Copies that skip it need a manual download.
 
 ## Secrets
 
-The app itself stores no secrets: no accounts, tokens or keys on the user's PC. Two secrets exist on the release side.
+The app itself stores no secrets: no accounts, tokens or keys on the user's PC. Three secrets exist on the release side.
 
 | Secret | Unlocks | Where | Rotate |
 |---|---|---|---|
-| Release signing key (ed25519) | Installed copies accept an update signed with it | `~/.release-keys/updates-ed25519.enc.pem` on Julian's PC (passphrase in Apple Passwords), backup `D:\Dropbox\KEYS\kelvinrgb-updates-ed25519.enc.pem` with the public key. No plain copy. | Make a new key pair, put the public half in `lib/update.js` `PUBKEY`, ship one release signed with the old key. Copies that skip that release can't update and need a manual download. |
+| Release signing key, Hello (RSA-2048, everyday) | Installed copies accept an update signed with it | Windows Hello key `jg-release-updates` in the TPM of Julian's PC. Can't be exported, so there is no copy or backup; the recovery key covers its loss. | Make a new one (`scripts/hello-sign.ps1 create`), put its public key in `lib/update.js` `HELLO`, sign that release with `--recovery`. |
+| Release signing key, recovery (ed25519) | Same as the Hello key: installed copies accept an update signed with either | `~/.release-keys/updates-ed25519.enc.pem` on Julian's PC (passphrase in Apple Passwords), backup `D:\Dropbox\KEYS\kelvinrgb-updates-ed25519.enc.pem` with the public key. No plain copy. | Make a new key pair, put the public half in `lib/update.js` `RECOVERY`, ship one release signed with the old key. Copies that skip that release can't update and need a manual download. |
 | Release token `KELVINRGB_GH_TOKEN` (fine-grained) | Releases and pull requests on gigolajulian/kelvinrgb only. Resource owner gigolajulian, repository access only gigolajulian/kelvinrgb; Contents read and write (covers releases), Pull requests read and write, Metadata read (automatic); expires 2027-02-23 (90 days) | User environment variable on Julian's PC; `scripts/gh.js` passes it to gh as `GH_TOKEN` for release calls only | Before it expires: a new token with the same settings at github.com/settings/personal-access-tokens/new, replace the variable, revoke the old one. A stolen token can upload an installer but can't sign it. |
 | GitHub login (gh CLI, 2FA) | Push and create releases on every repository of the account, edit workflows, gists (scopes repo, workflow, read:org, gist; no expiry) | gh's credential store on Julian's PC | `gh auth refresh` or revoke the OAuth app at github.com/settings/applications. Release calls no longer need it once `KELVINRGB_GH_TOKEN` is set. |
 
