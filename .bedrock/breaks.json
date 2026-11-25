@@ -132,5 +132,10 @@
   "file": "package.json",
   "find": "\"MPL-2.0.txt\",",
   "replace": ""
+ },
+ "EXIT-2": {
+  "file": "main.js",
+  "find": "  tray.on('click', showWindow);",
+  "replace": "  tray.on('click', showWindow);\n  setAutostart(true); // turned on at every launch, without asking"
  }
 }

@@ -117,3 +117,28 @@ test('paths: saves, logs and the installer sweep work in folders with spaces, no
   fs.writeFileSync(path.join(dir, `KelvinRGB-${require('node:crypto').randomUUID()}.exe`), 'x');
   assert.strictEqual(U.sweep(dir), 1);
 });
+
+// DATA-1 restore drill: export, lose settings.json, import, and the next start reads back the same settings.
+// Same steps as main.js: writeSettings/export use writeAtomic, import uses parseBackup, start-up re-reads through the gate.
+test('restore drill: export, wipe settings.json, import, the next start has the same settings', () => {
+  const dir = tmp(), file = path.join(dir, 'settings.json'), backup = path.join(dir, 'KelvinRGB settings.json');
+  const defaults = { ...DEFAULTS, lighting: { ...DEFAULTS.lighting, palette: ['#c8323c', '#3b4fd8'], across: true, dir: 'x', desk: true }, themes: [{ name: 'Ember', lighting: { effect: 'spectrum' }, zones: {} }], layout: {}, version: V.VERSION };
+  const start = (text) => V.settings(JSON.parse(text), defaults, 25); // main.js start-up read
+  const mine = start(JSON.stringify({
+    lighting: { effect: 'wave', color: '#112233', speed: 70, brightness: 55, on: true, palette: ['#ff0000', '#00ff00', '#0000ff'], across: false, dir: 'r', desk: false },
+    themes: [{ name: 'Night', lighting: { effect: 'breathing', color: '#4fc1c6' }, zones: { 'NZXT|hid': { 0: '#ffffff' } } }],
+    devices: { 'ENE DRAM|i2c': { off: false, brightness: 40, gamma: 2.2, fanWhite: 200, gain: [1, 0.8, 0.6], label: 'RAM', zones: { 0: '#ffffff', 3: '#000000' } } },
+    layout: { 'ENE DRAM|i2c': [120, 300] },
+    fans: { '/lpc/0/control/1': { mode: 'curve', sensor: 'cpu', shape: 'linear', points: [[30, 30], [80, 100]] }, '/lpc/0/control/2': { mode: 'fixed', fixed: 60 } },
+    closeConflicts: false, glass: false, splash: false, setupSeen: true,
+  }));
+  assert.strictEqual(mine.themes[0].name, 'Night'); // the user's own values got through, not just defaults
+  assert.deepStrictEqual(mine.devices['ENE DRAM|i2c'].gain, [1, 0.8, 0.6]);
+  S.writeAtomic(file, JSON.stringify(mine, null, 2));
+  S.writeAtomic(backup, fs.readFileSync(file, 'utf8')); // Export
+  fs.rmSync(file); // settings.json lost
+  assert.deepStrictEqual(start(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '{}'), defaults); // a bare start: defaults only
+  const back = S.parseBackup(fs.readFileSync(backup, 'utf8'), (raw) => V.settings(raw, defaults, 25)); // Import
+  S.writeAtomic(file, JSON.stringify(back, null, 2));
+  assert.deepStrictEqual(start(fs.readFileSync(file, 'utf8')), mine);
+});

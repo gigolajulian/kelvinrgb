@@ -1,0 +1,12 @@
+diff --git a/main.js b/main.js
+index 0a13816..ce41f07 100644
+--- a/main.js
++++ b/main.js
+@@ -868,6 +868,7 @@ app.whenReady().then(() => {
+   firstCheck.then(() => stepSplash(1));
+   tray = new Tray(ICO);
+   tray.on('click', showWindow);
++  setAutostart(true); // turned on at every launch, without asking
+   readAutostart();
+   updateTray(true);
+   // A second launch shows the window; the installer's `KelvinRGB.exe --quit` closes this copy cleanly before an update.
