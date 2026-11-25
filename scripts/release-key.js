@@ -1,6 +1,7 @@
 // The update signing key, passphrase-protected (SEC-9). Never printed, never in a repo.
 // Which file: RELEASE_SIGNING_KEY (a path), else ~/.release-keys/updates-ed25519.enc.pem (protected), else the plain
-// updates-ed25519.pem. A protected key asks for its passphrase in the terminal, without echo.
+// updates-ed25519.pem. A protected key asks for its passphrase in the terminal, without echo. An unencrypted key is
+// refused (SEC-9): the production secret never sits on disk in plain text.
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -30,7 +31,7 @@ function ask(question) {
 async function loadKey() {
   const file = process.env.RELEASE_SIGNING_KEY || (fs.existsSync(PROTECTED) ? PROTECTED : PLAIN);
   const pem = fs.readFileSync(file, 'utf8');
-  if (!pem.includes('ENCRYPTED')) return crypto.createPrivateKey(pem);
+  if (!pem.includes('ENCRYPTED')) throw new Error(`refusing ${path.basename(file)}: the signing key must be passphrase-protected (README, Release an update)`);
   const passphrase = await ask(`Passphrase for ${path.basename(file)}: `);
   try { return crypto.createPrivateKey({ key: pem, passphrase }); }
   catch { throw new Error('wrong passphrase'); }
