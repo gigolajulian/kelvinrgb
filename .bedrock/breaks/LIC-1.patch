@@ -1,8 +1,8 @@
 diff --git a/package.json b/package.json
-index 3a14d17..b524e9d 100644
+index e8c2e59..7b1de3f 100644
 --- a/package.json
 +++ b/package.json
-@@ -61,7 +61,7 @@
+@@ -62,7 +62,7 @@
          "to": "sidecar/lib",
          "filter": [
            "SIDECAR-NOTICE.txt",

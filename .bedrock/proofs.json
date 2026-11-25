@@ -582,5 +582,31 @@
     "seconds": 5.2,
     "date": "2026-11-24",
     "bedrock": "2.9.5"
+  },
+  "EXIT-2@desktop, local": {
+    "result": "proven",
+    "command": "node --test test/autostart.test.js",
+    "break": ".bedrock/breaks/EXIT-2.patch",
+    "patch_sha256": "d760b767989971af8a0389e5b6c2a6c5c1d29e1d34cd182651671d2899dac5a1",
+    "sha": "f00a9f8c2dabd9bc24b4e7e21839ed7cc96aded5",
+    "files": {
+      "main.js": "c84be82faf7358500440a752a90e40715d2250cec424b66f9a525958f0c040f5",
+      "test/autostart.test.js": "48b5b4d6225bb9fa1e4edb631f191b42da60d3892cfc294d2ced019241afa691",
+      "test/conflicts.test.js": "0cd1f7e0301ff4fda331a52ab9d39bc5645e47288cad6ed8a7feb170b01611c4",
+      "test/drivers.test.js": "c95ee8d665ce99be54a112c0f5b6a91c8ad08af7c327ba29f8ee8f29e629fa83",
+      "test/fans.test.js": "874d347e5181b720473cf624c68b9fa0b8811bc04073fb9f1eca1e23cbec0280",
+      "test/guard.test.js": "5b9673c5f0ae8cb06d4f6b1b61ce769a4d11c8f7a7e0732de3dace4be126f4ad",
+      "test/layout.test.js": "c5596a6a20556329b73d42e3ee426bfe5dc87ee6b30ce3aaf43942cf1fa4d21a",
+      "test/math.test.js": "189881c94ab16d8e98a85c12d25c1caa73961ff7ba11db731166348f1a923bcc",
+      "test/memory.test.js": "63706a33270f13bf2b68a1dcc4cc5fdf1383cfc5861bb3f4b0d1d42d26fc55f7",
+      "test/procwatch.test.js": "672fcfa93ec0afa4fdb978e8b93b4d223560b3482b4f1b2698c30e47fe41cde1",
+      "test/sidecar.test.js": "62596ff8903c628d3b173794869b39a1814d8b586049e50444c8d0b4ebe8c73c",
+      "test/store.test.js": "a4e2051ebff007232ea5fc867809526c88cd65141b102252e50e567d14ab8102",
+      "test/update.test.js": "d36d09b333a3066441eca52e17d9321d46aee1715bccc6ccbc06523cb9b1c48d",
+      "test/validate.test.js": "b3ef108f5a5c52c02a82007ef555bf56ceb3bb4759593266a2e2356aee766b5a"
+    },
+    "seconds": 4.8,
+    "date": "2026-11-25",
+    "bedrock": "2.9.5"
   }
 }
