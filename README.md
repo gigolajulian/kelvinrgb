@@ -32,7 +32,7 @@ The build is unsigned, so Windows SmartScreen may warn the first time: More info
 
 Installed copies trust two keys (`lib/update.js` `HELLO` and `RECOVERY`):
 - **Hello key** (everyday): RSA-2048, named `jg-release-updates`, made by Windows Hello in this PC's TPM. It can't be copied off the PC and isn't synced. `scripts/hello-sign.ps1` signs with it. The Hello prompt doesn't say what is being signed, so approve it only while running your own release. Made once with `powershell -File scripts/hello-sign.ps1 create`, which prints the public key for `HELLO`.
-- **Recovery key**: the passphrase-protected ed25519 key `~/.release-keys/updates-ed25519.enc.pem` (or the file `RELEASE_SIGNING_KEY` points to). `npm run sign -- --recovery --upload` uses it and asks for the passphrase. A key without a passphrase is refused.
+- **Recovery key**: the passphrase-protected ed25519 key `~/.release-keys/updates-ed25519.enc.pem` (or the file `RELEASE_SIGNING_KEY` points to). `node scripts/sign-release.js --recovery --upload` uses it and asks for the passphrase. Run node directly here: under `npm run` the passphrase prompt gets garbled on Windows and always says "wrong passphrase". A key without a passphrase is refused.
 
 The Hello key is lost with a Windows reinstall, a TPM clear, a Hello PIN reset, and maybe a BIOS update (AMD fTPM). Then: make a new Hello key, put its public key in `HELLO`, and sign that release with `--recovery`.
 
