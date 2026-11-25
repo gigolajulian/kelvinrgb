@@ -27,7 +27,7 @@ The build is unsigned, so Windows SmartScreen may warn the first time: More info
 ## Release an update
 
 1. Bump `version` in `package.json`, then `npm run dist`.
-2. `gh release create v<version> "dist/KelvinRGB Setup <version>.exe" --title "KelvinRGB <version>"`.
+2. `node scripts/gh.js release create v<version> "dist/KelvinRGB Setup <version>.exe" --title "KelvinRGB <version>"`. `scripts/gh.js` runs gh with the release token (`KELVINRGB_GH_TOKEN`, see Secrets); without it, gh's own login, with a warning. Use it for `pr create` too.
 3. `npm run sign -- --upload` signs the installer and uploads `KelvinRGB.Setup.<version>.exe.sig` to that release. Installed copies refuse an update without a valid `.sig`.
 
 The key is `~/.release-keys/updates-ed25519.enc.pem` on Julian's PC, protected by a passphrase the release asks for in the terminal (or the file `RELEASE_SIGNING_KEY` points to; the plain `updates-ed25519.pem` is used only while no protected copy exists). LOUPE's `node scripts/protect-key.js` makes the protected copy once. It never goes in a repo. If it is lost, installed copies can't update again, so keep a backup.
@@ -39,7 +39,8 @@ The app itself stores no secrets: no accounts, tokens or keys on the user's PC. 
 | Secret | Unlocks | Where | Rotate |
 |---|---|---|---|
 | Release signing key (ed25519) | Installed copies accept an update signed with it | `~/.release-keys/updates-ed25519.enc.pem` on Julian's PC (passphrase-protected), plus his backup | Make a new key pair, put the public half in `lib/update.js` `PUBKEY`, ship one release signed with the old key. Copies that skip that release can't update and need a manual download. |
-| GitHub login (gh CLI, 2FA) | Push and create releases on every repository of the account, edit workflows, gists (scopes repo, workflow, read:org, gist; no expiry) | gh's credential store on Julian's PC | `gh auth refresh` or revoke the OAuth app at github.com/settings/applications. A stolen login can upload an installer but can't sign it. |
+| Release token `KELVINRGB_GH_TOKEN` (fine-grained) | Releases and pull requests on gigolajulian/kelvinrgb only. Resource owner gigolajulian, repository access only gigolajulian/kelvinrgb; Contents read and write (covers releases), Pull requests read and write, Metadata read (automatic); expires 2027-02-23 (90 days) | User environment variable on Julian's PC; `scripts/gh.js` passes it to gh as `GH_TOKEN` for release calls only | Before it expires: a new token with the same settings at github.com/settings/personal-access-tokens/new, replace the variable, revoke the old one. A stolen token can upload an installer but can't sign it. |
+| GitHub login (gh CLI, 2FA) | Push and create releases on every repository of the account, edit workflows, gists (scopes repo, workflow, read:org, gist; no expiry) | gh's credential store on Julian's PC | `gh auth refresh` or revoke the OAuth app at github.com/settings/applications. Release calls no longer need it once `KELVINRGB_GH_TOKEN` is set. |
 
 ## Checks
 

@@ -6,10 +6,10 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 const { version } = require('../package.json');
 const { signed } = require('../lib/update');
 const { loadKey } = require('./release-key');
+const { gh } = require('./gh'); // KELVINRGB_GH_TOKEN for the upload (SEC-8)
 
 const tag = process.argv.includes('--upload') && `v${version}`;
 const file = path.join(__dirname, '..', 'dist', `KelvinRGB Setup ${version}.exe`);
@@ -20,5 +20,5 @@ const file = path.join(__dirname, '..', 'dist', `KelvinRGB Setup ${version}.exe`
   if (!signed(version, sha, sig)) throw new Error('this key does not match the public key in lib/update.js');
   fs.writeFileSync(file + '.sig', sig + '\n');
   console.log(`signed ${path.basename(file)}`);
-  if (tag) execFileSync('gh', ['release', 'upload', tag, file + '.sig', '--clobber', '-R', 'gigolajulian/kelvinrgb'], { stdio: 'inherit' });
+  if (tag) gh(['release', 'upload', tag, file + '.sig', '--clobber', '-R', 'gigolajulian/kelvinrgb']);
 })().catch(e => { console.error(e.message); process.exit(1); });

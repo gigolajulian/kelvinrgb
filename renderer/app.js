@@ -55,11 +55,14 @@ function driverSummary() {
 function fanHelp() {
   const m = ST ? ST.sensors : { ok: false, msg: 'starting' };
   if (ST && ST.guard) return 'Fans are back on BIOS while Apex runs. They return when the game closes.';
+  if (reading()) return 'Reading sensors… Fans show up here when the hardware scan finishes, about 10 s after start.';
   if (/missing/.test(m.msg)) return 'The sensor service files are missing. Reinstall KelvinRGB from the latest release.';
   if (!m.ok) return `The sensor service is not running (${m.msg}).`;
   if (m.admin === false) return 'KelvinRGB is not running as admin. Close it and start it again, then click Yes on the Windows prompt.';
   return 'No fan controller answered. Install the PawnIO driver (pawnio.eu), then restart KelvinRGB. Fans on a hub or the GPU are not controlled here.';
 }
+// main.js opens the window before the ~10 s sensors scan finishes (PERF-2): pages show a waiting state meanwhile.
+const reading = () => !!ST && !ST.sensors.ok && ST.sensors.msg === 'reading sensors';
 const sensorById = (id) => sensors().find((s) => s.id === id) || null;
 // Who drives this fan now (#26): another fan app, KelvinRGB, the hub's own default, or the BIOS.
 const fanApp = (c) => (ST.fanApps || []).find((a) => a.scope === 'all' || a.scope === (c.kind === 'hub' ? 'hub' : 'board'));
@@ -197,8 +200,10 @@ const pages = {
       const ram = mu && ma ? `${Math.round(mu.value + ma.value)} GB` : '';
       const join = (...a) => a.filter(Boolean).join(' · ');
       const line = (k, v, dot, act = '') => `<div><span class="k">${dot ? `<span class="dot ${dot}"></span>` : ''}${esc(k)}</span><span class="v">${esc(v)}</span>${act}</div>`;
-      $('#h-title').textContent = !ST.sensors.ok ? 'Starting up' : hot ? 'Running hot' : 'All good';
+      $('.ht').classList.toggle('wait', reading());
+      $('#h-title').textContent = reading() ? 'Reading sensors…' : !ST.sensors.ok ? 'Starting up' : hot ? 'Running hot' : 'All good';
       $('#h-sub').textContent = ST.guard ? 'Apex is running, so lights and fans are handed back.'
+        : reading() ? 'Lighting is on. Temperatures and fans fill in when the hardware scan finishes.'
         : !ST.sensors.ok ? `Waiting for sensors (${ST.sensors.msg}) and OpenRGB (${ST.openrgb.msg}).`
         : hot ? 'A temperature is over 85 °C.' : 'Nothing over limit. The lines show the last minute.';
 
@@ -846,22 +851,43 @@ const pages = {
       const f = this.edit;
       const X = (t) => ((t - 20) / 80) * 400, Y = (d) => 200 - d * 2;
       const pts = [...f.points].sort((a, b) => a[0] - b[0]);
-      const path = [];
-      for (let t = 20; t <= 100; t += 0.5) path.push(`${X(t).toFixed(1)},${Y(curve(pts, t, f.shape)).toFixed(1)}`);
+      const line = [];
+      for (let t = 20; t <= 100; t += 0.5) line.push([X(t), Y(curve(pts, t, f.shape))]);
+      const path = line.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`);
       const temp = sensorById(f.sensor);
       const now = temp ? Math.max(FLOOR, curve(pts, temp.value, f.shape)) : null;
+      // Labels keep a fixed size in CSS px (10 px, the now label 11 px) however narrow the chart gets (PLAT-2): k is
+      // viewBox units per CSS px. The left margin grows with the font so "100%" fits; k solves for that margin.
+      const svg = $('#c-svg'), cw = svg.clientWidth || 440;
+      const k = Math.max(476 / cw, 448 / Math.max(1, cw - 25)), fs = 10 * k, padL = Math.max(36, 2.5 * fs + 8);
+      svg.setAttribute('viewBox', `${-padL} -10 ${padL + 440} ${217 + 1.3 * fs}`);
+      // The now label goes in the first spot around its dot that clears the curve, the control points, the FLOOR
+      // label and the plot edge, so it never sits on the line (PLAT-2).
+      let nowLabel = '';
+      if (temp) {
+        const text = `now ${Math.round(temp.value)}° · ${Math.round(now)}%`, nf = 11 * k, tw = text.length * 0.6 * nf, th = nf, g = 5 + 2 * k;
+        const nx = X(temp.value), ny = Y(now), L = -g - tw, R = g, U = -g - th, D = g;
+        const fl = [400 - 5.5 * 0.6 * fs - 4, Y(FLOOR) + 4, 400, Y(FLOOR) + 4 + fs]; // FLOOR label box
+        const clear = ([x, y]) => x >= 0 && x + tw <= 400 && y >= 0 && y + th <= 200
+          && !line.some(([px, py]) => px > x - 3 && px < x + tw + 3 && py > y - 3 && py < y + th + 3)
+          && !pts.some(([t, d]) => X(t) > x - 9 && X(t) < x + tw + 9 && Y(d) > y - 9 && Y(d) < y + th + 9)
+          && !(x < fl[2] && x + tw > fl[0] && y < fl[3] && y + th > fl[1]);
+        const spots = [[R, U], [L, U], [R, D], [L, D], [R, U - th - g], [L, U - th - g], [R, D + th + g], [L, D + th + g], [R, U - 2 * (th + g)], [L, U - 2 * (th + g)]].map(([dx, dy]) => [nx + dx, ny + dy]);
+        const [lx, ly] = spots.find(clear) || [Math.min(Math.max(0, nx - tw / 2), 400 - tw), 4]; // nothing clear: top of the plot
+        nowLabel = `<text x="${lx.toFixed(1)}" y="${(ly + 0.8 * th).toFixed(1)}" style="font-family:var(--mono)" font-size="${nf.toFixed(1)}" fill="#e6e7e8">${text}</text>`;
+      }
       const grid = [0, 50, 100, 150, 200].map((y) => `<line x1="0" y1="${y}" x2="400" y2="${y}"/>`).join('') + [0, 100, 200, 300, 400].map((x) => `<line x1="${x}" y1="0" x2="${x}" y2="200"/>`).join('');
       const live = f.mode === 'curve';
       $('#c-svg').innerHTML = `<g stroke="rgba(255,255,255,.06)">${grid}</g>
         <rect x="0" y="${Y(FLOOR)}" width="400" height="${FLOOR * 2}" fill="rgba(240,163,94,.08)"/>
-        <text x="396" y="${Y(FLOOR) + 14}" text-anchor="end" style="font-family:var(--mono)" font-size="9" fill="#f0a35e">FLOOR ${FLOOR}%</text>
+        <text x="400" y="${(Y(FLOOR) + 4 + 0.8 * fs).toFixed(1)}" text-anchor="end" style="font-family:var(--mono)" font-size="${fs.toFixed(1)}" fill="#f0a35e">FLOOR ${FLOOR}%</text>
         <polyline points="${path.join(' ')}" fill="none" stroke="${live ? '#8fd3e0' : '#6c7177'}" stroke-width="2"/>
         ${pts.map((p) => `<circle class="pt" data-i="${f.points.indexOf(p)}" cx="${X(p[0])}" cy="${Y(p[1])}" r="6" fill="#0b0c0d" stroke="${live ? '#8fd3e0' : '#6c7177'}" stroke-width="2"/>`).join('')}
         ${temp ? `<line x1="${X(temp.value)}" y1="0" x2="${X(temp.value)}" y2="200" stroke="#e6e7e8" stroke-dasharray="3 4" opacity=".5"/>
         <circle cx="${X(temp.value)}" cy="${Y(now)}" r="4" fill="#e6e7e8"/>
-        <text x="${Math.min(X(temp.value) + 6, 320)}" y="${Y(now) - 8}" style="font-family:var(--mono)" font-size="10" fill="#e6e7e8">now ${Math.round(temp.value)}° · ${Math.round(now)}%</text>` : ''}
-        <g style="font-family:var(--mono)" font-size="9" fill="#6c7177">${[20, 40, 60, 80, 100].map((t) => `<text x="${X(t)}" y="216" text-anchor="middle">${t}°</text>`).join('')}
-        <text x="-8" y="3" text-anchor="end">100%</text><text x="-8" y="103" text-anchor="end">50%</text><text x="-8" y="203" text-anchor="end">0%</text></g>`;
+        ${nowLabel}` : ''}
+        <g style="font-family:var(--mono)" font-size="${fs.toFixed(1)}" fill="#6c7177">${[20, 40, 60, 80, 100].map((t) => `<text x="${X(t)}" y="${(207 + fs).toFixed(1)}" text-anchor="middle">${t}°</text>`).join('')}
+        ${[[100, 0], [50, 100], [0, 200]].map(([p, y]) => `<text x="-8" y="${(y + 0.35 * fs).toFixed(1)}" text-anchor="end">${p}%</text>`).join('')}</g>`;
       const c = ST.controls.find((x) => x.id === this.sel);
       if (c) $('#c-sub').textContent = temp ? `follows ${temp.name} · now ${Math.round(temp.value)}°C` : 'pick a sensor to follow';
     },
@@ -903,7 +929,7 @@ const pages = {
     },
     live() {
       const T = [['CPU temperature', cpuTemp(), '°C', 100], ['CPU load', cpuLoad(), '%', 100], ['GPU temperature', gpuTemp(), '°C', 100], ['GPU load', gpuLoad(), '%', 100], ['GPU clock', gpuClock(), 'MHz', 0], ['Memory', memLoad(), '%', 100]];
-      $('#y-tiles').innerHTML = T.map(([l, s, u, top]) => `<div class="g" style="padding:14px"><span class="lbl">${l}</span><div class="mono" style="font-size:26px;margin:8px 0 6px">${val(s)}<small style="font-size:12px;color:var(--soft);margin-left:3px">${u}</small></div><div class="sub" style="font-size:11.5px;margin-bottom:4px">${s ? esc(s.hwName) : 'no reading'}</div>${spark(s && s.id, top)}</div>`).join('');
+      $('#y-tiles').innerHTML = T.map(([l, s, u, top]) => `<div class="g" style="padding:14px"><span class="lbl">${l}</span><div class="mono" style="font-size:26px;margin:8px 0 6px">${val(s)}<small style="font-size:12px;color:var(--soft);margin-left:3px">${u}</small></div><div class="sub" style="font-size:11.5px;margin-bottom:4px">${s ? esc(s.hwName) : reading() ? 'reading sensors…' : 'no reading'}</div>${spark(s && s.id, top)}</div>`).join('');
       if ($('#y-all').open) $('#y-tbl').innerHTML = sensors().map((s) => `<tr><td class="lbl">${esc(s.hwName)}</td><td>${esc(s.name)}</td><td class="lbl">${esc(s.type)}</td><td>${Number(s.value).toFixed(1)}</td></tr>`).join('');
     },
   },
@@ -1170,7 +1196,7 @@ function onState(s) {
   }
   health('st-openrgb', s.openrgb.ok, !s.guard, `OpenRGB ${s.openrgb.ok ? 'connected' : s.openrgb.msg}`);
   const sensorsFull = s.sensors.ok && s.sensors.admin !== false;
-  health('st-sensors', sensorsFull, true, `Sensors ${sensorsFull ? 'live' : s.sensors.msg}`);
+  health('st-sensors', sensorsFull, true, `Sensors ${sensorsFull ? 'live' : s.sensors.msg === 'reading sensors' ? 'reading…' : s.sensors.msg}`);
   const u = s.update || {}, fv = $('#ft-ver'), up = u.action === 'install';
   fv.textContent = `v${s.version || ''}` + (up || /^(Downloading|Installing)/.test(u.text || '') ? ` · ${u.text.toLowerCase()}` : '');
   fv.classList.toggle('up', up); fv.disabled = !up;
