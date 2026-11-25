@@ -39,10 +39,12 @@ body{background:radial-gradient(1200px 700px at 70% 20%,#2a1d24 0,transparent 60
 /* ---------- the splash tile (this block is what goes into renderer/splash.html) ---------- */
 .d{width:320px;padding:30px 26px 18px;border-radius:22px;background:rgba(17,19,22,.94);border:1px solid var(--line2);
   opacity:0;transform:scale(.96);animation:in .5s cubic-bezier(.2,.8,.2,1) forwards}
-.d.done{animation:out .4s ease forwards}
+.d.done{animation:out .38s cubic-bezier(.4,0,.2,1) forwards}
 .logo{display:block;margin:0 auto}
 .track{stroke:rgba(255,255,255,.07)}
-.prog{transition:stroke-dashoffset .3s cubic-bezier(.3,.7,.2,1)}
+.logo{transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
+.d.full .logo{animation:beat .55s cubic-bezier(.34,1.56,.64,1)}
+.track{transition:stroke .4s}.d.full .track{stroke:rgba(255,255,255,.02)}
 h1{margin:16px 0 14px;text-align:center;font:600 17px var(--sans)}
 ul{list-style:none;margin:0;padding:10px 0 0;border-top:1px solid var(--line)}
 li{display:flex;align-items:center;gap:10px;height:26px;font:12px var(--mono);color:var(--dim);transition:color .3s}
@@ -55,7 +57,12 @@ li.ok{color:var(--soft)}
 .m .f{fill:var(--ok);transform-origin:7px 7px;transform:scale(0);transition:transform .32s cubic-bezier(.34,1.56,.64,1)}
 .m .t{fill:none;stroke:#0e1a12;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:9;stroke-dashoffset:9;transition:stroke-dashoffset .22s ease-out .1s}
 .m .x{stroke:var(--warn);stroke-width:1.6;stroke-linecap:round;opacity:0;transition:opacity .25s}
-li.run .o{stroke:var(--acc);animation:pulse 1.1s ease-in-out infinite}
+.m .s{fill:none;stroke:var(--acc);stroke-width:1.4;stroke-linecap:round;stroke-dasharray:11 40;transform-origin:7px 7px;opacity:0;transition:opacity .2s}
+li.run .s{opacity:1;animation:spin .8s linear infinite}
+li.run .o{stroke:rgba(143,211,224,.18)}
+li span:nth-of-type(1){transition:color .3s,transform .35s cubic-bezier(.34,1.56,.64,1)}
+li.ok span:nth-of-type(1){animation:nudge .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes nudge{40%{transform:translateX(2px)}}
 li.ok .o{stroke:var(--ok)}
 li.ok .f{transform:scale(1)}
 li.ok .t{stroke-dashoffset:0}
@@ -64,7 +71,9 @@ li.skip .x{opacity:1}
 li.skip span:last-child{color:var(--warn)}
 .credit{margin-top:14px;text-align:center;font:10px var(--mono);letter-spacing:.04em;color:var(--dim)}
 @keyframes in{to{opacity:1;transform:none}}
-@keyframes out{to{opacity:0;transform:scale(.98)}}
+@keyframes out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-6px) scale(.985)}}
+@keyframes beat{40%{transform:scale(1.045)}100%{transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{50%{stroke-opacity:.35}}
 /* reduced motion: no creep, no draw, the ring moves only when a point really finishes */
 html.rm .d,html.rm .d *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;transition-delay:0s!important}
@@ -101,8 +110,8 @@ html.rm .d,html.rm .d *{animation-duration:.01ms!important;animation-iteration-c
   </table>
   <p id="note"></p>
   <p>Changes: rows run game check, OpenRGB, lighting, sensors, so the fast three tick in the first 2 s.
-  The ring is split by expected time (8 / 12 / 8 / 72 %), not in quarters. While a point runs, the ring eases
-  toward 94% of its share over about 1.6x its expected time, then waits: it never reaches a point's end
+  The ring is split by expected time (12 / 16 / 12 / 60 %), not in quarters. While a point runs, the ring eases
+  toward its end, fast at first and slower as it nears 96% of its share, then waits: it never reaches a point's end
   before that point is done. Each tick draws in 0.3 s, inside the 0.3 s gap that already exists between ticks,
   so the window still opens at about 12.9 s.</p>
 </div>
@@ -132,9 +141,9 @@ html.rm .d,html.rm .d *{animation-duration:.01ms!important;animation-iteration-c
 <script>
 {
 const C = 390; // ring circumference (r 62)
-const MARK = '<svg class="m" viewBox="0 0 14 14"><circle class="o" cx="7" cy="7" r="6.2"/><circle class="f" cx="7" cy="7" r="6.6"/><path class="t" d="M4.1 7.3l2 2 3.8-4.3"/><path class="x" d="M4.5 7h5"/></svg>';
+const MARK = '<svg class="m" viewBox="0 0 14 14"><circle class="o" cx="7" cy="7" r="6.2"/><circle class="f" cx="7" cy="7" r="6.6"/><circle class="s" cx="7" cy="7" r="6.2"/><path class="t" d="M4.1 7.3l2 2 3.8-4.3"/><path class="x" d="M4.5 7h5"/></svg>';
 // new order and shares; EXP = expected ms for each point after the one before it (2026-11-24 log)
-const NEW = { names: ['Game check', 'OpenRGB', 'Lighting', 'Sensors'], share: [.08, .12, .08, .72], exp: [300, 1300, 300, 10400], creep: true };
+const NEW = { names: ['Game check', 'OpenRGB', 'Lighting', 'Sensors'], share: [.12, .16, .12, .60], exp: [300, 1300, 300, 10400], creep: true };
 const OLD = { names: ['Game check', 'Sensors', 'OpenRGB', 'Lighting'], share: [.25, .25, .25, .25], exp: [0, 0, 0, 0], creep: false };
 // when each point really finishes, by name (ms from start); null never finishes
 const SCEN = {
@@ -149,41 +158,46 @@ const $ = (s) => document.querySelector(s);
 const later = (f, ms) => timers.push(setTimeout(f, ms));
 
 // ---------- splash.js (renderer side) ----------
+// The ring is a spring chasing an honest target: the edge of what really finished, plus an estimate for the running
+// point that grows fast at first and flattens out, capped at 96% of that point's share. So it never stops, never jumps,
+// and never shows a point done before it is.
 function makeSplash(root, cfg) {
-  const prog = root.querySelector('.prog'), lis = [...root.querySelectorAll('li')];
+  const prog = root.querySelector('.prog'), lis = [...root.querySelectorAll('li')], N = lis.length;
   const reduced = () => rmOn || matchMedia('(prefers-reduced-motion: reduce)').matches;
   const edge = (i) => cfg.share.slice(0, i).reduce((a, b) => a + b, 0); // ring fraction once i points are done
-  let shown = 0, runAt = performance.now(), tick = null;
-  const ring = (f, ms, ease) => { prog.style.transition = `stroke-dashoffset ${ms}ms ${ease}`; prog.style.strokeDashoffset = C - C * f; };
-  // while point i+1 runs: ease toward 94% of its share, never to its end
-  let creepT = null;
-  const creep = (i, wait) => {
-    clearTimeout(creepT);
-    if (!cfg.creep || reduced() || i >= lis.length) return;
-    // starts once the 0.3 s catch-up to the edge has landed, so each tick reads as its own step
-    creepT = setTimeout(() => ring(edge(i) + cfg.share[i] * .94, cfg.exp[i] * 1.6, 'cubic-bezier(.2,.6,.35,1)'), wait);
+  let shown = 0, runAt = performance.now(), x = 0, v = 0, last = performance.now(), stopped = false, honest = null, raf = 0;
+  const target = (now) => {
+    if (honest != null) return honest;
+    if (!cfg.creep || reduced() || shown >= N) return edge(shown);
+    const el = now - runAt, tau = cfg.exp[shown] / 2;
+    return edge(shown) + cfg.share[shown] * .96 * (1 - Math.exp(-el / tau));
   };
-  const live = () => { // the running row counts up, so a long point still looks alive
-    clearInterval(tick);
-    const li = lis[shown]; if (!li || !cfg.creep) return;
-    tick = setInterval(() => { li.lastElementChild.textContent = ((performance.now() - runAt) / 1000).toFixed(1) + 's'; }, 100);
+  const frame = (now) => {
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    const t = target(now);
+    if (reduced()) { x = t; v = 0; } else {
+      const w = shown >= N ? 16 : 9; // stiffer on the last close so the ring shuts before the fade
+      v += (w * w * (t - x) - 2 * w * v) * dt; x += v * dt;
+      if (honest == null && x > t) { x = t; v = Math.min(v, 0); } // never ahead of the truth
+    }
+    prog.style.strokeDashoffset = C - C * Math.max(0, x);
+    if (shown >= N && x > .995 && !root.classList.contains('full')) root.classList.add('full');
+    const li = lis[shown]; // the running row counts up, so a long point still looks alive
+    if (li && cfg.creep) li.lastElementChild.textContent = ((now - runAt) / 1000).toFixed(1) + 's';
+    if (!stopped) raf = requestAnimationFrame(frame);
   };
   const paint = () => lis.forEach((li, j) => { li.className = j < shown ? 'ok' : j === shown ? 'run' : ''; });
-  paint(); creep(0, 50); live();
+  paint(); raf = requestAnimationFrame(frame);
   return {
     step(i, secs) {
       shown = i; runAt = performance.now();
-      ring(edge(i), reduced() ? 0 : 300, 'cubic-bezier(.3,.7,.2,1)');
       paint();
       if (secs) lis[i - 1].lastElementChild.textContent = secs + 's';
-      if (i < lis.length) { creep(i, 300); live(); } else clearInterval(tick);
     },
     done(reached) {
-      clearTimeout(creepT);
-      clearInterval(tick);
-      const fade = () => root.classList.add('done');
-      if (reached >= lis.length) { this.step(lis.length, ''); return fade(); }
-      ring(edge(reached), reduced() ? 0 : 400, 'ease'); // give back the estimate: show only what really finished
+      const fade = () => { root.classList.add('done'); setTimeout(() => { stopped = true; cancelAnimationFrame(raf); }, 500); };
+      if (reached >= N) { if (shown < N) this.step(N, ''); return fade(); }
+      honest = edge(reached); // give back the estimate: show only what really finished
       lis.forEach((li, j) => { if (j >= reached) { li.className = 'skip'; li.lastElementChild.textContent = 'skipped'; } });
       setTimeout(fade, 1200);
     },
