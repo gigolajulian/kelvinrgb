@@ -807,8 +807,8 @@ function stepSplash(i) {
   log(`splash: ${SPLASH_POINTS[i - 1]} done at ${((Date.now() - splashAt) / 1000).toFixed(1)}s`);
   advanceSplash();
 }
-// Points tick strictly in order, one at a time so each is seen. One that finished early (OpenRGB is often ready
-// before the sensors) waits for the ones before it. The window opens only after the 4th.
+// Points tick strictly in order, one at a time so each is seen. One that finished early waits for the ones before it
+// (sensors are last and slowest, so this is rare). The window opens only after the 4th.
 function advanceSplash() {
   if (splashTicking || !splash || splashEnding || !splashDone.has(splashStep + 1)) return;
   splashTicking = true;
@@ -822,7 +822,9 @@ function endSplash() {
   log(`splash: closing at ${((Date.now() - splashAt) / 1000).toFixed(1)}s, ${splashStep} of 4 points ticked`);
   const wait = Math.max(0, 1600 - (Date.now() - splashAt)); // long enough to read the steps, not a flicker
   setTimeout(() => {
-    splash.webContents.executeJavaScript(`done(${splashStep})`).catch(() => {}); // points after splashStep show as skipped
+    // points after splashStep show as skipped, except ones that finished behind one that never did (sensors behind a dead OpenRGB)
+    const late = [...splashDone.keys()].filter((i) => i > splashStep).map((i) => [i, ((splashDone.get(i) - splashAt) / 1000).toFixed(1)]);
+    splash.webContents.executeJavaScript(`done(${splashStep}, ${JSON.stringify(late)})`).catch(() => {});
     // the ring is full and the tile fades: show the real window, drop the splash just after
     setTimeout(() => { const s = splash; splash = null; showWindow(); setTimeout(() => s.destroy(), 200); }, splashStep >= 4 ? 450 : 1650);
   }, wait);

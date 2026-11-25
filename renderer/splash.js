@@ -39,11 +39,18 @@ window.step = (i, secs) => {
   if (secs && shown) lis[shown - 1].lastElementChild.textContent = `${secs}s`;
 };
 // Points past `reached` never finished (no OpenRGB, no admin, the game started): marked skipped, not ticked,
-// and the ring gives back its estimate. With skipped points the tile holds 1.2 s longer (main.js waits to match).
-window.done = (reached = N) => {
+// and the ring gives back its estimate. `late` lists [point, secs from start] for points that did finish behind
+// one that never did: those tick, and keep their share of the ring. With skipped points the tile holds 1.2 s
+// longer (main.js waits to match).
+window.done = (reached = N, late = []) => {
   const fade = () => { d.classList.add('done'); setTimeout(() => { stopped = true; }, 500); };
   if (reached >= N) { if (shown < N) window.step(N, ''); return fade(); }
-  honest = edge(reached);
-  lis.forEach((li, j) => { if (j >= reached) { li.className = 'skip'; li.lastElementChild.textContent = 'skipped'; } });
+  const ok = new Map(late);
+  honest = edge(reached) + SHARE.reduce((a, s, j) => a + (j >= reached && ok.has(j + 1) ? s : 0), 0);
+  lis.forEach((li, j) => {
+    if (j < reached) return;
+    li.className = ok.has(j + 1) ? 'ok' : 'skip';
+    li.lastElementChild.textContent = ok.has(j + 1) ? `${ok.get(j + 1)}s` : 'skipped';
+  });
   setTimeout(fade, 1200);
 };
