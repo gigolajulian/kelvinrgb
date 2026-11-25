@@ -799,7 +799,18 @@ function openSplash() {
   splash.loadFile(path.join(__dirname, 'renderer', 'splash.html'));
   splash.once('ready-to-show', () => splash && splash.showInactive());
   splashAt = Date.now();
+  // The window comes up invisible and click-through behind the splash, so its acrylic backdrop has settled by the time it
+  // fades in: shown cold, its first frames are a grey plate (screen recording 2026-11-25).
+  win.once('ready-to-show', () => { if (!splash || win.isVisible()) return; win.setOpacity(0); win.setIgnoreMouseEvents(true); win.setSkipTaskbar(true); win.showInactive(); });
   setTimeout(endSplash, 15000); // a point that never finishes (no OpenRGB, no admin) shows as skipped
+}
+// Fades the primed window in (0.3 s) while the splash fades out above it.
+function revealWindow() {
+  if (!win || win.isDestroyed()) return;
+  win.setIgnoreMouseEvents(false);
+  if (win.getOpacity() >= 1) return;
+  let o = 0;
+  const t = setInterval(() => { o = Math.min(1, o + 0.1); if (!win || win.isDestroyed()) return clearInterval(t); win.setOpacity(o); if (o >= 1) clearInterval(t); }, 30);
 }
 function stepSplash(i) {
   if (!splash || splashEnding || splashDone.has(i)) return;
@@ -825,8 +836,9 @@ function endSplash() {
     // points after splashStep show as skipped, except ones that finished behind one that never did (sensors behind a dead OpenRGB)
     const late = [...splashDone.keys()].filter((i) => i > splashStep).map((i) => [i, ((splashDone.get(i) - splashAt) / 1000).toFixed(1)]);
     splash.webContents.executeJavaScript(`done(${splashStep}, ${JSON.stringify(late)})`).catch(() => {});
-    // the ring is full and the tile fades: show the real window, drop the splash just after
-    setTimeout(() => { const s = splash; splash = null; showWindow(); log(`start: window shown ${process.uptime().toFixed(1)}s after launch`); setTimeout(() => s.destroy(), 200); }, splashStep >= SPLASH_POINTS.length ? 450 : 1650);
+    // The window opens as the tile starts to fade (splash.js done(): at once, or after 1.2 s with skipped points), under the
+    // splash, which stays on top (alwaysOnTop, never focused) until its 0.38 s fade is over (PERF-2).
+    setTimeout(() => { const s = splash; splash = null; revealWindow(); showWindow(); log(`start: window shown ${process.uptime().toFixed(1)}s after launch`); setTimeout(() => s.destroy(), 450); }, splashStep >= SPLASH_POINTS.length ? 0 : 1200);
   }, wait);
 }
 
