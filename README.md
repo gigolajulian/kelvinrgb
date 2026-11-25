@@ -40,7 +40,7 @@ The first release that trusts the Hello key (the transition release) must be sig
 
 ## Secrets
 
-The app itself stores no secrets: no accounts, tokens or keys on the user's PC. Three secrets exist on the release side.
+The app itself stores no secrets: no accounts, tokens or keys on the user's PC. Four secrets exist on the release side.
 
 | Secret | Unlocks | Where | Rotate |
 |---|---|---|---|
