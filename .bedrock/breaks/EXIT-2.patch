@@ -1,8 +1,8 @@
 diff --git a/main.js b/main.js
-index 6902693..2fc7385 100644
+index 8e858a4..57b2350 100644
 --- a/main.js
 +++ b/main.js
-@@ -868,6 +868,7 @@ app.whenReady().then(() => {
+@@ -880,6 +880,7 @@ app.whenReady().then(() => {
    firstCheck.then(() => stepSplash(1));
    tray = new Tray(ICO);
    tray.on('click', showWindow);
